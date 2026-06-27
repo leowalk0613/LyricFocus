@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="purple_500">#6200EE</color>
+    <color name="ic_launcher_background">#6366F1</color>
+    <color name="purple_700">#3700B3</color>
+    <color name="teal_200">#03DAC5</color>
+    <color name="teal_700">#018786</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="green">#4CAF50</color>
+    <color name="red">#F44336</color>
+    <color name="grey">#9E9E9E</color>
+    <color name="focus_lyric_primary">#FFFFFF</color>
+    <color name="focus_lyric_secondary">#E0E0E0</color>
+    <color name="focus_lyric_aod_primary">#FFFFFF</color>
+    <color name="focus_lyric_aod_secondary">#E0E0E0</color>
+</resources>
