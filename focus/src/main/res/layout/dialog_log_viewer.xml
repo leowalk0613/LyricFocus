@@ -7,6 +7,14 @@
     android:minHeight="300dp"
     android:maxHeight="500dp">
 
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tab_layout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:tabMode="scrollable"
+        app:tabGravity="start" />
+
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
