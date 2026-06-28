@@ -122,13 +122,12 @@ class LyricNotificationManager(private val context: Context) {
                 return
             }
 
-            showLyricInShade = true
-
             if (!isPlaying || lyricText.isBlank()) {
-                cancelLiveNotification()
+                updateForegroundNotification(title, artist, isPlaying)
                 return
             }
 
+            showLyricInShade = true
             lastTitle = title
             lastArtist = artist
             lastIsPlaying = isPlaying
