@@ -421,14 +421,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             )
         }
 
-        // 更新前台通知显示当前播放状态
-        lyricNotificationManager.updateForegroundNotification(
-            title = currentTitle,
-            artist = currentArtist,
-            isPlaying = isPlaying
-        )
-
-        if (FocusPreferences.isShowInShade(this)) {
+        if (FocusPreferences.isShowInShade(this) && isPlaying) {
             lyricNotificationManager.updateLyricNotification(
                 lyricText = currentLyricText,
                 secondLineText = secondLineText,
@@ -437,7 +430,11 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                 isPlaying = isPlaying
             )
         } else {
-            lyricNotificationManager.cancelRegularNotification()
+            lyricNotificationManager.updateForegroundNotification(
+                title = currentTitle,
+                artist = currentArtist,
+                isPlaying = isPlaying
+            )
         }
 
         sendLyricBroadcastIfChanged(currentLyricText, secondLineText)
@@ -706,7 +703,11 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                 }
             } else {
                 stopLyricUpdate()
-                lyricNotificationManager.cancelRegularNotification()
+                lyricNotificationManager.updateForegroundNotification(
+                    title = currentTitle,
+                    artist = currentArtist,
+                    isPlaying = false
+                )
             }
         }
     }
