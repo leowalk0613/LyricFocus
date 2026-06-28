@@ -36,7 +36,7 @@
             android:layout_gravity="center"
             android:gravity="center"
             android:padding="24dp"
-            android:text="未找到 LSPosed 日志\n\n可能原因：\n• 未安装 LSPosed\n• 日志文件不存在"
+            android:text="未找到 LSPosed 日志\n\n可能原因：\n• 未安装 LSPosed 或日志文件为空\n• LSPosed 日志路径与预期不同\n• Root 权限未正确授予\n\n可尝试：\n• 使用 adb pull /data/adb/lspd/log/ 手动获取"
             android:textAppearance="?attr/textAppearanceBodySmall"
             android:textColor="?attr/colorOnSurfaceVariant"
             android:visibility="gone" />

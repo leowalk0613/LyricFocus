@@ -68,22 +68,63 @@ object RootHelper {
     }
 
     /**
+     * 列出目录内容（需要 Root 权限）
+     */
+    fun listDirectory(path: String): List<String>? {
+        return try {
+            runSuCommand("ls '$path'")?.split("\n")?.filter { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * 检查文件是否存在（需要 Root 权限）
+     */
+    fun fileExists(path: String): Boolean {
+        return try {
+            runSuCommand("test -e '$path' && echo 'yes'")?.contains("yes") == true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
      * 读取 LSPosed 日志目录下的所有日志文件
+     * 支持多种 LSPosed 版本的日志路径
      */
     fun readLsposedLogs(): Map<String, String> {
         val result = mutableMapOf<String, String>()
-        val logPaths = listOf(
-            "/data/adb/lspd/log/startup.log",
-            "/data/adb/lspd/log/error.log",
-            "/data/adb/lspd/log/logcat.log"
+        
+        // 尝试多个可能的日志目录
+        val logDirs = listOf(
+            "/data/adb/lspd/log",
+            "/data/adb/lspd/logs",
+            "/data/adb/modules/zygisk_lsposed/log",
+            "/data/adb/lspd"
         )
-        for (path in logPaths) {
-            val content = readFile(path)
-            if (content != null) {
-                val fileName = path.substringAfterLast("/")
-                result[fileName] = content
+        
+        for (dir in logDirs) {
+            if (!fileExists(dir)) continue
+            
+            val files = listDirectory(dir)
+            if (files == null) continue
+            
+            for (file in files) {
+                val filePath = "$dir/$file"
+                val content = readFile(filePath)
+                if (content != null && content.isNotBlank()) {
+                    // 使用相对路径作为 key，避免重复
+                    val key = if (file.endsWith(".log")) {
+                        file.substringBefore(".log")
+                    } else {
+                        file
+                    }
+                    result["$key.log"] = content
+                }
             }
         }
+        
         return result
     }
 }
