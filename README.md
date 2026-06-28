@@ -38,7 +38,7 @@
 
 ## 功能概览
 
-- **Material Design 3 界面**：跟随系统壁纸 **Monet 动态取色**（Android 12+ Material You）
+- **Material 3 界面**：跟随系统壁纸 **Monet 动态取色**（Android 12+ Material You）
 - **实时歌词**：`NotificationListenerService` 绑定 MediaSession，监听播放进度与元数据
 - **多歌词源**：网易云音乐、QQ 音乐（自动链式回退或指定单一源）
 - **焦点通知**：锁屏 / AOD 使用 `miui.focus.rv`、`miui.focus.rvAod` 自定义 RemoteViews，支持 updatable 会话续期
