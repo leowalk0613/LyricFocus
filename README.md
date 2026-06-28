@@ -5,6 +5,7 @@
 ![Android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-0095D5?&style=for-the-badge&logo=kotlin&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-1.1.0-green?style=for-the-badge)
 
 在小米 HyperOS 上于**锁屏、AOD（息屏显示）、通知栏**展示同步歌词。  
 通过 LSPosed 注入 SystemUI，使用 HyperOS **焦点通知**（`miui.focus.*`）渲染歌词，可选超级岛。
@@ -12,6 +13,22 @@
 包名：`com.leowalk.LyricFocus`
 
 </div>
+
+---
+
+## 📷 效果图
+
+### 主设置界面
+
+![主设置界面](https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Android%20app%20settings%20screen%20with%20dark%20theme%2C%20Material%20Design%203%2C%20showing%20music%20lyric%20settings%2C%20toggle%20switches%2C%20sliders%2C%20buttons%2C%20Chinese%20text%2C%20clean%20modern%20UI&image_size=portrait_16_9)
+
+### 锁屏歌词（桌面状态）
+
+![锁屏歌词](https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Android%20lock%20screen%20with%20live%20lyrics%20display%20below%20music%20player%20widget%2C%20Chinese%20lyrics%2C%20dark%20background%20with%20starry%20sky%20wallpaper%2C%20HyperOS%20style%2C%20focus%20notification%20design&image_size=portrait_16_9)
+
+### 锁屏歌词（AOD 息屏）
+
+![AOD歌词](https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Android%20AOD%20always%20on%20display%20with%20lyrics%20overlay%2C%20Chinese%20lyrics%2C%20beautiful%20anime%20wallpaper%2C%20HyperOS%20focus%20notification%20style%2C%20dark%20theme&image_size=portrait_16_9)
 
 ---
 
@@ -44,6 +61,9 @@
 - **应用白名单**：可选仅对指定音乐 App 的 MediaSession 响应
 - **歌词提前量**：可调同步偏移（默认提前 1300 ms）
 - **Root 重启 SystemUI**：设置页一键重启系统界面，Hook 变更后快速生效
+- **统一通知渠道**：后台服务通知合并为单一渠道，前台通知显示当前播放状态
+- **关于界面**：包含软件信息、GitHub 链接、系统要求、致谢与开源许可证
+- **LSPosed 日志查看**：应用内一键查看 LSPosed 日志（需 Root）
 
 ---
 
@@ -56,7 +76,7 @@
 | 框架 | **LSPosed**（或兼容 Xposed 实现），API 82+ |
 | LSPosed 作用域 | `com.android.systemui`（系统界面）、`com.miui.aod`（息屏与锁屏编辑） |
 | 权限 | 通知访问、发送通知、网络、前台服务 |
-| 可选 | Root（Magisk / KernelSU）— 应用内重启 SystemUI |
+| 可选 | Root（Magisk / KernelSU）— 应用内重启 SystemUI、查看 LSPosed 日志 |
 
 ---
 
@@ -109,17 +129,18 @@ LyricFocus/
     └── src/main/
         ├── AndroidManifest.xml
         ├── assets/xposed_init          → FocusMainHook
-        ├── java/com/lyricnotify/focus/
+        ├── java/com/leowalk/LyricFocus/
         │   ├── MainActivity.kt
+        │   ├── AboutActivity.kt        → 关于界面（软件信息、日志查看）
         │   ├── AppWhitelistActivity.kt
         │   ├── FocusPreferences.kt
         │   ├── lyric/                  # 网易云 / QQ、LRC 解析
-        │   ├── service/                # MediaSession、歌词服务、广播
+        │   ├── service/                # MediaSession、歌词服务、通知管理
         │   ├── notification/           # HyperFocusLyricStyle
         │   ├── receiver/               # FocusResyncReceiver
-        │   ├── util/                   # RootHelper 等
+        │   ├── util/                   # RootHelper（含日志读取）
         │   └── xposed/                 # SystemUI / AOD Hook
-        └── res/layout/                 # focus_lyric_lock / aod / island
+        └── res/layout/                 # focus_lyric_lock / aod / island / about
 ```
 
 ---
@@ -137,7 +158,7 @@ LyricFocus/
 | Bootloader | 已解锁（安装 LSPosed 所需） |
 | LSPosed | 已通过 Magisk / KernelSU 等模块安装并启用 |
 | 网络 | 拉取歌词需联网（网易云 / QQ 音乐 API） |
-| Root（推荐） | 非必须，但 Hook 变更后可在应用内一键重启 SystemUI |
+| Root（推荐） | 非必须，但 Hook 变更后可在应用内一键重启 SystemUI、查看 LSPosed 日志 |
 
 > 已在 HyperOS **3.0.302.0.WNCCNXM** 环境验证。其他 HyperOS 版本若焦点通知 API 有差异，可能需要适配。
 
@@ -158,8 +179,8 @@ LyricFocus/
 
 ```bash
 # 克隆仓库
-git clone <仓库地址>
-cd LyricFocus   # 或 LyricNotify
+git clone https://github.com/leowalk0613/LyricFocus.git
+cd LyricFocus
 
 # 编译 Debug APK
 ./gradlew :focus:assembleDebug
@@ -205,7 +226,7 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 |------|----------|------|
 | **通知访问** | 点击「授权」→ 系统列表中找到 LyricFocus 并开启 | 读取 MediaSession，获取歌曲信息与播放进度 |
 | **发送通知** | Android 13+ 点击「授权」允许；若已拒绝则跳转应用通知设置 | 前台服务通知、可选通知栏歌词 |
-| **Root**（可选） | Magisk / KernelSU 授予 LyricFocus Root | 应用内重启 SystemUI |
+| **Root**（可选） | Magisk / KernelSU 授予 LyricFocus Root | 应用内重启 SystemUI、查看 LSPosed 日志 |
 
 **HyperOS 额外建议**：
 
@@ -254,6 +275,7 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 - Root 重启 SystemUI 或重启手机
 - 检查通知访问是否已授权
 - 在 LSPosed 日志中过滤 `LyricFocus_Xposed`、`SystemUIHyperFocusHook` 是否有报错
+- 在 LyricFocus 「关于」页面点击「查看 LSPosed 日志」（需 Root）
 
 **Q：锁屏有歌词，AOD 没有**
 
@@ -367,6 +389,29 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 
 ---
 
+## 调试
+
+| Tag | 来源 |
+|-----|------|
+| `LyricFocus_Xposed` | Xposed 入口 |
+| `SystemUIHyperFocusHook` | SystemUI Hook |
+| `LyricService` | 歌词服务 |
+
+LSPosed 日志 / `adb logcat` 过滤上述 Tag。
+
+在应用内「关于」页面点击「查看 LSPosed 日志」可直接查看（需 Root）。
+
+---
+
+## 已知限制
+
+- 仅适用于小米 HyperOS 焦点通知，其他 ROM 不可用
+- 系统大版本升级可能导致 Hook 类名变化，需适配
+- 焦点 updatable 会话有约 9s 系统超时，AOD 靠周期性 notify 续期
+- 歌词准确度取决于 API 搜索与 LRC 质量
+
+---
+
 ## 致谢
 
 感谢下列项目提供框架、依赖与实现参考。
@@ -387,27 +432,6 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 - [HookTool](https://github.com/HChenX/HookTool) · [Cemiuiler](https://github.com/ReChronoRain/Cemiuiler)
 
 歌词 Web API 版权归网易云、QQ 音乐各自平台所有。
-
----
-
-## 调试
-
-| Tag | 来源 |
-|-----|------|
-| `LyricFocus_Xposed` | Xposed 入口 |
-| `SystemUIHyperFocusHook` | SystemUI Hook |
-| `LyricService` | 歌词服务 |
-
-LSPosed 日志 / `adb logcat` 过滤上述 Tag。
-
----
-
-## 已知限制
-
-- 仅适用于小米 HyperOS 焦点通知，其他 ROM 不可用
-- 系统大版本升级可能导致 Hook 类名变化，需适配
-- 焦点 updatable 会话有约 9s 系统超时，AOD 靠周期性 notify 续期
-- 歌词准确度取决于 API 搜索与 LRC 质量
 
 ---
 
