@@ -57,8 +57,8 @@
 
 | 模块 | 说明 | 链接 |
 |------|------|------|
-| **HyperIsland** | 移除焦点通知白名单，支持自定义超级岛内容 | https://github.com/baimashi/HyperIsland |
-| **HyperCeiler** | HyperOS 系统增强模块，包含焦点通知相关功能 | https://github.com/HyperCeiler/HyperCeiler |
+| **HyperIsland** | 移除焦点通知白名单，支持自定义超级岛内容 | https://github.com/1812z/HyperIsland |
+| **HyperCeiler** | HyperOS 系统增强模块，包含焦点通知相关功能 | https://github.com/ReChronoRain/HyperCeiler |
 
 > 若未安装上述模块，焦点通知可能无法显示或被系统拦截。
 
