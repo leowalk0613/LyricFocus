@@ -52,14 +52,14 @@
 
 ### 额外使用条件
 
-**焦点通知白名单**：需移除系统级焦点通知白名单限制，否则 LyricFocus 无法正常显示歌词。可通过以下 LSPosed 模块实现：
+**移除焦点通知白名单**：需移除系统级焦点通知白名单限制，否则 LyricFocus 无法正常显示歌词。可通过以下 LSPosed 模块实现：
 
 | 模块 | 说明 | 链接 |
 |------|------|------|
 | **HyperIsland** | 移除焦点通知白名单，支持自定义超级岛内容 | https://github.com/1812z/HyperIsland |
-| **HyperCeiler** | HyperOS 系统增强模块，包含焦点通知相关功能 | https://github.com/ReChronoRain/HyperCeiler |
+| **HyperCeiler** | HyperOS 系统增强模块，包含焦点通知相关功能 | https://github.com/ReChronoRain/HyperCeiler |等
 
-> 若未安装上述模块，焦点通知可能无法显示或被系统拦截。
+> 若未安装上述类似模块，焦点通知可能无法显示或被系统拦截。
 
 ---
 
