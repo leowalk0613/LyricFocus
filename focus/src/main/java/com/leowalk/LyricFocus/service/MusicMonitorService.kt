@@ -30,6 +30,7 @@ class MusicMonitorService : NotificationListenerService() {
         private const val NOTIFICATION_ID = LyricNotificationManager.NOTIFICATION_ID
         private const val CHANNEL_ID = LyricNotificationManager.CHANNEL_ID
         private const val CHANNEL_NAME = "歌词服务"
+        private const val REFRESH_INTERVAL_MS = 5000L
 
         var isServiceRunning = false
             private set
@@ -60,11 +61,26 @@ class MusicMonitorService : NotificationListenerService() {
     private var mediaControllerCallback: MediaController.Callback? = null
     private val handler = Handler(Looper.getMainLooper())
     private var settingsReceiver: BroadcastReceiver? = null
+    private var lastKnownTitle: String? = null
+    private var lastKnownArtist: String? = null
 
     private val mediaSessionListener = object : MediaSessionManager.OnActiveSessionsChangedListener {
         override fun onActiveSessionsChanged(controllers: MutableList<MediaController>?) {
             Log.d(TAG, "Active sessions changed: ${controllers?.size ?: 0}")
             updateActiveSessions(controllers)
+        }
+    }
+
+    private val periodicRefreshRunnable = object : Runnable {
+        override fun run() {
+            try {
+                checkSessionHealth()
+                refreshSessions()
+            } catch (e: Exception) {
+                Log.e(TAG, "Periodic refresh error", e)
+            } finally {
+                handler.postDelayed(this, REFRESH_INTERVAL_MS)
+            }
         }
     }
 
@@ -78,6 +94,7 @@ class MusicMonitorService : NotificationListenerService() {
 
         setupMediaSessionListener()
         registerSettingsReceiver()
+        startPeriodicRefresh()
     }
 
     private fun registerSettingsReceiver() {
@@ -226,6 +243,9 @@ class MusicMonitorService : NotificationListenerService() {
         currentMetadata = controller.metadata
         currentPlaybackState = controller.playbackState
 
+        lastKnownTitle = currentMetadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
+        lastKnownArtist = currentMetadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)
+
         notifySessionChanged(controller)
         notifyMetadataChanged(currentMetadata)
         notifyPlaybackStateChanged(currentPlaybackState)
@@ -238,6 +258,8 @@ class MusicMonitorService : NotificationListenerService() {
         currentController = null
         currentMetadata = null
         currentPlaybackState = null
+        lastKnownTitle = null
+        lastKnownArtist = null
         mediaControllerCallback = null
 
         notifySessionChanged(null)
@@ -268,6 +290,7 @@ class MusicMonitorService : NotificationListenerService() {
         Log.d(TAG, "MusicMonitorService onDestroy")
         isServiceRunning = false
         unregisterSettingsReceiver()
+        stopPeriodicRefresh()
 
         try {
             mediaSessionManager?.removeOnActiveSessionsChangedListener(mediaSessionListener)
@@ -277,6 +300,52 @@ class MusicMonitorService : NotificationListenerService() {
 
         if (mediaControllerCallback != null) {
             currentController?.unregisterCallback(mediaControllerCallback!!)
+        }
+    }
+
+    private fun startPeriodicRefresh() {
+        handler.removeCallbacks(periodicRefreshRunnable)
+        handler.post(periodicRefreshRunnable)
+        Log.d(TAG, "Periodic refresh started")
+    }
+
+    private fun stopPeriodicRefresh() {
+        handler.removeCallbacks(periodicRefreshRunnable)
+        Log.d(TAG, "Periodic refresh stopped")
+    }
+
+    private fun checkSessionHealth() {
+        val currentMeta = currentMetadata
+        val title = currentMeta?.getString(MediaMetadata.METADATA_KEY_TITLE)
+        val artist = currentMeta?.getString(MediaMetadata.METADATA_KEY_ARTIST)
+
+        if (title != null && artist != null && (title != lastKnownTitle || artist != lastKnownArtist)) {
+            Log.d(TAG, "Health check detected metadata change: $title - $artist")
+            lastKnownTitle = title
+            lastKnownArtist = artist
+            notifyMetadataChanged(currentMeta)
+        }
+
+        if (currentController != null) {
+            try {
+                val freshMeta = currentController?.metadata
+                val freshState = currentController?.playbackState
+
+                if (freshMeta != null && freshMeta != currentMetadata) {
+                    Log.d(TAG, "Health check: stale metadata detected, refreshing")
+                    currentMetadata = freshMeta
+                    notifyMetadataChanged(freshMeta)
+                }
+
+                if (freshState != null && freshState != currentPlaybackState) {
+                    Log.d(TAG, "Health check: stale playback state detected")
+                    currentPlaybackState = freshState
+                    notifyPlaybackStateChanged(freshState)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Health check failed", e)
+                clearCurrentSession()
+            }
         }
     }
 }
