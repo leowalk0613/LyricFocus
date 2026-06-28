@@ -4,15 +4,15 @@ plugins {
 }
 
 android {
-    namespace 'com.lyricnotify.focus'
+    namespace 'com.leowalk.LyricFocus'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.lyricnotify.focus"
+        applicationId "com.leowalk.LyricFocus"
         minSdk 31
         targetSdk 34
-        versionCode 1
-        versionName "1.0.0-focus"
+        versionCode 2
+        versionName "1.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 

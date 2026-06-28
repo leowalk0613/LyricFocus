@@ -35,6 +35,11 @@
             android:exported="false"
             android:parentActivityName=".MainActivity" />
 
+        <activity
+            android:name=".AboutActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
+
         <service
             android:name=".service.MusicMonitorService"
             android:exported="true"
@@ -54,7 +59,7 @@
             android:name=".receiver.FocusResyncReceiver"
             android:exported="true">
             <intent-filter>
-                <action android:name="com.lyricnotify.focus.action.REQUEST_RESYNC" />
+                <action android:name="com.leowalk.LyricFocus.action.REQUEST_RESYNC" />
             </intent-filter>
         </receiver>
 
