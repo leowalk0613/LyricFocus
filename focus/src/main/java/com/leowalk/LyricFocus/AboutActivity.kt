@@ -84,11 +84,6 @@ class AboutActivity : AppCompatActivity() {
     }
 
     private fun showLogDialog() {
-        if (!RootHelper.checkRootAccess()) {
-            Toast.makeText(this, "需要 Root 权限才能查看日志", Toast.LENGTH_SHORT).show()
-            return
-        }
-
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_log_viewer, null)
         val tabLayout = dialogView.findViewById<TabLayout>(R.id.tab_layout)
         val logContent = dialogView.findViewById<TextView>(R.id.log_content)
@@ -99,46 +94,75 @@ class AboutActivity : AppCompatActivity() {
             .setTitle("LSPosed 日志")
             .setView(dialogView)
             .setNegativeButton("关闭", null)
+            .setCancelable(true)
             .create()
 
         loadingIndicator.visibility = View.VISIBLE
         logContent.visibility = View.GONE
         emptyState.visibility = View.GONE
 
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        val future = executor.submit<Map<String, String>> {
+            try {
+                RootHelper.readLsposedLogs()
+            } catch (e: Exception) {
+                emptyMap()
+            }
+        }
+
         Thread {
-            val logs = RootHelper.readLsposedLogs()
-            val logFiles = logs.keys.toList()
+            try {
+                val logs = future.get(30, java.util.concurrent.TimeUnit.SECONDS)
+                val logFiles = logs.keys.toList()
 
-            runOnUiThread {
-                loadingIndicator.visibility = View.GONE
+                runOnUiThread {
+                    loadingIndicator.visibility = View.GONE
 
-                if (logs.isEmpty()) {
-                    emptyState.visibility = View.VISIBLE
-                    logContent.visibility = View.GONE
-                    emptyState.text = "未找到 LSPosed 日志\n\n可能原因：\n• 未安装 LSPosed 或日志文件为空\n• LSPosed 日志路径与预期不同\n• Root 权限未正确授予\n\n可尝试：\n• 使用 adb pull /data/adb/lspd/log/ 手动获取"
-                } else {
-                    logContent.visibility = View.VISIBLE
+                    if (logs.isEmpty()) {
+                        emptyState.visibility = View.VISIBLE
+                        logContent.visibility = View.GONE
+                        emptyState.text = "未找到 LSPosed 日志\n\n可能原因：\n• 未安装 LSPosed 或日志文件为空\n• LSPosed 日志路径与预期不同\n• Root 权限未正确授予\n\n可尝试：\n• 使用 adb pull /data/adb/lspd/log/ 手动获取"
+                    } else {
+                        logContent.visibility = View.VISIBLE
 
-                    for (fileName in logFiles) {
-                        val displayName = fileName.substringBefore(".log")
-                        tabLayout.addTab(tabLayout.newTab().setText(displayName))
-                    }
-
-                    tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
-                        override fun onTabSelected(tab: com.google.android.material.tabs.TabLayout.Tab?) {
-                            tab?.text?.let { showLog ->
-                                val content = logs["$showLog.log"]
-                                logContent.text = content ?: "日志为空"
-                            }
+                        for (fileName in logFiles) {
+                            val displayName = fileName.substringBefore(".log")
+                            tabLayout.addTab(tabLayout.newTab().setText(displayName))
                         }
-                        override fun onTabUnselected(tab: com.google.android.material.tabs.TabLayout.Tab?) {}
-                        override fun onTabReselected(tab: com.google.android.material.tabs.TabLayout.Tab?) {}
-                    })
 
-                    if (logFiles.isNotEmpty()) {
-                        logContent.text = logs[logFiles.first()]
+                        tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+                            override fun onTabSelected(tab: com.google.android.material.tabs.TabLayout.Tab?) {
+                                tab?.text?.let { showLog ->
+                                    val content = logs["$showLog.log"]
+                                    logContent.text = content ?: "日志为空"
+                                }
+                            }
+                            override fun onTabUnselected(tab: com.google.android.material.tabs.TabLayout.Tab?) {}
+                            override fun onTabReselected(tab: com.google.android.material.tabs.TabLayout.Tab?) {}
+                        })
+
+                        if (logFiles.isNotEmpty()) {
+                            logContent.text = logs[logFiles.first()]
+                        }
                     }
                 }
+            } catch (e: java.util.concurrent.TimeoutException) {
+                future.cancel(true)
+                runOnUiThread {
+                    loadingIndicator.visibility = View.GONE
+                    emptyState.visibility = View.VISIBLE
+                    logContent.visibility = View.GONE
+                    emptyState.text = "读取日志超时\n\n可能原因：\n• Root 权限未及时授予\n• 日志文件过大\n• 系统响应缓慢"
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    loadingIndicator.visibility = View.GONE
+                    emptyState.visibility = View.VISIBLE
+                    logContent.visibility = View.GONE
+                    emptyState.text = "读取日志失败: ${e.message}"
+                }
+            } finally {
+                executor.shutdown()
             }
         }.start()
 
