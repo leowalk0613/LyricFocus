@@ -16,7 +16,6 @@
 
 ---
 
-
 ## 📋 目录
 
 - [功能概览](#功能概览)
@@ -29,7 +28,8 @@
 - [进程间通信](#进程间通信)
 - [Xposed Hook](#xposed-hook)
 - [依赖](#依赖)
-- [调试](#调试)
+- [版本更新](#版本更新)
+- [调试与反馈](#调试与反馈)
 - [已知限制](#已知限制)
 - [致谢](#致谢)
 - [许可证](#许可证)
@@ -47,8 +47,8 @@
 - **歌词提前量**：可调同步偏移（默认提前 1300 ms）
 - **Root 重启 SystemUI**：设置页一键重启系统界面，Hook 变更后快速生效
 - **统一通知渠道**：后台服务通知合并为单一渠道，前台通知显示当前播放状态
-- **关于界面**：包含软件信息、GitHub 链接、系统要求、致谢与开源许可证
-- **LSPosed 日志查看**：应用内一键查看 LSPosed 日志（需 Root）
+- **关于界面**：包含软件信息、GitHub 链接、酷安作者链接、系统要求、致谢与开源许可证
+- **LSPosed 日志查看**：应用内选择日志文件/ZIP压缩包，自动筛选 LyricFocus 相关日志，支持一键复制
 
 ---
 
@@ -252,43 +252,6 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 
 ---
 
-### 常见问题
-
-**Q：LSPosed 已启用，但完全没有歌词**
-
-- 确认作用域是否同时勾选 `com.android.systemui` 与 `com.miui.aod`
-- Root 重启 SystemUI 或重启手机
-- 检查通知访问是否已授权
-- 在 LSPosed 日志中过滤 `LyricFocus_Xposed`、`SystemUIHyperFocusHook` 是否有报错
-- 在 LyricFocus 「关于」页面点击「查看 LSPosed 日志」（需 Root）
-
-**Q：锁屏有歌词，AOD 没有**
-
-- 确认 `com.miui.aod` 在作用域内
-- 系统设置中 AOD 已开启且支持焦点通知样式
-- HyperOS 焦点 updatable 会话约 **9 秒**超时，AOD 依赖周期性续期；若仍异常可查看 `LyricService` 日志
-
-**Q：有通知但没有歌词文本 / 只显示占位**
-
-- 当前歌曲可能在网易云 / QQ API 未搜到，尝试切换歌词源
-- 检查网络与 DNS；部分区域需稳定网络访问 `music.163.com` / `c.y.qq.com`
-
-**Q：Hook 或设置改了不生效**
-
-- 使用应用内 **重启系统界面**（需 Root）
-- 或重启手机
-
-**Q：非小米 / 非 HyperOS 能否使用？**
-
-- **不能**。本应用依赖 HyperOS 焦点通知（`miui.focus.*`）与 SystemUI Hook，其他 ROM 不支持。
-
-**Q：编译失败 / 找不到 HyperFocusApi**
-
-- 确认 `focus/build.gradle` 中 JitPack 仓库可访问：`com.github.ghhccghk:HyperFocusApi:2.0`
-- 使用 JDK 17，Android Studio 同步 Gradle 后重试
-
----
-
 ### 卸载
 
 1. LSPosed 中 **关闭** LyricFocus 模块
@@ -374,17 +337,100 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 
 ---
 
-## 调试
+## 版本更新
+
+### v1.1.0
+
+- **统一通知渠道**：后台服务通知合并为单一 `lyric_service` 渠道
+- **关于界面**：添加软件详细信息、GitHub 链接、酷安作者链接、系统要求、致谢与开源许可证
+- **LSPosed 日志查看**：应用内选择日志文件/ZIP压缩包，自动筛选 LyricFocus 相关日志，支持一键复制
+- **包名变更**：改为 `com.leowalk.LyricFocus`
+
+---
+
+## 调试与反馈
+
+### 日志标签
 
 | Tag | 来源 |
 |-----|------|
 | `LyricFocus_Xposed` | Xposed 入口 |
 | `SystemUIHyperFocusHook` | SystemUI Hook |
 | `LyricService` | 歌词服务 |
+| `MusicMonitorService` | 媒体监控服务 |
 
-LSPosed 日志 / `adb logcat` 过滤上述 Tag。
+### 查看 LSPosed 日志
 
-在应用内「关于」页面点击「查看 LSPosed 日志」可直接查看（需 Root）。
+#### 方法一：应用内查看（推荐）
+
+1. 打开 **LSPosed 管理器**
+2. 点击右上角菜单 → **保存日志**（会导出为 zip 压缩包）
+3. 打开 **LyricFocus** → 点击底部导航「关于」
+4. 在「日志查看指南」下方点击 **选择日志文件筛选**
+5. 选择刚才导出的 zip 文件
+6. 应用会自动筛选并显示 LyricFocus 相关日志
+7. 如需反馈问题，点击 **复制日志** 将日志复制到剪贴板
+
+#### 方法二：ADB 命令
+
+```bash
+# 查看所有 LyricFocus 相关日志
+adb logcat | findstr "LyricFocus"
+
+# 保存日志到文件
+adb logcat -d > logcat.txt
+```
+
+### 日志文件说明
+
+LSPosed 导出的 zip 压缩包包含以下文件：
+
+| 文件 | 说明 |
+|------|------|
+| `startup.log` | 模块启动日志 |
+| `error.log` | 错误日志（排查 crash 首选） |
+| `logcat.log` | 完整系统日志 |
+
+### 反馈问题
+
+遇到问题时，请按以下步骤操作：
+
+1. **确认问题场景**：记录问题发生的具体条件（如：播放某首歌时、锁屏时、AOD 时等）
+2. **保存日志**：按照「查看 LSPosed 日志」方法一保存日志
+3. **复制日志**：在应用内日志查看器中点击「复制日志」
+4. **选择反馈渠道**：
+   - **GitHub Issues**：[https://github.com/leowalk0613/LyricFocus/issues](https://github.com/leowalk0613/LyricFocus/issues)
+   - **酷安作者**：[https://www.coolapk.com/u/551303](https://www.coolapk.com/u/551303)
+5. **描述问题**：详细描述问题现象，并附上复制的日志内容
+
+### 常见问题排查
+
+**Q：LSPosed 已启用，但完全没有歌词**
+
+- 确认作用域是否同时勾选 `com.android.systemui` 与 `com.miui.aod`
+- Root 重启 SystemUI 或重启手机
+- 检查通知访问是否已授权
+- 在应用内日志查看器中过滤 `LyricFocus_Xposed`、`SystemUIHyperFocusHook` 是否有报错
+
+**Q：锁屏有歌词，AOD 没有**
+
+- 确认 `com.miui.aod` 在作用域内
+- 系统设置中 AOD 已开启且支持焦点通知样式
+- HyperOS 焦点 updatable 会话约 **9 秒**超时，AOD 依赖周期性续期；若仍异常可查看 `LyricService` 日志
+
+**Q：有通知但没有歌词文本 / 只显示占位**
+
+- 当前歌曲可能在网易云 / QQ API 未搜到，尝试切换歌词源
+- 检查网络与 DNS；部分区域需稳定网络访问 `music.163.com` / `c.y.qq.com`
+
+**Q：Hook 或设置改了不生效**
+
+- 使用应用内 **重启系统界面**（需 Root）
+- 或重启手机
+
+**Q：非小米 / 非 HyperOS 能否使用？**
+
+- **不能**。本应用依赖 HyperOS 焦点通知（`miui.focus.*`）与 SystemUI Hook，其他 ROM 不支持。
 
 ---
 
@@ -430,15 +476,12 @@ MIT License
 
 <img width="600" height="1335" alt="Screenshot_2026-06-28-14-48-57-708_com leowalk LyricFocus" src="https://github.com/user-attachments/assets/c0bfa278-05a8-4c40-9df2-6e976fba5ac7" />
 
-
 ### 锁屏歌词（桌面状态）
 
 <img width="600" height="1335" alt="Screenshot_2026-06-28-14-49-07-693_com miui home" src="https://github.com/user-attachments/assets/cdb04b77-c0f3-407d-8a69-b15e32045b8f" />
-
 
 ### 锁屏歌词（AOD 息屏）
 
 <img width="600" height="1335" alt="Screenshot_2026-06-28-14-49-32-311_lockscreen" src="https://github.com/user-attachments/assets/cb6881be-789d-48a6-acf7-60ad6e5ee669" />
 
 ---
-
