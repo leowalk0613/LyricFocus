@@ -16,23 +16,6 @@
 
 ---
 
-## 📷 效果图
-
-### 主设置界面
-
-<img width="600" height="1335" alt="Screenshot_2026-06-28-14-48-57-708_com leowalk LyricFocus" src="https://github.com/user-attachments/assets/c0bfa278-05a8-4c40-9df2-6e976fba5ac7" />
-
-
-### 锁屏歌词（桌面状态）
-
-<img width="600" height="1335" alt="Screenshot_2026-06-28-14-49-07-693_com miui home" src="https://github.com/user-attachments/assets/cdb04b77-c0f3-407d-8a69-b15e32045b8f" />
-
-
-### 锁屏歌词（AOD 息屏）
-
-<img width="600" height="1335" alt="Screenshot_2026-06-28-14-49-32-311_lockscreen" src="https://github.com/user-attachments/assets/cb6881be-789d-48a6-acf7-60ad6e5ee669" />
-
----
 
 ## 📋 目录
 
@@ -440,3 +423,22 @@ LSPosed 日志 / `adb logcat` 过滤上述 Tag。
 ## 许可证
 
 MIT License
+
+## 📷 效果图
+
+### 主设置界面
+
+<img width="600" height="1335" alt="Screenshot_2026-06-28-14-48-57-708_com leowalk LyricFocus" src="https://github.com/user-attachments/assets/c0bfa278-05a8-4c40-9df2-6e976fba5ac7" />
+
+
+### 锁屏歌词（桌面状态）
+
+<img width="600" height="1335" alt="Screenshot_2026-06-28-14-49-07-693_com miui home" src="https://github.com/user-attachments/assets/cdb04b77-c0f3-407d-8a69-b15e32045b8f" />
+
+
+### 锁屏歌词（AOD 息屏）
+
+<img width="600" height="1335" alt="Screenshot_2026-06-28-14-49-32-311_lockscreen" src="https://github.com/user-attachments/assets/cb6881be-789d-48a6-acf7-60ad6e5ee669" />
+
+---
+
