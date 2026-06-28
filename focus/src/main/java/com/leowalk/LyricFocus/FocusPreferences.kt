@@ -37,7 +37,7 @@ object FocusPreferences {
     /** HyperOS 焦点通知 updatable 会话约 10s 超时，实际保活间隔不会超过此值 */
     const val SYSTEM_FOCUS_MAX_KEEPALIVE_SEC = 9
 
-    const val DEFAULT_SYNC_ADVANCE_MS = 1300L
+    const val DEFAULT_SYNC_ADVANCE_MS = 200L
     const val MIN_SYNC_ADVANCE_MS = -1000L
     const val MAX_SYNC_ADVANCE_MS = 3000L
 
