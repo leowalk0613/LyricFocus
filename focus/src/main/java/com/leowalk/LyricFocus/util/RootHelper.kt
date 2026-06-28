@@ -55,4 +55,35 @@ object RootHelper {
         }
         return stdout.ifBlank { stderr }.trim().ifBlank { null }
     }
+
+    /**
+     * 读取文件内容（需要 Root 权限）
+     */
+    fun readFile(path: String): String? {
+        return try {
+            runSuCommand("cat '$path'")
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * 读取 LSPosed 日志目录下的所有日志文件
+     */
+    fun readLsposedLogs(): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        val logPaths = listOf(
+            "/data/adb/lspd/log/startup.log",
+            "/data/adb/lspd/log/error.log",
+            "/data/adb/lspd/log/logcat.log"
+        )
+        for (path in logPaths) {
+            val content = readFile(path)
+            if (content != null) {
+                val fileName = path.substringAfterLast("/")
+                result[fileName] = content
+            }
+        }
+        return result
+    }
 }
