@@ -130,7 +130,7 @@
                         style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="查看 LSPosed 日志" />
+                        android:text="选择日志文件筛选" />
 
                 </LinearLayout>
 
