@@ -5,7 +5,6 @@
 ![Android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-0095D5?&style=for-the-badge&logo=kotlin&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)
-![Version](https://img.shields.io/badge/Version-1.1.0-green?style=for-the-badge)
 
 在小米 HyperOS 上于**锁屏、AOD（息屏显示）、通知栏**展示同步歌词。  
 通过 LSPosed 注入 SystemUI，使用 HyperOS **焦点通知**（`miui.focus.*`）渲染歌词，可选超级岛。
