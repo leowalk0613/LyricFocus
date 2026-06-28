@@ -406,12 +406,20 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
         val syncAdvanceMs = FocusPreferences.getSyncAdvanceMs(this)
         val currentLine = currentLyricInfo.getCurrentLine(currentPosition, syncAdvanceMs)
-        val currentLyricText = currentLine?.text?.ifBlank { "\u266A" } ?: "\u266A"
-        val secondLineText = currentLyricInfo.getSecondLineText(
-            currentPosition,
-            syncAdvanceMs,
-            lyricNotificationManager.buildSongSubtitle(currentTitle, currentArtist)
-        )
+        val currentLyricText: String
+        val secondLineText: String
+        if (currentLine == null && currentTitle.isNotBlank()) {
+            // 还没到第一句歌词，显示歌名+歌手
+            currentLyricText = currentTitle
+            secondLineText = currentArtist
+        } else {
+            currentLyricText = currentLine?.text?.ifBlank { "\u266A" } ?: "\u266A"
+            secondLineText = currentLyricInfo.getSecondLineText(
+                currentPosition,
+                syncAdvanceMs,
+                lyricNotificationManager.buildSongSubtitle(currentTitle, currentArtist)
+            )
+        }
 
         // 更新前台通知显示当前播放状态
         lyricNotificationManager.updateForegroundNotification(
@@ -484,12 +492,20 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         }
         val syncAdvanceMs = FocusPreferences.getSyncAdvanceMs(this)
         val currentLine = currentLyricInfo.getCurrentLine(currentPosition, syncAdvanceMs)
-        val lyricText = currentLine?.text ?: "\u266A"
-        val secondLineText = currentLyricInfo.getSecondLineText(
-            currentPosition,
-            syncAdvanceMs,
-            lyricNotificationManager.buildSongSubtitle(currentTitle, currentArtist)
-        )
+        val lyricText: String
+        val secondLineText: String
+        if (currentLine == null && currentTitle.isNotBlank()) {
+            // 还没到第一句歌词，显示歌名+歌手
+            lyricText = currentTitle
+            secondLineText = currentArtist
+        } else {
+            lyricText = currentLine?.text ?: "\u266A"
+            secondLineText = currentLyricInfo.getSecondLineText(
+                currentPosition,
+                syncAdvanceMs,
+                lyricNotificationManager.buildSongSubtitle(currentTitle, currentArtist)
+            )
+        }
         lastBroadcastLyric = lyricText
         lastBroadcastSecond = secondLineText
         sendLyricBroadcastTo(PACKAGE_SYSTEMUI, lyricText, secondLineText, force = true)
@@ -554,12 +570,20 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         val syncAdvanceMs = FocusPreferences.getSyncAdvanceMs(this)
         val lyricJson = lyricInfo.toJson()
         val currentLine = lyricInfo.getCurrentLine(currentPosition, syncAdvanceMs)
-        val currentLyricText = currentLine?.text?.takeIf { it.isNotBlank() } ?: "\u266A"
-        val secondLineText = lyricInfo.getSecondLineText(
-            currentPosition,
-            syncAdvanceMs,
-            lyricNotificationManager.buildSongSubtitle(title, artist)
-        )
+        val currentLyricText: String
+        val secondLineText: String
+        if (currentLine == null && title.isNotBlank()) {
+            // 还没到第一句歌词，显示歌名+歌手
+            currentLyricText = title
+            secondLineText = artist
+        } else {
+            currentLyricText = currentLine?.text?.takeIf { it.isNotBlank() } ?: "\u266A"
+            secondLineText = lyricInfo.getSecondLineText(
+                currentPosition,
+                syncAdvanceMs,
+                lyricNotificationManager.buildSongSubtitle(title, artist)
+            )
+        }
         lyricNotificationManager.sendLyricData(
             lyricJson = lyricJson,
             position = currentPosition,
@@ -751,15 +775,15 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     }
 
     private fun sendNoLyricStateToSystemUI(title: String, artist: String, force: Boolean = true) {
-        val subtitle = lyricNotificationManager.buildSongSubtitle(title, artist)
         if (FocusPreferences.isShowInShade(this)) {
             lyricNotificationManager.showNoLyricNotification(title, artist)
         }
-        val noLyricText = "\u6682\u65e0\u6b4c\u8bcd"
+        val noLyricText = title.ifBlank { "\u6682\u65e0\u6b4c\u8bcd" }
+        val noLyricSecond = artist.ifBlank { lyricNotificationManager.buildSongSubtitle(title, artist) }
         val noLyricJson = """[{"time":0,"text":"$noLyricText"}]"""
         pushPlaceholderFocusToSystemUI(
             lyricText = noLyricText,
-            secondLine = subtitle,
+            secondLine = noLyricSecond,
             title = title,
             artist = artist,
             lyricJson = noLyricJson

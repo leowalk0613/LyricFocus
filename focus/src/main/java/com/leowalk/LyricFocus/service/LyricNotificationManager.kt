@@ -258,11 +258,15 @@ class LyricNotificationManager(private val context: Context) {
 
         lastSecondLineText = ""
 
+        val noLyricText = title.ifBlank { "暂无歌词" }
+
+        val noLyricSecond = artist.ifBlank { buildSongSubtitle(title, artist) }
+
         updateLyricNotification(
 
-            lyricText = "暂无歌词",
+            lyricText = noLyricText,
 
-            secondLineText = buildSongSubtitle(title, artist),
+            secondLineText = noLyricSecond,
 
             title = title,
 
