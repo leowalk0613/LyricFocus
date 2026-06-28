@@ -1,14 +1,19 @@
 package com.leowalk.LyricFocus
 
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -83,6 +88,10 @@ class AboutActivity : AppCompatActivity() {
             openUrl("https://github.com/leowalk0613/LyricFocus/issues")
         }
 
+        findViewById<MaterialButton>(R.id.btn_coolapk).setOnClickListener {
+            openUrl("https://www.coolapk.com/u/551303")
+        }
+
         findViewById<MaterialButton>(R.id.btn_hyperfocus_api).setOnClickListener {
             openUrl("https://github.com/ghhccghk/HyperFocusApi")
         }
@@ -108,6 +117,8 @@ class AboutActivity : AppCompatActivity() {
         val logContent = dialogView.findViewById<TextView>(R.id.log_content)
         val loadingIndicator = dialogView.findViewById<ProgressBar>(R.id.loading_indicator)
         val emptyState = dialogView.findViewById<TextView>(R.id.empty_state)
+        val actionBar = dialogView.findViewById<LinearLayout>(R.id.action_bar)
+        val btnCopyLog = dialogView.findViewById<MaterialButton>(R.id.btn_copy_log)
 
         val dialog = MaterialAlertDialogBuilder(this)
             .setTitle("日志查看")
@@ -120,6 +131,7 @@ class AboutActivity : AppCompatActivity() {
         logContent.visibility = View.GONE
         emptyState.visibility = View.GONE
         tabLayout.visibility = View.GONE
+        actionBar.visibility = View.GONE
 
         Thread {
             val logs = mutableMapOf<String, String>()
@@ -148,9 +160,11 @@ class AboutActivity : AppCompatActivity() {
                     emptyState.visibility = View.VISIBLE
                     logContent.visibility = View.GONE
                     tabLayout.visibility = View.GONE
+                    actionBar.visibility = View.GONE
                     emptyState.text = "未找到 LyricFocus 相关日志\n\n已搜索的标签：\n${LOG_TAGS.joinToString(", ")}"
                 } else {
                     logContent.visibility = View.VISIBLE
+                    actionBar.visibility = View.VISIBLE
 
                     if (logFiles.size > 1) {
                         tabLayout.visibility = View.VISIBLE
@@ -174,11 +188,22 @@ class AboutActivity : AppCompatActivity() {
                     if (logFiles.isNotEmpty()) {
                         logContent.text = logs[logFiles.first()]
                     }
+
+                    btnCopyLog.setOnClickListener {
+                        copyToClipboard(logContent.text.toString())
+                    }
                 }
             }
         }.start()
 
         dialog.show()
+    }
+
+    private fun copyToClipboard(text: String) {
+        val clipboard = ContextCompat.getSystemService(this, ClipboardManager::class.java)
+        val clip = android.content.ClipData.newPlainText("LyricFocus 日志", text)
+        clipboard?.setPrimaryClip(clip)
+        Toast.makeText(this, "日志已复制到剪贴板", Toast.LENGTH_SHORT).show()
     }
 
     private fun readLogsFromZip(uri: Uri, logs: MutableMap<String, String>) {

@@ -126,6 +126,14 @@
                         android:text="反馈问题" />
 
                     <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_coolapk"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        android:text="酷安作者" />
+
+                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_view_logs"
                         style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="match_parent"
