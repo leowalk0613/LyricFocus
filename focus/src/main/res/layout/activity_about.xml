@@ -37,7 +37,6 @@
             android:paddingHorizontal="16dp"
             android:paddingBottom="24dp">
 
-            <!-- 应用信息卡片 -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -58,7 +57,7 @@
                         android:layout_width="64dp"
                         android:layout_height="64dp"
                         android:layout_marginBottom="12dp"
-                        android:src="@mipmap/ic_launcher" />
+                        android:src="@drawable/ic_music_note" />
 
                     <TextView
                         android:layout_width="wrap_content"
@@ -88,7 +87,6 @@
 
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- 项目地址卡片 -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -117,22 +115,19 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="8dp"
-                        android:text="GitHub 仓库"
-                        app:icon="@drawable/ic_github" />
+                        android:text="GitHub 仓库" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_github_issue"
                         style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="反馈问题"
-                        app:icon="@drawable/ic_bug_report" />
+                        android:text="反馈问题" />
 
                 </LinearLayout>
 
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- 系统要求卡片 -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -167,7 +162,6 @@
 
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- 致谢卡片 -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -218,7 +212,6 @@
 
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- 许可证卡片 -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

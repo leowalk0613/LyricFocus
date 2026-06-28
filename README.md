@@ -9,7 +9,7 @@
 在小米 HyperOS 上于**锁屏、AOD（息屏显示）、通知栏**展示同步歌词。  
 通过 LSPosed 注入 SystemUI，使用 HyperOS **焦点通知**（`miui.focus.*`）渲染歌词，可选超级岛。
 
-包名：`com.lyricnotify.focus`
+包名：`com.leowalk.LyricFocus`
 
 </div>
 
@@ -66,7 +66,7 @@ App 进程拉歌词，SystemUI 进程发焦点通知：
 
 ```mermaid
 flowchart LR
-    subgraph App["com.lyricnotify.focus"]
+    subgraph App["com.leowalk.LyricFocus"]
         MMS[MusicMonitorService]
         LS[LyricService]
         LM[LyricManager]
@@ -327,22 +327,22 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 
 | Action | 说明 |
 |--------|------|
-| `com.lyricnotify.focus.action.UPDATE_LYRIC` | 当前行、第二行、播放状态 |
-| `com.lyricnotify.focus.action.LYRIC_DATA` | LRC JSON、position、offset |
-| `com.lyricnotify.focus.action.PLAYBACK_STATE` | 播放/暂停 |
-| `com.lyricnotify.focus.action.SETTINGS_CHANGED` | 设置变更 |
+| `com.leowalk.LyricFocus.action.UPDATE_LYRIC` | 当前行、第二行、播放状态 |
+| `com.leowalk.LyricFocus.action.LYRIC_DATA` | LRC JSON、position、offset |
+| `com.leowalk.LyricFocus.action.PLAYBACK_STATE` | 播放/暂停 |
+| `com.leowalk.LyricFocus.action.SETTINGS_CHANGED` | 设置变更 |
 
 **SystemUI → App**：
 
 | Action | 说明 |
 |--------|------|
-| `com.lyricnotify.focus.action.REQUEST_RESYNC` | SystemUI 就绪，请求重推 |
+| `com.leowalk.LyricFocus.action.REQUEST_RESYNC` | SystemUI 就绪，请求重推 |
 
 ---
 
 ## Xposed Hook
 
-入口：`com.lyricnotify.focus.xposed.FocusMainHook`
+入口：`com.leowalk.LyricFocus.xposed.FocusMainHook`
 
 | 作用域 | 主要类 | 职责 |
 |--------|--------|------|
