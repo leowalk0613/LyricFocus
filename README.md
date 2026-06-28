@@ -43,7 +43,7 @@
 
 | 项目 | 要求 |
 |------|------|
-| 系统 | **小米 HyperOS 3.0 + **（验证环境：HyperOS 3.0.x，如 `3.0.302.0.WNCCNXM`） |
+| 系统 | **小米 HyperOS 3.0+ **（验证环境：HyperOS 3.0.x，如 `3.0.302.0.WNCCNXM`） |
 | Android | API **31+**，`targetSdk 34` |
 | 框架 | **LSPosed**（或兼容 Xposed 实现），API 82+ |
 | LSPosed 作用域 | `com.android.systemui`（系统界面）、`com.miui.aod`（息屏与锁屏编辑） |
@@ -136,7 +136,7 @@ LyricFocus/
 
 | 项目 | 说明 |
 |------|------|
-| 设备 | 小米 / Redmi，已升级 **HyperOS**（建议 HyperOS 2 / 3，焦点通知完整） |
+| 设备 | 小米 / Redmi，已升级 **HyperOS 3.0+ ** |
 | Android | **12 及以上**（`minSdk 31`） |
 | Bootloader | 已解锁（安装 LSPosed 所需） |
 | LSPosed | 已通过 Magisk / KernelSU 等模块安装并启用 |
