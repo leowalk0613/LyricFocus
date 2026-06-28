@@ -20,15 +20,17 @@
 
 ### 主设置界面
 
-![主设置界面](https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Android%20app%20settings%20screen%20with%20dark%20theme%2C%20Material%20Design%203%2C%20showing%20music%20lyric%20settings%2C%20toggle%20switches%2C%20sliders%2C%20buttons%2C%20Chinese%20text%2C%20clean%20modern%20UI&image_size=portrait_16_9)
+<img width="600" height="1335" alt="Screenshot_2026-06-28-14-48-57-708_com leowalk LyricFocus" src="https://github.com/user-attachments/assets/c0bfa278-05a8-4c40-9df2-6e976fba5ac7" />
+
 
 ### 锁屏歌词（桌面状态）
 
-![锁屏歌词](https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Android%20lock%20screen%20with%20live%20lyrics%20display%20below%20music%20player%20widget%2C%20Chinese%20lyrics%2C%20dark%20background%20with%20starry%20sky%20wallpaper%2C%20HyperOS%20style%2C%20focus%20notification%20design&image_size=portrait_16_9)
+<img width="600" height="1335" alt="Screenshot_2026-06-28-14-49-07-693_com miui home" src="https://github.com/user-attachments/assets/cdb04b77-c0f3-407d-8a69-b15e32045b8f" />
+
 
 ### 锁屏歌词（AOD 息屏）
 
-![AOD歌词](https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Android%20AOD%20always%20on%20display%20with%20lyrics%20overlay%2C%20Chinese%20lyrics%2C%20beautiful%20anime%20wallpaper%2C%20HyperOS%20focus%20notification%20style%2C%20dark%20theme&image_size=portrait_16_9)
+<img width="600" height="1335" alt="Screenshot_2026-06-28-14-49-32-311_lockscreen" src="https://github.com/user-attachments/assets/cb6881be-789d-48a6-acf7-60ad6e5ee669" />
 
 ---
 
