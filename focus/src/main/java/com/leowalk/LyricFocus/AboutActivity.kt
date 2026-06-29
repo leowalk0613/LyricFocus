@@ -1,5 +1,3 @@
-package com.leowalk.LyricFocus
-
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -22,6 +20,8 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.tabs.TabLayout
 import java.io.BufferedReader
+import java.io.File
+import java.io.InputStream
 import java.io.InputStreamReader
 import java.util.zip.ZipInputStream
 
@@ -37,6 +37,11 @@ class AboutActivity : AppCompatActivity() {
         "FocusMainHook",
         "LSPosed-Bridge",
         "LSPosed"
+    )
+
+    private val LSP_LOG_PATHS = listOf(
+        "/data/adb/lspd/log/",
+        "/data/adb/lspd/log.old/"
     )
 
     private val openDocumentLauncher = registerForActivityResult(
@@ -107,7 +112,167 @@ class AboutActivity : AppCompatActivity() {
 
     private fun setupLogViewer() {
         findViewById<MaterialButton>(R.id.btn_view_logs).setOnClickListener {
-            openDocumentLauncher.launch(arrayOf("*/*"))
+            showLogSourceSelection()
+        }
+    }
+
+    private fun showLogSourceSelection() {
+        val options = arrayOf("自动扫描 LSPosed 日志", "手动选择日志文件")
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle("选择日志来源")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> scanLspLogs()
+                    1 -> openDocumentLauncher.launch(arrayOf("*/*"))
+                }
+            }
+            .show()
+    }
+
+    private fun scanLspLogs() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_log_viewer, null)
+        val tabLayout = dialogView.findViewById<TabLayout>(R.id.tab_layout)
+        val logContent = dialogView.findViewById<TextView>(R.id.log_content)
+        val loadingIndicator = dialogView.findViewById<ProgressBar>(R.id.loading_indicator)
+        val emptyState = dialogView.findViewById<TextView>(R.id.empty_state)
+        val actionBar = dialogView.findViewById<LinearLayout>(R.id.action_bar)
+        val btnCopyLog = dialogView.findViewById<MaterialButton>(R.id.btn_copy_log)
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle("LSPosed 日志")
+            .setView(dialogView)
+            .setNegativeButton("关闭", null)
+            .setCancelable(true)
+            .create()
+
+        loadingIndicator.visibility = View.VISIBLE
+        logContent.visibility = View.GONE
+        emptyState.visibility = View.GONE
+        tabLayout.visibility = View.GONE
+        actionBar.visibility = View.GONE
+
+        Thread {
+            val logs = mutableMapOf<String, String>()
+
+            try {
+                for (logPath in LSP_LOG_PATHS) {
+                    val dir = File(logPath)
+                    if (dir.exists() && dir.isDirectory) {
+                        scanDirectory(dir, logs)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error scanning LSP logs", e)
+            }
+
+            val logFiles = logs.keys.sortedByDescending { it }.toList()
+
+            runOnUiThread {
+                loadingIndicator.visibility = View.GONE
+
+                if (logs.isEmpty()) {
+                    emptyState.visibility = View.VISIBLE
+                    logContent.visibility = View.GONE
+                    tabLayout.visibility = View.GONE
+                    actionBar.visibility = View.GONE
+                    emptyState.text = "未找到 LSPosed 日志\n\n请确保已获取 Root 权限\n或使用手动选择文件方式"
+                } else {
+                    logContent.visibility = View.VISIBLE
+                    actionBar.visibility = View.VISIBLE
+
+                    if (logFiles.size > 1) {
+                        tabLayout.visibility = View.VISIBLE
+                        for (fileName in logFiles) {
+                            val displayName = fileName.substringBefore(".log")
+                            tabLayout.addTab(tabLayout.newTab().setText(displayName))
+                        }
+
+                        tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+                            override fun onTabSelected(tab: TabLayout.Tab?) {
+                                tab?.text?.let { showLog ->
+                                    val content = logs["$showLog.log"]
+                                    logContent.text = content ?: "日志为空"
+                                }
+                            }
+                            override fun onTabUnselected(tab: TabLayout.Tab?) {}
+                            override fun onTabReselected(tab: TabLayout.Tab?) {}
+                        })
+                    }
+
+                    if (logFiles.isNotEmpty()) {
+                        logContent.text = logs[logFiles.first()]
+                    }
+
+                    btnCopyLog.setOnClickListener {
+                        copyToClipboard(logContent.text.toString())
+                    }
+                }
+            }
+        }.start()
+
+        dialog.show()
+    }
+
+    private fun scanDirectory(dir: File, logs: MutableMap<String, String>) {
+        val files = dir.listFiles() ?: return
+
+        for (file in files) {
+            if (file.isDirectory) {
+                scanDirectory(file, logs)
+            } else if (file.name.endsWith(".log") && file.name.startsWith("modules_")) {
+                val content = readFilteredLogContent(file)
+                if (content.isNotBlank()) {
+                    logs[file.name] = content
+                }
+            } else if (file.name.endsWith(".zip", true)) {
+                readLogsFromZipFile(file, logs)
+            }
+        }
+    }
+
+    private fun readFilteredLogContent(file: File): String {
+        return try {
+            BufferedReader(InputStreamReader(file.inputStream())).use { reader ->
+                reader.lineSequence()
+                    .filter { line ->
+                        LOG_TAGS.any { tag -> line.contains(tag) }
+                    }
+                    .toList()
+                    .joinToString("\n")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reading log file: ${file.name}", e)
+            ""
+        }
+    }
+
+    private fun readLogsFromZipFile(file: File, logs: MutableMap<String, String>) {
+        try {
+            file.inputStream().use { inputStream ->
+                ZipInputStream(inputStream).use { zip ->
+                    var entry = zip.nextEntry
+                    while (entry != null) {
+                        if (!entry.isDirectory && entry.name.endsWith(".log", true)) {
+                            val fileName = entry.name.substringAfterLast("/")
+                            val content = BufferedReader(InputStreamReader(zip)).use { reader ->
+                                reader.lineSequence()
+                                    .filter { line ->
+                                        LOG_TAGS.any { tag -> line.contains(tag) }
+                                    }
+                                    .toList()
+                                    .joinToString("\n")
+                            }
+                            if (content.isNotBlank()) {
+                                logs[fileName] = content
+                            }
+                        }
+                        entry = zip.nextEntry
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reading zip file: ${file.name}", e)
         }
     }
 

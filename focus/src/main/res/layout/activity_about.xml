@@ -171,7 +171,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="8dp"
                         android:lineSpacingExtra="4dp"
-                        android:text="LSPosed 导出的日志为 zip 压缩包，包含以下文件："
+                        android:text="LSPosed 日志路径："
                         android:textAppearance="?attr/textAppearanceBodyMedium"
                         android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -186,7 +186,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginBottom="4dp"
-                            android:text="• startup.log - 模块启动日志"
+                            android:text="• /data/adb/lspd/log/modules_*.log"
                             android:textAppearance="?attr/textAppearanceBodyMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -194,14 +194,14 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginBottom="4dp"
-                            android:text="• error.log - 错误日志（排查 crash 首选）"
+                            android:text="• /data/adb/lspd/log.old/（旧日志）"
                             android:textAppearance="?attr/textAppearanceBodyMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="• logcat.log - 完整系统日志"
+                            android:text="• LSPosed 导出的 zip 压缩包"
                             android:textAppearance="?attr/textAppearanceBodyMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -225,7 +225,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginBottom="2dp"
-                            android:text="1. 打开 LSPosed Manager"
+                            android:text="• 自动扫描（需 Root）：点击下方按钮 → 选择「自动扫描 LSPosed 日志」"
                             android:textAppearance="?attr/textAppearanceBodyMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -233,22 +233,14 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginBottom="2dp"
-                            android:text="2. 点击右上角菜单 → 保存日志"
+                            android:text="• 手动选择（无需 Root）：先在 LSPosed 中保存日志 → 点击下方按钮 → 选择「手动选择日志文件」"
                             android:textAppearance="?attr/textAppearanceBodyMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="2dp"
-                            android:text="3. 点击下方按钮，选择导出的 zip 文件"
-                            android:textAppearance="?attr/textAppearanceBodyMedium"
-                            android:textColor="?attr/colorOnSurfaceVariant" />
-
-                        <TextView
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="4. 应用会自动筛选 LyricFocus 相关日志"
+                            android:text="• 应用会自动筛选 LyricFocus 相关日志，支持一键复制"
                             android:textAppearance="?attr/textAppearanceBodyMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
