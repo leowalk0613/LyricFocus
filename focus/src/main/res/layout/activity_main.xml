@@ -39,10 +39,18 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="12dp"
                 android:text="HyperOS 焦点通知歌词"
                 android:textAppearance="?attr/textAppearanceBodyMedium"
                 android:textColor="?attr/colorOnSurfaceVariant" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_style_settings"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:text="样式设置" />
 
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
@@ -119,78 +127,6 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="通知栏也显示"
-                                android:textAppearance="?attr/textAppearanceBodyLarge" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:text="默认只在锁屏/AOD 显示，不占用通知栏"
-                                android:textAppearance="?attr/textAppearanceBodySmall"
-                                android:textColor="?attr/colorOnSurfaceVariant" />
-
-                        </LinearLayout>
-
-                        <com.google.android.material.materialswitch.MaterialSwitch
-                            android:id="@+id/switch_show_in_shade"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content" />
-
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="12dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="超级岛显示歌词"
-                                android:textAppearance="?attr/textAppearanceBodyLarge" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:text="关闭后仅在锁屏/AOD/焦点区实时更新"
-                                android:textAppearance="?attr/textAppearanceBodySmall"
-                                android:textColor="?attr/colorOnSurfaceVariant" />
-
-                        </LinearLayout>
-
-                        <com.google.android.material.materialswitch.MaterialSwitch
-                            android:id="@+id/switch_show_on_island"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content" />
-
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="12dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
                                 android:text="音乐应用白名单"
                                 android:textAppearance="?attr/textAppearanceBodyLarge" />
 
@@ -213,7 +149,7 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_manage_whitelist"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="12dp"
@@ -258,7 +194,7 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btn_switch_lyric_source"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            style="@style/Widget.Material3.Button.TonalButton"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="切换" />
@@ -449,7 +385,7 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Root 权限"
+                                android:text="Root 权限（用于系统界面重启）"
                                 android:textAppearance="?attr/textAppearanceBodyLarge" />
 
                             <TextView
@@ -463,10 +399,10 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btn_restart_systemui"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            style="@style/Widget.Material3.Button.TonalButton"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="重启系统界面" />
+                            android:text="重启" />
 
                     </LinearLayout>
 
@@ -500,7 +436,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:lineSpacingExtra="4dp"
-                        android:text="1. 授予通知访问与发送通知权限\n2. LSPosed 勾选「系统界面」和「息屏与锁屏编辑(com.miui.aod)」\n3. 使用 Root 重启系统界面使 Hook 生效\n4. 播放音乐后锁屏/AOD 显示歌词（可选开启超级岛）"
+                        android:text="1. 授予通知访问与发送通知权限\n2. LSPosed 勾选「系统界面」和「息屏与锁屏编辑(com.miui.aod)」\n3. 使用 Root 重启系统界面使 Hook 生效\n4. 播放音乐后锁屏/AOD 显示歌词"
                         android:textAppearance="?attr/textAppearanceBodyMedium"
                         android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -510,9 +446,10 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_about"
-                style="@style/Widget.Material3.Button.OutlinedButton"
+                style="@style/Widget.Material3.Button.TonalButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
                 android:text="关于 LyricFocus" />
 
         </LinearLayout>

@@ -12,6 +12,26 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_MEDIA_FILES" />
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <package android:name="com.netease.cloudmusic" />
+        <package android:name="com.tencent.qqmusic" />
+        <package android:name="com.luna.music" />
+        <package android:name="com.miui.player" />
+        <package android:name="com.kugou.android" />
+        <package android:name="com.kuwo.kwmusiccar" />
+        <package android:name="cn.kuwo.player" />
+        <package android:name="com.apple.android.music" />
+        <package android:name="com.google.android.apps.youtube.music" />
+        <package android:name="com.spotify.music" />
+    </queries>
 
     <application
         android:name=".LyricFocusApp"
@@ -39,6 +59,11 @@
 
         <activity
             android:name=".AboutActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
+            android:name=".StyleSettingsActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />
 

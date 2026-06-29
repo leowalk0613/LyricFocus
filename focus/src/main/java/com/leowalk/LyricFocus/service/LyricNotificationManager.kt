@@ -226,6 +226,7 @@ class LyricNotificationManager(private val context: Context) {
                 if (forceResync) {
                     putExtra("force_resync", true)
                 }
+                FocusPreferences.fillStyleExtras(this, context)
             }
             context.sendBroadcast(intent)
         } catch (e: Exception) {

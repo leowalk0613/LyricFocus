@@ -37,7 +37,9 @@ import com.hyperfocus.api.FocusApi
 import com.hyperfocus.api.IslandApi
 
 import com.leowalk.LyricFocus.R
-
+import com.leowalk.LyricFocus.FocusPreferences
+import com.leowalk.LyricFocus.FocusStyleSnapshot
+import com.leowalk.LyricFocus.util.AlbumColorExtractor
 import org.json.JSONObject
 
 
@@ -54,19 +56,13 @@ object HyperFocusLyricStyle {
 
 
 
-    const val MODULE_PACKAGE = "com.leowalk.LyricFocus"
+    const val MODULE_PACKAGE = FocusPreferences.MODULE_PACKAGE
 
     /** 与 HyperCeiler 焦点歌词渠道一致，便于 SystemUI 识别为焦点通知 */
 
     const val CHANNEL_ID = "channel_id_focusNotifLyrics"
 
     private const val TIMEOUT_SEC = 999999
-
-    private const val LYRIC_PRIMARY_SP = 18f
-
-    private const val LYRIC_SECONDARY_SP = 14f
-
-    private const val ISLAND_LYRIC_PRIMARY_SP = 17f
 
     private const val COLOR_LYRIC_PRIMARY = Color.WHITE
 
@@ -208,7 +204,7 @@ object HyperFocusLyricStyle {
 
         val islandTemplate = if (showOnIsland) {
 
-            buildIslandTemplate(lyric, musicLabel, content.musicPackage)
+            buildIslandTemplate(lyric, musicLabel, content.musicPackage, moduleContext)
 
         } else {
 
@@ -336,7 +332,7 @@ object HyperFocusLyricStyle {
 
         val notifyId = CHANNEL_ID.hashCode()
 
-        if (recreateForAod) {
+        if (recreateForAod || forceRefresh) {
 
             notificationManager.cancel(notifyId)
 
@@ -394,7 +390,12 @@ object HyperFocusLyricStyle {
 
 
 
-    private fun buildIslandTemplate(lyric: String, musicLabel: String, musicPackage: String): org.json.JSONObject {
+    private fun buildIslandTemplate(
+        lyric: String,
+        musicLabel: String,
+        musicPackage: String,
+        moduleContext: Context
+    ): org.json.JSONObject {
 
         // 固定单块布局，避免长短句切换时左右分岛变形动画
 
@@ -430,11 +431,13 @@ object HyperFocusLyricStyle {
 
         )
 
+        val islandStyle = resolveLyricStyle(moduleContext, R.layout.focus_lyric_island)
+
         return IslandApi.IslandTemplate(
 
             shareData = shareData,
 
-            highlightColor = "#FFFFFFFF",
+            highlightColor = colorToIslandHex(islandStyle.colorPrimary),
 
             islandTimeout = TIMEOUT_SEC,
 
@@ -459,63 +462,161 @@ object HyperFocusLyricStyle {
 
 
     private fun buildLyricRemoteViews(
-
         moduleContext: Context,
-
         layoutId: Int,
-
         lyric: String,
-
         translation: String?
-
     ): RemoteViews {
-
         val views = RemoteViews(moduleContext.packageName, layoutId)
+        val style = resolveLyricStyle(moduleContext, layoutId)
+        applyLyricStyle(views, lyric, translation, style, hideSongTitle = layoutId == R.layout.focus_lyric_lock)
+        return views
+    }
+
+    private data class LyricStyle(
+        val primarySizeSp: Float,
+        val secondarySizeSp: Float,
+        val colorPrimary: Int,
+        val colorSecondary: Int,
+        val lyricMaxLines: Int,
+        val translationMaxLines: Int,
+        val gravityValue: Int,
+        val backgroundColor: Int?
+    )
+
+    private fun resolveLyricStyle(moduleContext: Context, layoutId: Int): LyricStyle {
+        val textSize = FocusStyleSnapshot.textSizeSp
+        val textColor = FocusStyleSnapshot.textColor
+        val lyricMaxLines = FocusStyleSnapshot.lyricMaxLines
+        val translationMaxLines = FocusStyleSnapshot.translationMaxLines
+        val gravity = FocusStyleSnapshot.gravity
+        val background = FocusStyleSnapshot.background
+        val monetEnabled = FocusStyleSnapshot.monetDynamicColorEnabled
+        val textExtractionEnabled = FocusStyleSnapshot.textColorExtractionEnabled
+        val extractedColor = if (monetEnabled || textExtractionEnabled) {
+            FocusStyleSnapshot.extractedTextColor
+        } else {
+            null
+        }
+        val extractedBgColor = FocusStyleSnapshot.extractedBgColor
+
+        val colorPrimary: Int
+        val colorSecondary: Int
+        val backgroundColor: Int?
+        when {
+            monetEnabled && extractedColor != null && extractedBgColor != null -> {
+                colorPrimary = extractedColor
+                colorSecondary = AlbumColorExtractor.ensureContrast(
+                    AlbumColorExtractor.blendSecondary(extractedColor, extractedBgColor),
+                    extractedBgColor,
+                    3.0
+                )
+                backgroundColor = extractedBgColor
+            }
+            textExtractionEnabled && extractedColor != null -> {
+                val (primary, secondary) = AlbumColorExtractor.resolveTextColors(
+                    accent = extractedColor,
+                    backgroundEstimate = extractedBgColor ?: Color.GRAY,
+                    backgroundMode = background
+                )
+                colorPrimary = primary
+                colorSecondary = secondary
+                backgroundColor = when (background) {
+                    FocusPreferences.BACKGROUND_BLACK -> Color.BLACK
+                    FocusPreferences.BACKGROUND_WHITE -> Color.WHITE
+                    else -> null
+                }
+            }
+            textColor == FocusPreferences.TEXT_COLOR_BLACK -> {
+                colorPrimary = Color.BLACK
+                colorSecondary = 0xFF333333.toInt()
+                backgroundColor = when (background) {
+                    FocusPreferences.BACKGROUND_BLACK -> Color.BLACK
+                    FocusPreferences.BACKGROUND_WHITE -> Color.WHITE
+                    else -> null
+                }
+            }
+            else -> {
+                colorPrimary = COLOR_LYRIC_PRIMARY
+                colorSecondary = COLOR_LYRIC_SECONDARY
+                backgroundColor = when (background) {
+                    FocusPreferences.BACKGROUND_BLACK -> Color.BLACK
+                    FocusPreferences.BACKGROUND_WHITE -> Color.WHITE
+                    else -> null
+                }
+            }
+        }
+
+        val gravityValue = when (gravity) {
+            FocusPreferences.GRAVITY_LEFT -> android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+            FocusPreferences.GRAVITY_RIGHT -> android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL
+            else -> android.view.Gravity.CENTER
+        }
 
         val primarySize = if (layoutId == R.layout.focus_lyric_island) {
-
-            ISLAND_LYRIC_PRIMARY_SP
-
+            textSize * 0.94f
         } else {
-
-            LYRIC_PRIMARY_SP
-
+            textSize
         }
 
+        return LyricStyle(
+            primarySizeSp = primarySize,
+            secondarySizeSp = textSize * 0.78f,
+            colorPrimary = colorPrimary,
+            colorSecondary = colorSecondary,
+            lyricMaxLines = lyricMaxLines,
+            translationMaxLines = translationMaxLines,
+            gravityValue = gravityValue,
+            backgroundColor = backgroundColor
+        )
+    }
 
+    private fun applyLyricStyle(
+        views: RemoteViews,
+        lyric: String,
+        translation: String?,
+        style: LyricStyle,
+        hideSongTitle: Boolean
+    ) {
+        views.setInt(R.id.focus_lyric_content, "setGravity", style.gravityValue)
 
         views.setTextViewText(R.id.focuslyric, lyric)
-
-        views.setTextColor(R.id.focuslyric, COLOR_LYRIC_PRIMARY)
-
-        views.setTextViewTextSize(R.id.focuslyric, TypedValue.COMPLEX_UNIT_SP, primarySize)
-
-
+        views.setTextColor(R.id.focuslyric, style.colorPrimary)
+        views.setTextViewTextSize(R.id.focuslyric, TypedValue.COMPLEX_UNIT_SP, style.primarySizeSp)
+        views.setInt(R.id.focuslyric, "setMaxLines", style.lyricMaxLines)
+        views.setInt(R.id.focuslyric, "setGravity", style.gravityValue)
 
         if (translation.isNullOrBlank()) {
-
             views.setViewVisibility(R.id.focustflyric, View.GONE)
-
         } else {
-
             views.setTextViewText(R.id.focustflyric, translation)
-
-            views.setTextColor(R.id.focustflyric, COLOR_LYRIC_SECONDARY)
-
-            views.setTextViewTextSize(R.id.focustflyric, TypedValue.COMPLEX_UNIT_SP, LYRIC_SECONDARY_SP)
-
+            views.setTextColor(R.id.focustflyric, style.colorSecondary)
+            views.setTextViewTextSize(R.id.focustflyric, TypedValue.COMPLEX_UNIT_SP, style.secondarySizeSp)
+            views.setInt(R.id.focustflyric, "setMaxLines", style.translationMaxLines)
+            views.setInt(R.id.focustflyric, "setGravity", style.gravityValue)
             views.setViewVisibility(R.id.focustflyric, View.VISIBLE)
-
         }
 
-        if (layoutId == R.layout.focus_lyric_lock) {
+        if (style.backgroundColor != null) {
+            views.setViewVisibility(R.id.focus_lyric_bg, View.VISIBLE)
+            views.setImageViewBitmap(R.id.focus_lyric_bg, solidColorBitmap(style.backgroundColor))
+        } else {
+            views.setViewVisibility(R.id.focus_lyric_bg, View.GONE)
+        }
 
+        if (hideSongTitle) {
             views.setViewVisibility(R.id.focus_song_title, View.GONE)
-
         }
+    }
 
-        return views
+    private fun solidColorBitmap(color: Int): Bitmap {
+        val bitmap = Bitmap.createBitmap(16, 16, Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(color)
+        return bitmap
+    }
 
+    private fun colorToIslandHex(color: Int): String {
+        return String.format("#%08X", color.toLong() and 0xFFFFFFFFL)
     }
 
 
@@ -536,27 +637,9 @@ object HyperFocusLyricStyle {
 
         views.setImageViewIcon(R.id.focusicon, icon)
 
-        views.setTextViewText(R.id.focuslyric, lyric)
+        val style = resolveLyricStyle(moduleContext, R.layout.focus_lyric_aod)
 
-        views.setTextColor(R.id.focuslyric, COLOR_LYRIC_PRIMARY)
-
-        views.setTextViewTextSize(R.id.focuslyric, TypedValue.COMPLEX_UNIT_SP, LYRIC_PRIMARY_SP)
-
-        if (translation.isNullOrBlank()) {
-
-            views.setViewVisibility(R.id.focustflyric, View.GONE)
-
-        } else {
-
-            views.setTextViewText(R.id.focustflyric, translation)
-
-            views.setTextColor(R.id.focustflyric, COLOR_LYRIC_SECONDARY)
-
-            views.setTextViewTextSize(R.id.focustflyric, TypedValue.COMPLEX_UNIT_SP, LYRIC_SECONDARY_SP)
-
-            views.setViewVisibility(R.id.focustflyric, View.VISIBLE)
-
-        }
+        applyLyricStyle(views, lyric, translation, style, hideSongTitle = false)
 
         return views
 

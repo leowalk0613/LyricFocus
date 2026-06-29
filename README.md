@@ -18,25 +18,39 @@
 
 ## 📋 目录
 
-- [功能概览](#功能概览)- [系统要求](#系统要求)- [架构与数据流](#架构与数据流)- [项目结构](#项目结构)- [安装与配置](#安装与配置)- [设置项](#设置项)
-- [歌词源](#歌词源)- [进程间通信](#进程间通信)- [Xposed Hook](#xposed-hook)- [依赖](#依赖)
-- [版本更新](#版本更新)- [调试与反馈](#调试与反馈)- [已知限制](#已知限制)- [致谢](#致谢)- [许可证](#许可证)
+- [功能概览](#功能概览)
+- [系统要求](#系统要求)
+- [架构与数据流](#架构与数据流)
+- [项目结构](#项目结构)
+- [安装与配置](#安装与配置)
+- [设置项](#设置项)
+- [歌词源](#歌词源)
+- [进程间通信](#进程间通信)
+- [Xposed Hook](#xposed-hook)
+- [依赖](#依赖)
+- [版本更新](#版本更新)
+- [调试与反馈](#调试与反馈)
+- [已知限制](#已知限制)
+- [致谢](#致谢)
+- [许可证](#许可证)
 
 ---
 
 ## 功能概览
 
-- **Material 3 界面**：跟随系统壁纸 **Monet 动态取色**（Android 12+ Material You）
+- **Material 3 界面**：主界面、样式设置、关于页统一 Tonal 按钮风格
+- **样式设置（v1.3）**：独立二级页面，可调文字大小、颜色、行数、对齐、焦点通知背景；支持 **Monet 动态取色** 与 **通知文字取色**
+- **Monet 动态取色**：从当前播放专辑封面实时提取背景与文字色（Material You 风格），自动增强对比度以保证歌词可读性；开启后手动背景/文字/文字取色选项置灰
 - **实时歌词**：`NotificationListenerService` 绑定 MediaSession，监听播放进度与元数据
 - **多歌词源**：网易云音乐、QQ 音乐（自动链式回退或指定单一源）
 - **焦点通知**：锁屏 / AOD 使用 `miui.focus.rv`、`miui.focus.rvAod` 自定义 RemoteViews，支持 updatable 会话续期
-- **超级岛（可选，默认关闭）**：开启走 `IslandApi`；关闭时注入 `dismissIsland`，避免 HyperOS 3 生成默认小岛
-- **应用白名单**：可选仅对指定音乐 App 的 MediaSession 响应
-- **歌词提前量**：可调同步偏移（默认提前 1300 ms）
+- **超级岛（默认关闭）**：主界面已移除开关，代码层固定关闭
+- **应用白名单**：可选仅对指定音乐 App 的 MediaSession 响应；支持搜索已安装应用、手动添加包名
+- **歌词提前量**：可调同步偏移（默认提前 200 ms）
 - **Root 重启 SystemUI**：设置页一键重启系统界面，Hook 变更后快速生效
 - **统一通知渠道**：后台服务通知合并为单一渠道，前台通知显示当前播放状态
-- **关于界面**：包含软件信息、GitHub 链接、酷安作者链接、系统要求、致谢与开源许可证
-- **LSPosed 日志查看**：应用内选择日志文件/ZIP压缩包，自动筛选 LyricFocus 相关日志，支持一键复制
+- **关于界面**：软件信息、GitHub / 酷安链接、联系邮箱弹窗、系统要求、致谢与开源许可证
+- **LSPosed 日志查看**：应用内选择日志文件/ZIP 压缩包，自动筛选 LyricFocus 相关日志，支持一键复制
 
 ---
 
@@ -48,7 +62,7 @@
 | Android | API **31+**，`targetSdk 34` |
 | 框架 | **LSPosed**（或兼容 Xposed 实现），API 82+ |
 | LSPosed 作用域 | `com.android.systemui`（系统界面）、`com.miui.aod`（息屏与锁屏编辑） |
-| 权限 | 通知访问、发送通知、网络、前台服务 |
+| 权限 | 通知访问、发送通知、网络、前台服务、读取应用列表（白名单选应用，Android 11+） |
 | 可选 | Root（Magisk / KernelSU）— 应用内重启 SystemUI、查看 LSPosed 日志 |
 
 ### 额外使用条件
@@ -115,16 +129,18 @@ LyricFocus/
         ├── assets/xposed_init          → FocusMainHook
         ├── java/com/leowalk/LyricFocus/
         │   ├── MainActivity.kt
-        │   ├── AboutActivity.kt        → 关于界面（软件信息、日志查看）
-        │   ├── AppWhitelistActivity.kt
+        │   ├── StyleSettingsActivity.kt  → 样式设置（字号、取色、背景等）
+        │   ├── AboutActivity.kt          → 关于界面（软件信息、日志查看、联系邮箱）
+        │   ├── AppWhitelistActivity.kt   → 音乐应用白名单
         │   ├── FocusPreferences.kt
-        │   ├── lyric/                  # 网易云 / QQ、LRC 解析
-        │   ├── service/                # MediaSession、歌词服务、通知管理
-        │   ├── notification/           # HyperFocusLyricStyle
-        │   ├── receiver/               # FocusResyncReceiver
-        │   ├── util/                   # RootHelper（含日志读取）
-        │   └── xposed/                 # SystemUI / AOD Hook
-        └── res/layout/                 # focus_lyric_lock / aod / island / about
+        │   ├── FocusStyleSnapshot.kt     → SystemUI 侧样式快照
+        │   ├── lyric/                    # 网易云 / QQ、LRC 解析
+        │   ├── service/                  # MediaSession、歌词服务、通知管理
+        │   ├── notification/             # HyperFocusLyricStyle
+        │   ├── receiver/                 # FocusResyncReceiver
+        │   ├── util/                     # RootHelper、AlbumColorExtractor、InstalledAppsHelper
+        │   └── xposed/                   # SystemUI / AOD Hook
+        └── res/layout/                   # focus_lyric_* / activity_style_settings / about
 ```
 
 ---
@@ -210,7 +226,8 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 |------|----------|------|
 | **通知访问** | 点击「授权」→ 系统列表中找到 LyricFocus 并开启 | 读取 MediaSession，获取歌曲信息与播放进度 |
 | **发送通知** | Android 13+ 点击「授权」允许；若已拒绝则跳转应用通知设置 | 前台服务通知、可选通知栏歌词 |
-| **Root**（可选） | Magisk / KernelSU 授予 LyricFocus Root | 应用内重启 SystemUI、查看 LSPosed 日志 |
+| **Root**（可选） | Magisk / KernelSU 授予 LyricFocus Root | 应用内重启 SystemUI、自动扫描 LSPosed 日志 |
+| **读取应用列表**（可选） | 系统设置 → LyricFocus → 权限 → 读取应用列表 | 白名单「添加应用」时列出已安装音乐 App |
 
 **HyperOS 额外建议**：
 
@@ -230,11 +247,13 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 4. 确认 **服务状态** 显示为「运行中」
 5. 打开任意音乐 App **播放歌曲**（带歌词 metadata 更易命中）
 6. **锁屏** 或 **息屏（AOD）**，应看到焦点通知区域的歌词随播放更新
-7. （可选）开启 **超级岛显示歌词**；默认关闭，仅在锁屏 / AOD / 焦点区更新
+7. （可选）进入 **样式设置** 调整字号、Monet 动态取色等显示效果
 
 **歌词源**：默认 `auto`（先网易云后 QQ）。可在设置中切换；界面会显示当前歌曲与命中来源。
 
-**同步偏移**：歌词偏慢向右拖，偏快向左拖（默认提前 1300 ms）。
+**同步偏移**：歌词偏慢向右拖，偏快向左拖（默认提前 200 ms）。
+
+**样式设置**：主界面顶部「样式设置」入口，可配置 Monet 动态取色、文字颜色、焦点通知背景等。
 
 ---
 
@@ -267,12 +286,21 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 | 设置 | 键 | 默认 | 说明 |
 |------|-----|------|------|
 | 焦点通知歌词 | `focus_lyric_enabled` | 开 | 总开关 |
-| 通知栏显示 | `show_in_notification_shade` | 关 | 下滑通知栏是否显示 |
-| 超级岛显示歌词 | `show_on_super_island` | 关 | 开启用 `IslandApi`；关闭则 `dismissIsland` |
+| 通知栏显示 | `show_in_notification_shade` | 关 | 代码固定关闭（v1.3 主界面已移除开关） |
+| 超级岛显示歌词 | `show_on_super_island` | 关 | 代码固定关闭（v1.3 主界面已移除开关） |
 | 应用白名单 | `app_whitelist_enabled` | 关 | 限制 MediaSession 包名 |
+| 白名单包名列表 | `app_whitelist_packages` | 空 | 开启白名单时默认填充常见音乐 App |
 | 歌词获取源 | `lyric_source` | `auto` | `auto` / `netease` / `qq` |
-| 歌词提前量 | `sync_advance_ms` | `1300` | -1000 ~ 3000 ms |
+| 歌词提前量 | `sync_advance_ms` | `200` | -1000 ~ 3000 ms |
 | AOD 保活间隔 | `aod_keepalive_sec` | `9` | 受焦点会话 ~9s 系统上限约束 |
+| 歌词字号 | `lyric_text_size` | `18` sp | 12 ~ 32 sp |
+| 文字颜色 | `lyric_text_color` | `white` | `white` / `black`；Monet 或文字取色开启时无效 |
+| 歌词行数 | `lyric_max_lines` | `2` | 1 ~ 2 |
+| 翻译行数 | `translation_max_lines` | `1` | 1 ~ 2 |
+| 对齐方式 | `lyric_gravity` | `center` | `left` / `center` / `right` |
+| 焦点通知背景 | `focus_background` | `default` | `default` / `black` / `white`；Monet 开启时无效 |
+| Monet 动态取色 | `monet_dynamic_color` | 关 | 专辑封面实时取背景+文字色 |
+| 通知文字取色 | `lyric_color_extraction` | 关 | 仅文字取色；与 Monet 互斥 |
 
 ---
 
@@ -299,7 +327,7 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 | `com.leowalk.LyricFocus.action.UPDATE_LYRIC` | 当前行、第二行、播放状态 |
 | `com.leowalk.LyricFocus.action.LYRIC_DATA` | LRC JSON、position、offset |
 | `com.leowalk.LyricFocus.action.PLAYBACK_STATE` | 播放/暂停 |
-| `com.leowalk.LyricFocus.action.SETTINGS_CHANGED` | 设置变更 |
+| `com.leowalk.LyricFocus.action.SETTINGS_CHANGED` | 设置变更（含样式、白名单、Monet 取色） |
 
 **SystemUI → App**：
 
@@ -332,11 +360,24 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 | [HyperFocusApi](https://github.com/ghhccghk/HyperFocusApi) | 2.0 | `miui.focus` 参数封装 |
 | [Xposed API](https://api.xposed.info/) | 82 | LSPosed Hook 接口 |
 | OkHttp | 4.12.0 | 歌词 HTTP |
+| AndroidX Palette | 1.0.0 | 专辑封面取色 |
 | AndroidX / Material / Coroutines | 见 `focus/build.gradle` | UI、MediaSession |
 
 ---
 
 ## 版本更新
+
+### v1.3.0
+
+- **样式设置页面**：新增独立「样式设置」入口，支持歌词字号、文字颜色、歌词/翻译行数、对齐方式、焦点通知背景
+- **Monet 动态取色**：从当前播放专辑封面实时提取背景与文字色（Material You 风格），按 WCAG 对比度增强可读性；换歌自动更新；开启后文字颜色、焦点背景、通知文字取色选项置灰不可改
+- **通知文字取色**：保留仅提取文字强调色的模式（背景仍用手动设置），与 Monet 互斥
+- **专辑封面取色链路**：新增 `AlbumArtLoader`、`AlbumColorExtractor`、`FocusStyleSnapshot`；封面 URI/Bitmap 加载、换歌重同步、跨进程样式广播
+- **应用白名单增强**：修复 Android 11+ 包可见性导致应用列表不全；声明 `QUERY_ALL_PACKAGES`；改用 `getInstalledApplications`；支持搜索选应用、手动添加包名
+- **主界面 UI**：全部按钮统一为 Material 3 Tonal 风格；重启按钮文案简化为「重启」；Root 权限项增加「（用于系统界面重启）」说明
+- **主界面精简**：移除「通知栏也显示」「超级岛显示歌词」开关，代码层固定为关闭
+- **关于页优化**：按钮风格统一；联系邮箱改为弹窗（显示地址 + 发邮件）；日志复制按钮风格一致
+- **版本号**：`1.3.0`（versionCode 4）
 
 ### v1.2.0
 
@@ -428,6 +469,7 @@ LSPosed 日志目录结构：
 4. **选择反馈渠道**：
    - **GitHub Issues**：[https://github.com/leowalk0613/LyricFocus/issues](https://github.com/leowalk0613/LyricFocus/issues)
    - **酷安作者**：[https://www.coolapk.com/u/551303](https://www.coolapk.com/u/551303)
+   - **邮箱**：`walkalone9990613@gmail.com`（关于页 → 联系邮箱）
 5. **描述问题**：详细描述问题现象，并附上复制的日志内容
 
 ### 常见问题排查

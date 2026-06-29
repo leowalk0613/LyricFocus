@@ -111,7 +111,7 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_github_repo"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="8dp"
@@ -119,15 +119,23 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_github_issue"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="8dp"
                         android:text="反馈问题" />
 
                     <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_contact_email"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        android:text="联系邮箱" />
+
+                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_coolapk"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="8dp"
@@ -308,7 +316,7 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_hyperfocus_api"
-                        style="@style/Widget.Material3.Button.TextButton"
+                        style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="HyperFocusApi"
@@ -316,7 +324,7 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_hyperceiler"
-                        style="@style/Widget.Material3.Button.TextButton"
+                        style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="HyperCeiler"
@@ -324,7 +332,7 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_lsposed"
-                        style="@style/Widget.Material3.Button.TextButton"
+                        style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="LSPosed"

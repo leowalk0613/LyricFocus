@@ -21,6 +21,7 @@ import android.service.notification.StatusBarNotification
 import android.view.View
 import android.view.ViewGroup
 import com.leowalk.LyricFocus.FocusPreferences
+import com.leowalk.LyricFocus.FocusStyleSnapshot
 import com.leowalk.LyricFocus.notification.HyperFocusLyricStyle
 import com.leowalk.LyricFocus.xposed.hook.BaseHook
 import de.robv.android.xposed.XC_MethodHook
@@ -624,12 +625,39 @@ class SystemUIHyperFocusHook : BaseHook() {
         showOnIsland = FocusPreferences.readShowOnIsland(context)
         aodKeepaliveSec = FocusPreferences.readAodKeepaliveSec(context)
         syncAdvanceMs = FocusPreferences.readSyncAdvanceMs(context)
+        FocusStyleSnapshot.reloadFromDisk()
+    }
+
+    private fun applyIncomingStyleExtras(intent: Intent): Boolean {
+        val prevMonet = FocusStyleSnapshot.monetDynamicColorEnabled
+        val prevTextExtraction = FocusStyleSnapshot.textColorExtractionEnabled
+        val prevEnabled = FocusStyleSnapshot.colorExtractionEnabled
+        val prevColor = FocusStyleSnapshot.extractedTextColor
+        val prevBgColor = FocusStyleSnapshot.extractedBgColor
+        val prevColorSet = prevColor != null
+        FocusStyleSnapshot.applyFromLyricIntent(intent)
+        val newColorSet = FocusStyleSnapshot.extractedTextColor != null
+        return prevMonet != FocusStyleSnapshot.monetDynamicColorEnabled ||
+            prevTextExtraction != FocusStyleSnapshot.textColorExtractionEnabled ||
+            prevEnabled != FocusStyleSnapshot.colorExtractionEnabled ||
+            prevColor != FocusStyleSnapshot.extractedTextColor ||
+            prevBgColor != FocusStyleSnapshot.extractedBgColor ||
+            prevColorSet != newColorSet
     }
 
     private fun handleSettingsChanged(intent: Intent) {
+        val styleChanged = intent.getBooleanExtra(FocusStyleSnapshot.EXTRA_STYLE_CHANGED, false)
+        FocusStyleSnapshot.applyFromIntent(intent)
+        if (styleChanged) {
+            prepareFocusSessionRecreate(
+                songChanged = false,
+                leavingPlaceholder = false,
+                force = true
+            )
+        }
         if (intent.hasExtra(FocusPreferences.EXTRA_FOCUS_ENABLED)) {
             focusEnabled = intent.getBooleanExtra(FocusPreferences.EXTRA_FOCUS_ENABLED, true)
-        } else {
+        } else if (!styleChanged) {
             refreshSettings()
         }
         if (intent.hasExtra(FocusPreferences.EXTRA_SHOW_IN_SHADE)) {
@@ -680,6 +708,7 @@ class SystemUIHyperFocusHook : BaseHook() {
             cancelFocusNotification()
             return
         }
+        HyperFocusLyricStyle.resetPostedCache()
         repostFocusIfNeeded()
     }
 
@@ -689,6 +718,7 @@ class SystemUIHyperFocusHook : BaseHook() {
             return
         }
         try {
+            val styleChanged = applyIncomingStyleExtras(intent)
             val lyricJson = intent.getStringExtra(EXTRA_LYRIC_JSON)
             val newTitle = intent.getStringExtra(EXTRA_TITLE) ?: ""
             val newArtist = intent.getStringExtra(EXTRA_ARTIST) ?: ""
@@ -737,17 +767,17 @@ class SystemUIHyperFocusHook : BaseHook() {
                     currentLyricText = lyricText
                     currentSecondLine = secondLine
                     val needsPost = forceResync || songChanged || leavingPlaceholder ||
-                        lastNotifiedLyric.isBlank()
+                        lastNotifiedLyric.isBlank() || styleChanged
                     if (needsPost) {
                         prepareFocusSessionRecreate(
                             songChanged = songChanged,
                             leavingPlaceholder = leavingPlaceholder,
-                            force = forceResync
+                            force = forceResync || styleChanged
                         )
                         postFocusUpdate(
                             FocusRefreshMode.LINE_CHANGE,
                             force = forceResync || lastNotifiedLyric.isBlank() ||
-                                songChanged || leavingPlaceholder
+                                songChanged || leavingPlaceholder || styleChanged
                         )
                     }
                 }
@@ -767,6 +797,7 @@ class SystemUIHyperFocusHook : BaseHook() {
             return
         }
         try {
+            val styleChanged = applyIncomingStyleExtras(intent)
             val lyric = intent.getStringExtra(EXTRA_LYRIC_TEXT) ?: ""
             val secondLine = intent.getStringExtra(EXTRA_SECOND_LINE) ?: ""
             isPlaying = intent.getBooleanExtra(EXTRA_IS_PLAYING, false)
@@ -806,18 +837,18 @@ class SystemUIHyperFocusHook : BaseHook() {
             val contentChanged = lyric.isNotBlank() && isPlaying &&
                 (lyric != prevLyric || secondLine != prevSecond || songChanged)
             val needsPost = contentChanged || forceResync || leavingPlaceholder ||
-                lastNotifiedLyric.isBlank()
+                lastNotifiedLyric.isBlank() || styleChanged
 
             if (needsPost && lyric.isNotBlank() && isPlaying) {
                 prepareFocusSessionRecreate(
                     songChanged = songChanged,
                     leavingPlaceholder = leavingPlaceholder,
-                    force = forceResync || songChanged || leavingPlaceholder
+                    force = forceResync || songChanged || leavingPlaceholder || styleChanged
                 )
                 postFocusUpdate(
                     FocusRefreshMode.LINE_CHANGE,
                     force = forceResync || lastNotifiedLyric.isBlank() ||
-                        songChanged || leavingPlaceholder || contentChanged
+                        songChanged || leavingPlaceholder || contentChanged || styleChanged
                 )
             } else if (!isPlaying) {
                 cancelFocusNotification()
@@ -976,7 +1007,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         force: Boolean
     ) {
         if (!songChanged && !leavingPlaceholder && !force) return
-        if (leavingPlaceholder || songChanged) {
+        if (leavingPlaceholder || songChanged || force) {
             notificationManager?.let { HyperFocusLyricStyle.cancelFocusNotification(it) }
         }
         lastNotifiedLyric = ""

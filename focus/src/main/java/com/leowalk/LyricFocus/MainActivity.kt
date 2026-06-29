@@ -26,8 +26,6 @@ import com.leowalk.LyricFocus.AboutActivity
 class MainActivity : AppCompatActivity() {
 
     private lateinit var switchFocusLyric: MaterialSwitch
-    private lateinit var switchShowInShade: MaterialSwitch
-    private lateinit var switchShowOnIsland: MaterialSwitch
     private lateinit var switchAppWhitelist: MaterialSwitch
     private lateinit var btnManageWhitelist: MaterialButton
     private lateinit var btnSwitchLyricSource: MaterialButton
@@ -43,6 +41,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvRootPermission: TextView
     private lateinit var btnRestartSystemUi: MaterialButton
     private lateinit var btnAbout: MaterialButton
+    private lateinit var btnStyleSettings: MaterialButton
     private var isSyncAdvanceSliderUpdating = false
     private var isCheckingRoot = false
 
@@ -91,8 +90,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun initViews() {
         switchFocusLyric = findViewById(R.id.switch_focus_lyric)
-        switchShowInShade = findViewById(R.id.switch_show_in_shade)
-        switchShowOnIsland = findViewById(R.id.switch_show_on_island)
         switchAppWhitelist = findViewById(R.id.switch_app_whitelist)
         btnManageWhitelist = findViewById(R.id.btn_manage_whitelist)
         btnSwitchLyricSource = findViewById(R.id.btn_switch_lyric_source)
@@ -108,10 +105,9 @@ class MainActivity : AppCompatActivity() {
         tvRootPermission = findViewById(R.id.tv_root_permission_status)
         btnRestartSystemUi = findViewById(R.id.btn_restart_systemui)
         btnAbout = findViewById(R.id.btn_about)
+        btnStyleSettings = findViewById(R.id.btn_style_settings)
 
         switchFocusLyric.isChecked = FocusPreferences.isFocusEnabled(this)
-        switchShowInShade.isChecked = FocusPreferences.isShowInShade(this)
-        switchShowOnIsland.isChecked = FocusPreferences.isShowOnIsland(this)
         switchAppWhitelist.isChecked = FocusPreferences.isAppWhitelistEnabled(this)
         updateWhitelistUi()
         bindSyncAdvanceSlider(FocusPreferences.getSyncAdvanceMs(this))
@@ -128,14 +124,6 @@ class MainActivity : AppCompatActivity() {
     private fun setupListeners() {
         switchFocusLyric.setOnCheckedChangeListener { _, checked ->
             FocusPreferences.setFocusEnabled(this, checked)
-            broadcastSettingsChanged()
-        }
-        switchShowInShade.setOnCheckedChangeListener { _, checked ->
-            FocusPreferences.setShowInShade(this, checked)
-            broadcastSettingsChanged()
-        }
-        switchShowOnIsland.setOnCheckedChangeListener { _, checked ->
-            FocusPreferences.setShowOnIsland(this, checked)
             broadcastSettingsChanged()
         }
         switchAppWhitelist.setOnCheckedChangeListener { _, checked ->
@@ -171,6 +159,9 @@ class MainActivity : AppCompatActivity() {
         }
         btnAbout.setOnClickListener {
             startActivity(Intent(this, AboutActivity::class.java))
+        }
+        btnStyleSettings.setOnClickListener {
+            startActivity(Intent(this, StyleSettingsActivity::class.java))
         }
         sliderSyncAdvance.addOnChangeListener { _, value, fromUser ->
             if (!fromUser || isSyncAdvanceSliderUpdating) return@addOnChangeListener
@@ -360,7 +351,7 @@ class MainActivity : AppCompatActivity() {
         RootHelper.restartSystemUiAsync { success, message ->
             runOnUiThread {
                 btnRestartSystemUi.isEnabled = true
-                btnRestartSystemUi.text = "重启系统界面"
+                btnRestartSystemUi.text = "重启"
                 if (success) {
                     Toast.makeText(this, "已发送重启指令，系统界面即将恢复", Toast.LENGTH_SHORT).show()
                     checkRootAccessAsync()

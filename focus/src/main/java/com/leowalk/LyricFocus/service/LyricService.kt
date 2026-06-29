@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.PlaybackState
@@ -23,11 +22,15 @@ import androidx.core.app.NotificationCompat
 import com.leowalk.LyricFocus.MainActivity
 import com.leowalk.LyricFocus.R
 import com.leowalk.LyricFocus.FocusPreferences
+import com.leowalk.LyricFocus.FocusStyleSnapshot
 import com.leowalk.LyricFocus.lyric.LyricInfo
 import com.leowalk.LyricFocus.lyric.LyricManager
+import com.leowalk.LyricFocus.util.AlbumColorExtractor
+import com.leowalk.LyricFocus.util.AlbumArtLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class LyricService : Service(), MusicMonitorService.MusicStateListener {
@@ -93,12 +96,14 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     private var currentTitle = ""
     private var currentArtist = ""
     private var currentAlbumArt: Bitmap? = null
+    private var currentAlbumArtKey: String = ""
     private var isPlaying = false
     private var currentPosition: Long = 0
     private var lastUpdateTime: Long = 0
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private var fetchLyricJob: Job? = null
+    private var albumArtRetryJob: Job? = null
     private var lastBroadcastLyric = ""
     private var lastBroadcastSecond = ""
 
@@ -136,11 +141,29 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                     clearLyricStateForBlockedApp()
                     return
                 }
+                if (FocusPreferences.isColorExtractionEnabled(this@LyricService)) {
+                    extractAndSaveAlbumColor(currentAlbumArt)
+                } else {
+                    FocusPreferences.clearExtractedTextColor(this@LyricService)
+                }
                 if (intent.hasExtra(FocusPreferences.EXTRA_LYRIC_SOURCE) &&
                     currentTitle.isNotBlank()
                 ) {
                     fetchLyric(currentTitle, currentArtist)
+                    return
                 }
+                if (intent.getBooleanExtra(FocusStyleSnapshot.EXTRA_STYLE_CHANGED, false)) {
+                    val needsColorResync = FocusPreferences.isColorExtractionEnabled(this@LyricService) &&
+                        FocusPreferences.getExtractedTextColor(this@LyricService) != null &&
+                        !intent.hasExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_COLOR)
+                    if (needsColorResync) {
+                        FocusPreferences.notifyStyleSettingsChanged(this@LyricService)
+                        return
+                    }
+                    resyncFocusState()
+                    return
+                }
+                resyncFocusState()
             }
         }
     }
@@ -548,6 +571,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                 if (force) {
                     putExtra("force_resync", true)
                 }
+                FocusPreferences.fillStyleExtras(this, this@LyricService)
             }
             sendBroadcast(intent)
         } catch (e: Exception) {
@@ -595,6 +619,79 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         )
     }
 
+    private fun extractAndSaveAlbumColor(bitmap: Bitmap?, forceNotify: Boolean = false) {
+        val monetEnabled = FocusPreferences.isMonetDynamicColorEnabled(this)
+        val textExtractionEnabled = FocusPreferences.isTextColorExtractionEnabled(this)
+        if (!monetEnabled && !textExtractionEnabled) {
+            FocusPreferences.clearExtractedTextColor(this)
+            return
+        }
+        val previous = FocusPreferences.getExtractedTextColor(this)
+        val previousBg = FocusPreferences.getExtractedBgColor(this)
+        val art = bitmap ?: AlbumArtLoader.load(this, MusicMonitorService.currentMetadata)
+        if (monetEnabled) {
+            val scheme = AlbumColorExtractor.extractMonetScheme(art)
+            if (scheme == null) {
+                if (previous != null || previousBg != null || forceNotify) {
+                    FocusPreferences.clearExtractedTextColor(this)
+                    publishAlbumColorUpdate()
+                }
+                return
+            }
+            if (scheme.primaryText == previous && scheme.background == previousBg && !forceNotify) return
+            FocusPreferences.setExtractedMonetScheme(this, scheme)
+        } else {
+            val colors = AlbumColorExtractor.extractLyricColors(art)
+            if (colors == null) {
+                if (previous != null || previousBg != null || forceNotify) {
+                    FocusPreferences.clearExtractedTextColor(this)
+                    publishAlbumColorUpdate()
+                }
+                return
+            }
+            if (colors.accent == previous && colors.backgroundEstimate == previousBg && !forceNotify) return
+            FocusPreferences.setExtractedColors(this, colors.accent, colors.backgroundEstimate)
+        }
+        publishAlbumColorUpdate()
+    }
+
+    private fun publishAlbumColorUpdate() {
+        FocusPreferences.notifyStyleSettingsChanged(this)
+        if (isPlaying && currentTitle.isNotBlank()) {
+            resyncFocusState()
+        }
+    }
+
+    private fun scheduleAlbumArtRetry() {
+        if (!FocusPreferences.isColorExtractionEnabled(this)) return
+        albumArtRetryJob?.cancel()
+        albumArtRetryJob = serviceScope.launch {
+            for (attempt in 0 until 6) {
+                delay(400L * (attempt + 1))
+                val metadata = MusicMonitorService.currentMetadata ?: continue
+                val art = AlbumArtLoader.load(this@LyricService, metadata) ?: continue
+                val artKey = AlbumArtLoader.artKey(metadata).ifBlank {
+                    "${currentTitle}|${currentArtist}"
+                }
+                if (artKey == currentAlbumArtKey &&
+                    FocusPreferences.getExtractedTextColor(this@LyricService) != null
+                ) {
+                    return@launch
+                }
+                currentAlbumArtKey = artKey
+                currentAlbumArt = art
+                extractAndSaveAlbumColor(art, forceNotify = true)
+                return@launch
+            }
+        }
+    }
+
+    private fun clearAlbumColorForNewSong() {
+        if (!FocusPreferences.isColorExtractionEnabled(this)) return
+        FocusPreferences.clearExtractedTextColor(this)
+        publishAlbumColorUpdate()
+    }
+
     private fun currentMusicPackage(): String {
         return MusicMonitorService.currentController?.packageName ?: ""
     }
@@ -609,6 +706,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         currentTitle = ""
         currentArtist = ""
         currentAlbumArt = null
+        currentAlbumArtKey = ""
         currentLyricInfo = LyricInfo.EMPTY
         currentLyricSourceHit = ""
         currentLyricSongLabel = ""
@@ -645,6 +743,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             currentTitle = ""
             currentArtist = ""
             currentAlbumArt = null
+            currentAlbumArtKey = ""
             currentLyricInfo = LyricInfo.EMPTY
             lastBroadcastLyric = ""
             lastBroadcastSecond = ""
@@ -655,20 +754,27 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
         val title = metadata.getString(MediaMetadata.METADATA_KEY_TITLE) ?: ""
         val artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: ""
+        val artKey = AlbumArtLoader.artKey(metadata)
+        val songChanged = title != currentTitle || artist != currentArtist
+        val artChanged = artKey.isNotBlank() && artKey != currentAlbumArtKey
 
-        if (title != currentTitle || artist != currentArtist) {
+        if (songChanged) {
             currentTitle = title
             currentArtist = artist
             resetBroadcastCache()
-
-            currentAlbumArt = metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-            if (currentAlbumArt == null) {
-                currentAlbumArt = BitmapFactory.decodeResource(resources, R.drawable.ic_music_note)
-            }
-
+            clearAlbumColorForNewSong()
             fetchLyric(title, artist)
             if (isPlaying) {
                 restartLyricTickerIfPlaying()
+            }
+        }
+
+        if (songChanged || artChanged) {
+            currentAlbumArtKey = artKey
+            currentAlbumArt = AlbumArtLoader.load(this, metadata)
+            extractAndSaveAlbumColor(currentAlbumArt, forceNotify = songChanged || artChanged)
+            if (currentAlbumArt == null && FocusPreferences.isColorExtractionEnabled(this)) {
+                scheduleAlbumArtRetry()
             }
         }
 
@@ -830,6 +936,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         isServiceRunning = false
 
         stopLyricUpdate()
+        albumArtRetryJob?.cancel()
 
         try {
             unregisterReceiver(alarmReceiver)
