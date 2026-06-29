@@ -11,7 +11,7 @@
 
 包名：`com.leowalk.LyricFocus`
 
-123网盘更新地址：https://1825191091.mshare.123pan.cn/123pan/jNBsjv-aMry?notoken=1&pwd=N7a6
+123网盘更新地址：https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3
 </div>
 
 ---
