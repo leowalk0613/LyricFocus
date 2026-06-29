@@ -50,6 +50,21 @@ object RootHelper {
         }
     }
 
+    fun runSuCommand(command: String, ignoreExitCode: Boolean = false): String? {
+        val process = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
+        val stdout = process.inputStream.bufferedReader().readText()
+        val stderr = process.errorStream.bufferedReader().readText()
+        val finished = process.waitFor(SU_TIMEOUT_SEC, TimeUnit.SECONDS)
+        if (!finished) {
+            process.destroy()
+            throw IllegalStateException("Root 命令超时")
+        }
+        if (!ignoreExitCode && process.exitValue() != 0) {
+            throw IllegalStateException(stderr.trim().ifBlank { "exit ${process.exitValue()}" })
+        }
+        return stdout.ifBlank { stderr }.trim().ifBlank { null }
+    }
+
     /**
      * 读取文件内容（需要 Root 权限）
      */
