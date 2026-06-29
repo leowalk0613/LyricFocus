@@ -258,25 +258,31 @@ class AboutActivity : AppCompatActivity() {
             RootHelper.runSuCommand("mkdir -p '$extractPath'")
             RootHelper.runSuCommand("unzip -o '$zipPath' -d '$extractPath'", ignoreExitCode = true)
             
-            val extractedFiles = RootHelper.listDirectory(extractPath)
-            if (extractedFiles != null) {
-                for (file in extractedFiles) {
-                    if (file.endsWith(".log", true)) {
-                        val filePath = "$extractPath/$file"
-                        val content = RootHelper.readFile(filePath)
-                        if (content != null && content.isNotBlank()) {
-                            val filteredContent = filterLogContent(content)
-                            if (filteredContent.isNotBlank()) {
-                                logs[file] = filteredContent
-                            }
-                        }
-                    }
-                }
-            }
+            scanDirectoryViaRoot(extractPath, logs)
             
             RootHelper.runSuCommand("rm -rf '$extractPath'", ignoreExitCode = true)
         } catch (e: Exception) {
             Log.e(TAG, "Error extracting zip via root: $zipPath", e)
+        }
+    }
+
+    private fun scanDirectoryViaRoot(dirPath: String, logs: MutableMap<String, String>) {
+        val files = RootHelper.listDirectory(dirPath)
+        if (files != null) {
+            for (file in files) {
+                val filePath = if (dirPath.endsWith("/")) "$dirPath$file" else "$dirPath/$file"
+                if (RootHelper.isDirectory(filePath)) {
+                    scanDirectoryViaRoot(filePath, logs)
+                } else if (file.contains(".log", ignoreCase = true)) {
+                    val content = RootHelper.readFile(filePath)
+                    if (content != null && content.isNotBlank()) {
+                        val filteredContent = filterLogContent(content)
+                        if (filteredContent.isNotBlank()) {
+                            logs[file] = filteredContent
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -383,7 +389,7 @@ class AboutActivity : AppCompatActivity() {
                 while (entry != null) {
                     Log.d(TAG, "ZIP entry: ${entry.name}, isDirectory: ${entry.isDirectory}")
                     if (!entry.isDirectory) {
-                        if (entry.name.endsWith(".log", true)) {
+                        if (entry.name.contains(".log", ignoreCase = true)) {
                             foundEntries++
                             val fileName = entry.name.substringAfterLast("/")
                             val content = BufferedReader(InputStreamReader(zip)).use { reader ->
@@ -396,24 +402,9 @@ class AboutActivity : AppCompatActivity() {
                             }
                             if (content.isNotBlank()) {
                                 logs[fileName] = content
-                                Log.d(TAG, "Found LyricFocus logs in: $fileName")
+                                Log.d(TAG, "Found LyricFocus logs in: ${entry.name}")
                             } else {
-                                Log.d(TAG, "No matching logs in: $fileName")
-                            }
-                        } else if (entry.name.endsWith(".log.old", true)) {
-                            foundEntries++
-                            val fileName = entry.name.substringAfterLast("/")
-                            val content = BufferedReader(InputStreamReader(zip)).use { reader ->
-                                reader.lineSequence()
-                                    .filter { line ->
-                                        LOG_TAGS.any { tag -> line.contains(tag) }
-                                    }
-                                    .toList()
-                                    .joinToString("\n")
-                            }
-                            if (content.isNotBlank()) {
-                                logs[fileName] = content
-                                Log.d(TAG, "Found LyricFocus logs in: $fileName")
+                                Log.d(TAG, "No matching logs in: ${entry.name}")
                             }
                         }
                     }
