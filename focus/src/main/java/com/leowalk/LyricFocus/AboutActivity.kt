@@ -146,11 +146,11 @@ class AboutActivity : AppCompatActivity() {
             .setCancelable(true)
             .create()
 
-        loadingIndicator.visibility = View.VISIBLE
-        logContent.visibility = View.GONE
-        emptyState.visibility = View.GONE
-        tabLayout.visibility = View.GONE
-        actionBar.visibility = View.GONE
+        loadingIndicator.visibility = android.view.View.VISIBLE
+        logContent.visibility = android.view.View.GONE
+        emptyState.visibility = android.view.View.GONE
+        tabLayout.visibility = android.view.View.GONE
+        actionBar.visibility = android.view.View.GONE
 
         Thread {
             val logs = mutableMapOf<String, String>()
@@ -169,20 +169,20 @@ class AboutActivity : AppCompatActivity() {
             val logFiles = logs.keys.sortedByDescending { it }.toList()
 
             runOnUiThread {
-                loadingIndicator.visibility = View.GONE
+                loadingIndicator.visibility = android.view.View.GONE
 
                 if (logs.isEmpty()) {
-                    emptyState.visibility = View.VISIBLE
-                    logContent.visibility = View.GONE
-                    tabLayout.visibility = View.GONE
-                    actionBar.visibility = View.GONE
+                    emptyState.visibility = android.view.View.VISIBLE
+                    logContent.visibility = android.view.View.GONE
+                    tabLayout.visibility = android.view.View.GONE
+                    actionBar.visibility = android.view.View.GONE
                     emptyState.text = "未找到 LSPosed 日志\n\n请确保已获取 Root 权限\n或使用手动选择文件方式"
                 } else {
-                    logContent.visibility = View.VISIBLE
-                    actionBar.visibility = View.VISIBLE
+                    logContent.visibility = android.view.View.VISIBLE
+                    actionBar.visibility = android.view.View.VISIBLE
 
                     if (logFiles.size > 1) {
-                        tabLayout.visibility = View.VISIBLE
+                        tabLayout.visibility = android.view.View.VISIBLE
                         for (fileName in logFiles) {
                             val displayName = fileName.substringBefore(".log")
                             tabLayout.addTab(tabLayout.newTab().setText(displayName))
@@ -292,11 +292,11 @@ class AboutActivity : AppCompatActivity() {
             .setCancelable(true)
             .create()
 
-        loadingIndicator.visibility = View.VISIBLE
-        logContent.visibility = View.GONE
-        emptyState.visibility = View.GONE
-        tabLayout.visibility = View.GONE
-        actionBar.visibility = View.GONE
+        loadingIndicator.visibility = android.view.View.VISIBLE
+        logContent.visibility = android.view.View.GONE
+        emptyState.visibility = android.view.View.GONE
+        tabLayout.visibility = android.view.View.GONE
+        actionBar.visibility = android.view.View.GONE
 
         Thread {
             val logs = mutableMapOf<String, String>()
@@ -319,20 +319,20 @@ class AboutActivity : AppCompatActivity() {
             val logFiles = logs.keys.toList()
 
             runOnUiThread {
-                loadingIndicator.visibility = View.GONE
+                loadingIndicator.visibility = android.view.View.GONE
 
                 if (logs.isEmpty()) {
-                    emptyState.visibility = View.VISIBLE
-                    logContent.visibility = View.GONE
-                    tabLayout.visibility = View.GONE
-                    actionBar.visibility = View.GONE
+                    emptyState.visibility = android.view.View.VISIBLE
+                    logContent.visibility = android.view.View.GONE
+                    tabLayout.visibility = android.view.View.GONE
+                    actionBar.visibility = android.view.View.GONE
                     emptyState.text = "未找到 LyricFocus 相关日志\n\n已搜索的标签：\n${LOG_TAGS.joinToString(", ")}"
                 } else {
-                    logContent.visibility = View.VISIBLE
-                    actionBar.visibility = View.VISIBLE
+                    logContent.visibility = android.view.View.VISIBLE
+                    actionBar.visibility = android.view.View.VISIBLE
 
                     if (logFiles.size > 1) {
-                        tabLayout.visibility = View.VISIBLE
+                        tabLayout.visibility = android.view.View.VISIBLE
                         for (fileName in logFiles) {
                             val displayName = fileName.substringBefore(".log")
                             tabLayout.addTab(tabLayout.newTab().setText(displayName))
