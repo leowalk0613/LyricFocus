@@ -41,7 +41,7 @@ object RootHelper {
         }.start()
     }
 
-    private fun runSuCommand(command: String, ignoreExitCode: Boolean = false): String? {
+    fun runSuCommand(command: String, ignoreExitCode: Boolean = false): String? {
         val process = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
         val stdout = process.inputStream.bufferedReader().readText()
         val stderr = process.errorStream.bufferedReader().readText()

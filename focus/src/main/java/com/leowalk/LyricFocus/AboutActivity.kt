@@ -22,6 +22,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.tabs.TabLayout
 import com.leowalk.LyricFocus.R
+import com.leowalk.LyricFocus.util.RootHelper
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStream
@@ -159,10 +160,33 @@ class AboutActivity : AppCompatActivity() {
             val logs = mutableMapOf<String, String>()
 
             try {
+                if (!RootHelper.checkRootAccess()) {
+                    runOnUiThread {
+                        loadingIndicator.setVisibility(android.view.View.GONE)
+                        emptyState.setVisibility(android.view.View.VISIBLE)
+                        emptyState.text = "未获取 Root 权限\n\n请在 Magisk / KernelSU 中允许本应用\n或使用手动选择文件方式"
+                    }
+                    return@Thread
+                }
+
                 for (logPath in LSP_LOG_PATHS) {
-                    val dir = File(logPath)
-                    if (dir.exists() && dir.isDirectory) {
-                        scanDirectory(dir, logs)
+                    val files = RootHelper.listDirectory(logPath)
+                    if (files != null) {
+                        for (file in files) {
+                            if (file.endsWith(".log") && file.startsWith("modules_")) {
+                                val filePath = if (logPath.endsWith("/")) "$logPath$file" else "$logPath/$file"
+                                val content = RootHelper.readFile(filePath)
+                                if (content != null && content.isNotBlank()) {
+                                    val filteredContent = filterLogContent(content)
+                                    if (filteredContent.isNotBlank()) {
+                                        logs[file] = filteredContent
+                                    }
+                                }
+                            } else if (file.endsWith(".zip", true)) {
+                                val filePath = if (logPath.endsWith("/")) "$logPath$file" else "$logPath/$file"
+                                readLogsFromZipFileViaRoot(filePath, logs)
+                            }
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -217,65 +241,42 @@ class AboutActivity : AppCompatActivity() {
         dialog.show()
     }
 
-    private fun scanDirectory(dir: File, logs: MutableMap<String, String>) {
-        val files = dir.listFiles() ?: return
-
-        for (file in files) {
-            if (file.isDirectory) {
-                scanDirectory(file, logs)
-            } else if (file.name.endsWith(".log") && file.name.startsWith("modules_")) {
-                val content = readFilteredLogContent(file)
-                if (content.isNotBlank()) {
-                    logs[file.name] = content
-                }
-            } else if (file.name.endsWith(".zip", true)) {
-                readLogsFromZipFile(file, logs)
+    private fun filterLogContent(content: String): String {
+        return content.lineSequence()
+            .filter { line ->
+                LOG_TAGS.any { tag -> line.contains(tag) }
             }
-        }
+            .toList()
+            .joinToString("\n")
     }
 
-    private fun readFilteredLogContent(file: File): String {
-        return try {
-            BufferedReader(InputStreamReader(file.inputStream())).use { reader ->
-                reader.lineSequence()
-                    .filter { line ->
-                        LOG_TAGS.any { tag -> line.contains(tag) }
-                    }
-                    .toList()
-                    .joinToString("\n")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error reading log file: ${file.name}", e)
-            ""
-        }
-    }
-
-    private fun readLogsFromZipFile(file: File, logs: MutableMap<String, String>) {
+    private fun readLogsFromZipFileViaRoot(zipPath: String, logs: MutableMap<String, String>) {
         try {
-            file.inputStream().use { inputStream ->
-                ZipInputStream(inputStream).use { zip ->
-                    var entry = zip.nextEntry
-                    while (entry != null) {
-                        if (!entry.isDirectory && entry.name.endsWith(".log", true)) {
-                            val fileName = entry.name.substringAfterLast("/")
-                            val content = BufferedReader(InputStreamReader(zip)).use { reader ->
-                                reader.lineSequence()
-                                    .filter { line ->
-                                        LOG_TAGS.any { tag -> line.contains(tag) }
-                                    }
-                                    .toList()
-                                    .joinToString("\n")
-                            }
-                            if (content.isNotBlank()) {
-                                logs[fileName] = content
+            val tempDir = cacheDir.absolutePath
+            val extractPath = "$tempDir/lsp_log_extract"
+            
+            RootHelper.runSuCommand("mkdir -p '$extractPath'")
+            RootHelper.runSuCommand("unzip -o '$zipPath' -d '$extractPath'", ignoreExitCode = true)
+            
+            val extractedFiles = RootHelper.listDirectory(extractPath)
+            if (extractedFiles != null) {
+                for (file in extractedFiles) {
+                    if (file.endsWith(".log", true)) {
+                        val filePath = "$extractPath/$file"
+                        val content = RootHelper.readFile(filePath)
+                        if (content != null && content.isNotBlank()) {
+                            val filteredContent = filterLogContent(content)
+                            if (filteredContent.isNotBlank()) {
+                                logs[file] = filteredContent
                             }
                         }
-                        entry = zip.nextEntry
                     }
                 }
             }
+            
+            RootHelper.runSuCommand("rm -rf '$extractPath'", ignoreExitCode = true)
         } catch (e: Exception) {
-            Log.e(TAG, "Error reading zip file: ${file.name}", e)
+            Log.e(TAG, "Error extracting zip via root: $zipPath", e)
         }
     }
 
@@ -378,25 +379,49 @@ class AboutActivity : AppCompatActivity() {
         contentResolver.openInputStream(uri)?.use { inputStream ->
             ZipInputStream(inputStream).use { zip ->
                 var entry = zip.nextEntry
+                var foundEntries = 0
                 while (entry != null) {
-                    if (!entry.isDirectory && entry.name.endsWith(".log", true)) {
-                        val fileName = entry.name.substringAfterLast("/")
-                        val content = BufferedReader(InputStreamReader(zip)).use { reader ->
-                            reader.lineSequence()
-                                .filter { line ->
-                                    LOG_TAGS.any { tag -> line.contains(tag) }
-                                }
-                                .toList()
-                                .joinToString("\n")
-                        }
-                        if (content.isNotBlank()) {
-                            logs[fileName] = content
+                    Log.d(TAG, "ZIP entry: ${entry.name}, isDirectory: ${entry.isDirectory}")
+                    if (!entry.isDirectory) {
+                        if (entry.name.endsWith(".log", true)) {
+                            foundEntries++
+                            val fileName = entry.name.substringAfterLast("/")
+                            val content = BufferedReader(InputStreamReader(zip)).use { reader ->
+                                reader.lineSequence()
+                                    .filter { line ->
+                                        LOG_TAGS.any { tag -> line.contains(tag) }
+                                    }
+                                    .toList()
+                                    .joinToString("\n")
+                            }
+                            if (content.isNotBlank()) {
+                                logs[fileName] = content
+                                Log.d(TAG, "Found LyricFocus logs in: $fileName")
+                            } else {
+                                Log.d(TAG, "No matching logs in: $fileName")
+                            }
+                        } else if (entry.name.endsWith(".log.old", true)) {
+                            foundEntries++
+                            val fileName = entry.name.substringAfterLast("/")
+                            val content = BufferedReader(InputStreamReader(zip)).use { reader ->
+                                reader.lineSequence()
+                                    .filter { line ->
+                                        LOG_TAGS.any { tag -> line.contains(tag) }
+                                    }
+                                    .toList()
+                                    .joinToString("\n")
+                            }
+                            if (content.isNotBlank()) {
+                                logs[fileName] = content
+                                Log.d(TAG, "Found LyricFocus logs in: $fileName")
+                            }
                         }
                     }
                     entry = zip.nextEntry
                 }
+                Log.d(TAG, "Total ZIP entries checked: $foundEntries")
             }
-        }
+        } ?: Log.e(TAG, "Failed to open input stream for URI: $uri")
     }
 
     private fun readLogsFromTextFile(uri: Uri, logs: MutableMap<String, String>) {
