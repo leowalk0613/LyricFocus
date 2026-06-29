@@ -386,12 +386,13 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 
 1. 打开 **LSPosed 管理器**
 2. 点击右上角菜单 → **保存日志**（会导出为 zip 压缩包）
-3. 打开 **LyricFocus** → 点击底部导航「关于」
-4. 点击 **选择日志文件筛选**
-5. 在弹出的选项中选择 **手动选择日志文件**
-6. 选择刚才导出的 zip 文件
-7. 应用会自动筛选并显示 LyricFocus 相关日志
-8. 如需反馈问题，点击 **复制日志** 将日志复制到剪贴板
+3. **解压**导出的 zip 压缩包，或直接从 `/data/adb/lspd/log/` 目录复制 `modules_*.log` 文件到手机存储（如 Download 文件夹）
+4. 打开 **LyricFocus** → 点击底部导航「关于」
+5. 点击 **选择日志文件筛选**
+6. 在弹出的选项中选择 **手动选择日志文件**
+7. 选择解压后的 `.log` 文件（支持多选）
+8. 应用会自动筛选并显示 LyricFocus 相关日志
+9. 如需反馈问题，点击 **复制日志** 将日志复制到剪贴板
 
 #### 方法三：ADB 命令
 
@@ -410,18 +411,12 @@ LSPosed 日志目录结构：
 ```
 /data/adb/lspd/log/
 ├── modules_2026-06-28T15:30:37.775962.log  # 模块日志（按时间命名）
-└── LSPosed_xxx.zip                          # 导出的 zip 压缩包
+└── LSPosed_xxx.zip                          # 导出的 zip 压缩包（需解压后使用）
 
 /data/adb/lspd/log.old/                      # 旧日志备份
 ```
 
-LSPosed 导出的 zip 压缩包包含以下文件：
-
-| 文件 | 说明 |
-|------|------|
-| `startup.log` | 模块启动日志 |
-| `error.log` | 错误日志（排查 crash 首选） |
-| `logcat.log` | 完整系统日志 |
+**注意**：手动选择日志文件时，需要先解压 zip 压缩包，或直接复制 `modules_*.log` 文件到手机存储。
 
 ### 反馈问题
 

@@ -233,7 +233,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginBottom="2dp"
-                            android:text="• 手动选择（无需 Root）：先在 LSPosed 中保存日志 → 点击下方按钮 → 选择「手动选择日志文件」"
+                            android:text="• 手动选择（无需 Root）：先在 LSPosed 中保存日志并解压，或复制 modules_*.log 文件到手机存储，再点击下方按钮 → 选择「手动选择日志文件」"
                             android:textAppearance="?attr/textAppearanceBodyMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
