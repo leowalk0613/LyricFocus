@@ -20,6 +20,7 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.tabs.TabLayout
+import com.leowalk.LyricFocus.util.LyricFocusLogFilter
 import com.leowalk.LyricFocus.util.RootHelper
 import java.io.BufferedReader
 import java.io.InputStream
@@ -30,16 +31,6 @@ class AboutActivity : AppCompatActivity() {
 
     private val TAG = "LyricFocus_About"
     private val contactEmail = "walkalone9990613@gmail.com"
-    private val LOG_TAGS = listOf(
-        "LyricFocus",
-        "LyricService",
-        "MusicMonitorService",
-        "SystemUIHyperFocusHook",
-        "HyperFocusLyricStyle",
-        "FocusMainHook",
-        "LSPosed-Bridge",
-        "LSPosed"
-    )
 
     private val LSP_LOG_PATHS = listOf(
         "/data/adb/lspd/log/",
@@ -275,14 +266,7 @@ class AboutActivity : AppCompatActivity() {
         dialog.show()
     }
 
-    private fun filterLogContent(content: String): String {
-        return content.lineSequence()
-            .filter { line ->
-                LOG_TAGS.any { tag -> line.contains(tag) }
-            }
-            .toList()
-            .joinToString("\n")
-    }
+    private fun filterLogContent(content: String): String = LyricFocusLogFilter.filter(content)
 
     private fun readLogsFromZipFileViaRoot(zipPath: String, logs: MutableMap<String, String>) {
         try {
@@ -370,7 +354,7 @@ class AboutActivity : AppCompatActivity() {
                     logContent!!.visibility = View.GONE
                     tabLayout!!.visibility = View.GONE
                     actionBar!!.visibility = View.GONE
-                    emptyState.text = "未找到 LyricFocus 相关日志\n\n已搜索的标签：\n${LOG_TAGS.joinToString(", ")}"
+                    emptyState.text = "未找到 LyricFocus 相关日志\n\n已搜索的标签：\n${LyricFocusLogFilter.tagSummary}"
                 } else {
                     logContent!!.visibility = View.VISIBLE
                     actionBar!!.visibility = View.VISIBLE
@@ -427,12 +411,7 @@ class AboutActivity : AppCompatActivity() {
                             foundEntries++
                             val fileName = entry.name.substringAfterLast("/")
                             val content = BufferedReader(InputStreamReader(zip)).use { reader ->
-                                reader.lineSequence()
-                                    .filter { line ->
-                                        LOG_TAGS.any { tag -> line.contains(tag) }
-                                    }
-                                    .toList()
-                                    .joinToString("\n")
+                                LyricFocusLogFilter.filter(reader.readText())
                             }
                             if (content.isNotBlank()) {
                                 logs[fileName] = content
@@ -453,9 +432,7 @@ class AboutActivity : AppCompatActivity() {
         contentResolver.openInputStream(uri)?.use { inputStream ->
             BufferedReader(InputStreamReader(inputStream)).use { reader ->
                 val filteredLines = reader.lineSequence()
-                    .filter { line ->
-                        LOG_TAGS.any { tag -> line.contains(tag) }
-                    }
+                    .filter(LyricFocusLogFilter::matches)
                     .toList()
 
                 if (filteredLines.isNotEmpty()) {
