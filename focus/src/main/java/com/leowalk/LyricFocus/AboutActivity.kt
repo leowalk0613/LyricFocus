@@ -58,8 +58,17 @@ class AboutActivity : AppCompatActivity() {
         setContentView(R.layout.activity_about)
         setupWindowInsets()
         setupToolbar()
+        setupVersionLabel()
         setupLinks()
         setupLogViewer()
+    }
+
+    private fun setupVersionLabel() {
+        findViewById<TextView>(R.id.tv_version).text = runCatching {
+            @Suppress("DEPRECATION")
+            val info = packageManager.getPackageInfo(packageName, 0)
+            "v${info.versionName}"
+        }.getOrElse { getString(R.string.app_version) }
     }
 
     private fun setupWindowInsets() {
