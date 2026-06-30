@@ -82,21 +82,32 @@ object AlbumColorExtractor {
         val primary = ensureContrast(accent, bg, MIN_PRIMARY_CONTRAST)
         val secondary = ensureContrast(blendSecondary(primary, bg), bg, MIN_SECONDARY_CONTRAST)
         
-        // 如果取到黑色或接近黑色，强制改为灰白色
-        val finalPrimary = avoidPureBlack(primary)
-        val finalSecondary = avoidPureBlack(secondary)
+        // 根据背景模式调整纯色
+        val isDarkBackground = backgroundMode != FocusPreferences.BACKGROUND_WHITE
+        val finalPrimary = avoidPureColor(primary, isDarkBackground)
+        val finalSecondary = avoidPureColor(secondary, isDarkBackground)
         
         return finalPrimary to finalSecondary
     }
 
     /**
-     * 如果颜色是黑色或接近黑色，改为灰白色（#E0E0E0）
+     * 避免纯色：
+     * - 深色背景：黑色/接近黑色 -> 灰白色 (#E0E0E0)
+     * - 浅色背景：白色/接近白色 -> 灰黑色 (#1F1F1F)
      */
-    private fun avoidPureBlack(color: Int): Int {
+    private fun avoidPureColor(color: Int, isDarkBackground: Boolean): Int {
         val luminance = relativeLuminance(color)
-        // 如果亮度低于 0.08（接近黑色），改为灰白色
-        if (luminance < 0.08) {
-            return Color.rgb(224, 224, 224)  // #E0E0E0
+        
+        if (isDarkBackground) {
+            // 深色背景：避免黑色
+            if (luminance < 0.08) {
+                return Color.rgb(224, 224, 224)  // #E0E0E0 灰白色
+            }
+        } else {
+            // 浅色背景：避免白色
+            if (luminance > 0.92) {
+                return Color.rgb(31, 31, 31)  // #1F1F1F 灰黑色
+            }
         }
         return color
     }
