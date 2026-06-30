@@ -462,8 +462,8 @@ class SystemUIHyperFocusHook : BaseHook() {
             stackField.isAccessible = true
             val stackChildren = stackField.get(null) as? List<*> ?: return
 
-            var focusRow: Any? = null
-            var mediaRows = mutableListOf<Any>()
+            var focusRow: View? = null
+            var mediaRows = mutableListOf<View>()
 
             for (child in stackChildren) {
                 val childView = child as? View ?: continue
@@ -484,14 +484,13 @@ class SystemUIHyperFocusHook : BaseHook() {
             if (focusRow == null || mediaRows.isEmpty()) return
 
             val stack = focusRow.parent as? ViewGroup ?: return
-            val focusIndex = stack.indexOfChild(focusRow as View)
+            val focusIndex = stack.indexOfChild(focusRow)
 
             for (mediaRow in mediaRows) {
-                val mediaView = mediaRow as View
-                val mediaIndex = stack.indexOfChild(mediaView)
+                val mediaIndex = stack.indexOfChild(mediaRow)
                 if (mediaIndex >= 0 && mediaIndex < focusIndex) {
-                    stack.removeView(mediaView)
-                    stack.addView(mediaView, focusIndex)
+                    stack.removeView(mediaRow)
+                    stack.addView(mediaRow, focusIndex)
                 }
             }
 
