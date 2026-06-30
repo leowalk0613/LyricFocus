@@ -40,6 +40,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnGrantPostNotification: MaterialButton
     private lateinit var tvRootPermission: TextView
     private lateinit var btnRestartSystemUi: MaterialButton
+    private lateinit var tvLsposedStatus: TextView
+    private lateinit var btnOpenLsposed: MaterialButton
     private lateinit var btnAbout: MaterialButton
     private lateinit var btnStyleSettings: MaterialButton
     private var isSyncAdvanceSliderUpdating = false
@@ -69,6 +71,7 @@ class MainActivity : AppCompatActivity() {
         updateWhitelistUi()
         updateLyricSourceUi()
         updateStatus()
+        updateLsposedStatus()
         checkRootAccessAsync()
     }
 
@@ -104,11 +107,14 @@ class MainActivity : AppCompatActivity() {
         btnGrantPostNotification = findViewById(R.id.btn_grant_post_notification)
         tvRootPermission = findViewById(R.id.tv_root_permission_status)
         btnRestartSystemUi = findViewById(R.id.btn_restart_systemui)
+        tvLsposedStatus = findViewById(R.id.tv_lsposed_status)
+        btnOpenLsposed = findViewById(R.id.btn_open_lsposed)
         btnAbout = findViewById(R.id.btn_about)
         btnStyleSettings = findViewById(R.id.btn_style_settings)
 
         switchFocusLyric.isChecked = FocusPreferences.isFocusEnabled(this)
         switchAppWhitelist.isChecked = FocusPreferences.isAppWhitelistEnabled(this)
+        updateLsposedStatus()
         updateWhitelistUi()
         bindSyncAdvanceSlider(FocusPreferences.getSyncAdvanceMs(this))
         updateLyricSourceUi()
@@ -156,6 +162,9 @@ class MainActivity : AppCompatActivity() {
         }
         btnRestartSystemUi.setOnClickListener {
             confirmRestartSystemUi()
+        }
+        btnOpenLsposed.setOnClickListener {
+            openLsposedManager()
         }
         btnAbout.setOnClickListener {
             startActivity(Intent(this, AboutActivity::class.java))
@@ -376,5 +385,61 @@ class MainActivity : AppCompatActivity() {
             } catch (_: Exception) {
             }
         }
+    }
+
+    private fun openLsposedManager() {
+        val lsposedPackages = listOf(
+            "org.lsposed.manager",
+            "org.lsposed.lspmanager",
+            "com.lsposed.lspmanager"
+        )
+        for (pkg in lsposedPackages) {
+            try {
+                val intent = Intent().apply {
+                    component = ComponentName(pkg, "$pkg.ui.activity.MainActivity")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(intent)
+                return
+            } catch (_: Exception) {
+                try {
+                    val intent = Intent().apply {
+                        component = ComponentName(pkg, "$pkg.ui.MainActivity")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(intent)
+                    return
+                } catch (_: Exception) {
+                    try {
+                        val intent = packageManager.getLaunchIntentForPackage(pkg)
+                        if (intent != null) {
+                            startActivity(intent)
+                            return
+                        }
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        }
+        Toast.makeText(this, "未检测到 LSPosed Manager，请先安装", Toast.LENGTH_LONG).show()
+    }
+
+    private fun updateLsposedStatus() {
+        val lsposedPackages = listOf(
+            "org.lsposed.manager",
+            "org.lsposed.lspmanager",
+            "com.lsposed.lspmanager"
+        )
+        for (pkg in lsposedPackages) {
+            try {
+                packageManager.getApplicationInfo(pkg, 0)
+                tvLsposedStatus.text = "已安装"
+                tvLsposedStatus.setTextColor(getColor(R.color.green))
+                return
+            } catch (_: Exception) {
+            }
+        }
+        tvLsposedStatus.text = "未安装"
+        tvLsposedStatus.setTextColor(getColor(R.color.red))
     }
 }
