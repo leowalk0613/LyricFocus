@@ -391,40 +391,62 @@ class MainActivity : AppCompatActivity() {
         val lsposedPackages = listOf(
             "org.lsposed.manager",
             "org.lsposed.lspmanager",
-            "com.lsposed.lspmanager"
+            "com.lsposed.lspmanager",
+            "com.android.systemui"
         )
         for (pkg in lsposedPackages) {
             try {
-                val intent = Intent().apply {
-                    component = ComponentName(pkg, "$pkg.ui.activity.MainActivity")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                startActivity(intent)
-                return
-            } catch (_: Exception) {
-                try {
-                    val intent = Intent().apply {
-                        component = ComponentName(pkg, "$pkg.ui.MainActivity")
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
+                val intent = packageManager.getLaunchIntentForPackage(pkg)
+                if (intent != null) {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     startActivity(intent)
                     return
-                } catch (_: Exception) {
-                    try {
-                        val intent = packageManager.getLaunchIntentForPackage(pkg)
-                        if (intent != null) {
-                            startActivity(intent)
-                            return
-                        }
-                    } catch (_: Exception) {
-                    }
                 }
+            } catch (_: Exception) {
             }
+        }
+        try {
+            val intent = Intent("org.lsposed.LSPOSED_MANAGER").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+            return
+        } catch (_: Exception) {
+        }
+        try {
+            val intent = Intent("lsposed://").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+            return
+        } catch (_: Exception) {
         }
         Toast.makeText(this, "未检测到 LSPosed Manager，请先安装", Toast.LENGTH_LONG).show()
     }
 
     private fun updateLsposedStatus() {
+        if (isLsposedActive()) {
+            tvLsposedStatus.text = "已激活"
+            tvLsposedStatus.setTextColor(getColor(R.color.green))
+        } else if (isLsposedInstalled()) {
+            tvLsposedStatus.text = "已安装"
+            tvLsposedStatus.setTextColor(getColor(R.color.green))
+        } else {
+            tvLsposedStatus.text = "未安装"
+            tvLsposedStatus.setTextColor(getColor(R.color.red))
+        }
+    }
+
+    private fun isLsposedActive(): Boolean {
+        return try {
+            val lsposed = System.getProperty("persist.sys.lspd")
+            lsposed != null && !lsposed.isEmpty()
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun isLsposedInstalled(): Boolean {
         val lsposedPackages = listOf(
             "org.lsposed.manager",
             "org.lsposed.lspmanager",
@@ -433,13 +455,18 @@ class MainActivity : AppCompatActivity() {
         for (pkg in lsposedPackages) {
             try {
                 packageManager.getApplicationInfo(pkg, 0)
-                tvLsposedStatus.text = "已安装"
-                tvLsposedStatus.setTextColor(getColor(R.color.green))
-                return
+                return true
             } catch (_: Exception) {
             }
         }
-        tvLsposedStatus.text = "未安装"
-        tvLsposedStatus.setTextColor(getColor(R.color.red))
+        try {
+            val intent = Intent("org.lsposed.LSPOSED_MANAGER")
+            val receivers = packageManager.queryBroadcastReceivers(intent, 0)
+            if (receivers.isNotEmpty()) {
+                return true
+            }
+        } catch (_: Exception) {
+        }
+        return false
     }
 }
