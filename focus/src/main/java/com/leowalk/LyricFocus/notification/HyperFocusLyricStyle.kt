@@ -289,12 +289,11 @@ object HyperFocusLyricStyle {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
 
             .setPriority(
-
                 if (pinAboveMedia) NotificationCompat.PRIORITY_MAX
-
-                else NotificationCompat.PRIORITY_DEFAULT
-
+                else NotificationCompat.PRIORITY_HIGH
             )
+
+            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
 
             .setSilent(true)
 
@@ -307,13 +306,12 @@ object HyperFocusLyricStyle {
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
 
 
-
         if (pinAboveMedia) {
-
             builder.setSortKey("\u0000")
-
-            builder.setWhen(lyric.hashCode().toLong())
-
+            builder.setWhen(Long.MIN_VALUE)
+        } else {
+            builder.setSortKey("\u0001")
+            builder.setWhen(Long.MIN_VALUE)
         }
 
 

@@ -421,30 +421,106 @@ class SystemUIHyperFocusHook : BaseHook() {
                 "com.android.systemui.statusbar.stack.NotificationStackScrollLayout",
                 classLoader
             )
+
+            val reorderRunnable = Runnable {
+                reorderFocusAboveMedia(stackClass)
+            }
+
             XposedBridge.hookAllMethods(stackClass, "addView", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     if (!pinAboveMedia || !isPlaying || currentLyricText.isBlank()) return
-                    val child = param.args[0] as? View ?: return
-                    val name = child.javaClass.name
-                    if (!name.contains("Media", ignoreCase = true) &&
-                        !name.contains("media", ignoreCase = true)
-                    ) {
-                        return
-                    }
                     val stack = param.thisObject as? ViewGroup ?: return
-                    stack.post {
-                        if (child.parent != stack) return@post
-                        val index = stack.indexOfChild(child)
-                        if (index >= 0 && index < stack.childCount - 1) {
-                            stack.removeView(child)
-                            stack.addView(child, stack.childCount)
-                        }
-                    }
+                    stack.postDelayed(reorderRunnable, 100)
                 }
             })
-            log("Media below focus hook ready")
+
+            XposedBridge.hookAllMethods(stackClass, "removeView", object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    if (!pinAboveMedia || !isPlaying || currentLyricText.isBlank()) return
+                    val stack = param.thisObject as? ViewGroup ?: return
+                    stack.postDelayed(reorderRunnable, 100)
+                }
+            })
+
+            XposedBridge.hookAllMethods(stackClass, "updateNotificationStack", object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    if (!pinAboveMedia || !isPlaying || currentLyricText.isBlank()) return
+                    val stack = param.thisObject as? ViewGroup ?: return
+                    stack.postDelayed(reorderRunnable, 200)
+                }
+            })
+
+            log("Media below focus hook ready with enhanced reordering")
         } catch (e: Throwable) {
             log("Media reorder hook skipped: ${e.message}")
+        }
+    }
+
+    private fun reorderFocusAboveMedia(stackClass: Class<*>) {
+        try {
+            val stackField = stackClass.getDeclaredField("mStackChildren")
+            stackField.isAccessible = true
+            val stackChildren = stackField.get(null) as? List<*> ?: return
+
+            var focusRow: Any? = null
+            var mediaRows = mutableListOf<Any>()
+
+            for (child in stackChildren) {
+                val childView = child as? View ?: continue
+                val rowClass = "com.android.systemui.statusbar.notification.row.ExpandableNotificationRow"
+                if (!childView.javaClass.name.contains(rowClass)) continue
+
+                val entry = XposedHelpers.callMethod(childView, "getEntry") ?: continue
+                val sbn = XposedHelpers.getObjectField(entry, "mSbn") as? StatusBarNotification ?: continue
+                val channelId = sbn.notification?.channelId
+
+                if (channelId == HyperFocusLyricStyle.CHANNEL_ID) {
+                    focusRow = childView
+                } else if (isMediaNotification(sbn)) {
+                    mediaRows.add(childView)
+                }
+            }
+
+            if (focusRow == null || mediaRows.isEmpty()) return
+
+            val stack = focusRow.parent as? ViewGroup ?: return
+            val focusIndex = stack.indexOfChild(focusRow as View)
+
+            for (mediaRow in mediaRows) {
+                val mediaView = mediaRow as View
+                val mediaIndex = stack.indexOfChild(mediaView)
+                if (mediaIndex >= 0 && mediaIndex < focusIndex) {
+                    stack.removeView(mediaView)
+                    stack.addView(mediaView, focusIndex)
+                }
+            }
+
+            log("Reordered ${mediaRows.size} media notifications below focus")
+        } catch (e: Throwable) {
+            log("Reorder focus above media failed: ${e.message}")
+        }
+    }
+
+    private fun isMediaNotification(sbn: StatusBarNotification): Boolean {
+        try {
+            val notification = sbn.notification
+            val category = notification?.category
+            if (category != null && category == Notification.CATEGORY_TRANSPORT) {
+                return true
+            }
+            val packageName = sbn.packageName
+            val mediaPackages = listOf(
+                "com.miui.player",
+                "com.android.music",
+                "com.tencent.qqmusic",
+                "com.kugou.android",
+                "com.netease.cloudmusic",
+                "com.spotify.music",
+                "com.apple.android.music"
+            )
+            return mediaPackages.contains(packageName)
+        } catch (_: Throwable) {
+            return false
         }
     }
 
@@ -508,7 +584,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                 val channel = NotificationChannel(
                     HyperFocusLyricStyle.CHANNEL_ID,
                     "焦点歌词",
-                    NotificationManager.IMPORTANCE_DEFAULT
+                    NotificationManager.IMPORTANCE_HIGH
                 ).apply {
                     description = "HyperOS 焦点通知歌词（锁屏 / AOD，可选超级岛）"
                     setShowBadge(false)
