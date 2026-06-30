@@ -23,9 +23,6 @@ object FocusStyleSnapshot {
     const val EXTRA_STYLE_EXTRACTED_COLOR_SET = "style_extracted_color_set"
     const val EXTRA_STYLE_EXTRACTED_BG_COLOR = "style_extracted_bg_color"
     const val EXTRA_STYLE_EXTRACTED_BG_COLOR_SET = "style_extracted_bg_color_set"
-    const val EXTRA_STYLE_STROKE_ENABLED = "style_stroke_enabled"
-    const val EXTRA_STYLE_STROKE_WIDTH = "style_stroke_width"
-    const val EXTRA_STYLE_STROKE_COLOR_MODE = "style_stroke_color_mode"
 
     @Volatile
     var textSizeSp: Float = FocusPreferences.DEFAULT_LYRIC_TEXT_SIZE_SP
@@ -69,18 +66,6 @@ object FocusStyleSnapshot {
 
     @Volatile
     var extractedBgColor: Int? = null
-        private set
-
-    @Volatile
-    var textStrokeEnabled: Boolean = false
-        private set
-
-    @Volatile
-    var textStrokeWidth: Float = FocusPreferences.DEFAULT_TEXT_STROKE_WIDTH
-        private set
-
-    @Volatile
-    var textStrokeColorMode: String = FocusPreferences.STROKE_COLOR_AUTO
         private set
 
     fun reloadFromDisk() {
@@ -132,18 +117,6 @@ object FocusStyleSnapshot {
         } else {
             null
         }
-        textStrokeEnabled = prefs.getBoolean(FocusPreferences.PREF_TEXT_STROKE_ENABLED, false)
-        textStrokeWidth = prefs.getFloat(
-            FocusPreferences.PREF_TEXT_STROKE_WIDTH,
-            FocusPreferences.DEFAULT_TEXT_STROKE_WIDTH
-        ).coerceIn(
-            FocusPreferences.MIN_TEXT_STROKE_WIDTH,
-            FocusPreferences.MAX_TEXT_STROKE_WIDTH
-        )
-        textStrokeColorMode = prefs.getString(
-            FocusPreferences.PREF_TEXT_STROKE_COLOR_MODE,
-            FocusPreferences.STROKE_COLOR_AUTO
-        ) ?: FocusPreferences.STROKE_COLOR_AUTO
     }
 
     fun applyFromIntent(intent: Intent) {
@@ -213,19 +186,6 @@ object FocusStyleSnapshot {
             }
         } else if (!colorExtractionEnabled || extractedTextColor == null) {
             extractedBgColor = null
-        }
-        if (intent.hasExtra(EXTRA_STYLE_STROKE_ENABLED)) {
-            textStrokeEnabled = intent.getBooleanExtra(EXTRA_STYLE_STROKE_ENABLED, false)
-        }
-        if (intent.hasExtra(EXTRA_STYLE_STROKE_WIDTH)) {
-            textStrokeWidth = intent.getFloatExtra(EXTRA_STYLE_STROKE_WIDTH, textStrokeWidth)
-                .coerceIn(
-                    FocusPreferences.MIN_TEXT_STROKE_WIDTH,
-                    FocusPreferences.MAX_TEXT_STROKE_WIDTH
-                )
-        }
-        if (intent.hasExtra(EXTRA_STYLE_STROKE_COLOR_MODE)) {
-            textStrokeColorMode = intent.getStringExtra(EXTRA_STYLE_STROKE_COLOR_MODE) ?: textStrokeColorMode
         }
     }
 

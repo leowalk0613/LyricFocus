@@ -481,10 +481,7 @@ object HyperFocusLyricStyle {
         val lyricMaxLines: Int,
         val translationMaxLines: Int,
         val gravityValue: Int,
-        val backgroundColor: Int?,
-        val strokeEnabled: Boolean,
-        val strokeWidth: Float,
-        val strokeColor: Int
+        val backgroundColor: Int?
     )
 
     private fun resolveLyricStyle(moduleContext: Context, layoutId: Int): LyricStyle {
@@ -502,9 +499,6 @@ object HyperFocusLyricStyle {
             null
         }
         val extractedBgColor = FocusStyleSnapshot.extractedBgColor
-        val strokeEnabled = FocusStyleSnapshot.textStrokeEnabled
-        val strokeWidth = FocusStyleSnapshot.textStrokeWidth
-        val strokeColorMode = FocusStyleSnapshot.textStrokeColorMode
 
         val colorPrimary: Int
         val colorSecondary: Int
@@ -565,12 +559,6 @@ object HyperFocusLyricStyle {
             textSize
         }
 
-        val strokeColor = if (strokeEnabled) {
-            AlbumColorExtractor.computeStrokeColor(colorPrimary, strokeColorMode)
-        } else {
-            Color.TRANSPARENT
-        }
-
         return LyricStyle(
             primarySizeSp = primarySize,
             secondarySizeSp = textSize * 0.78f,
@@ -579,10 +567,7 @@ object HyperFocusLyricStyle {
             lyricMaxLines = lyricMaxLines,
             translationMaxLines = translationMaxLines,
             gravityValue = gravityValue,
-            backgroundColor = backgroundColor,
-            strokeEnabled = strokeEnabled,
-            strokeWidth = strokeWidth,
-            strokeColor = strokeColor
+            backgroundColor = backgroundColor
         )
     }
 
@@ -601,11 +586,6 @@ object HyperFocusLyricStyle {
         views.setInt(R.id.focuslyric, "setMaxLines", style.lyricMaxLines)
         views.setInt(R.id.focuslyric, "setGravity", style.gravityValue)
 
-        if (style.strokeEnabled && style.strokeWidth > 0) {
-            views.setInt(R.id.focuslyric, "setShadowLayer",
-                style.strokeWidth.toInt(), 0, 0, style.strokeColor)
-        }
-
         if (translation.isNullOrBlank()) {
             views.setViewVisibility(R.id.focustflyric, View.GONE)
         } else {
@@ -615,11 +595,6 @@ object HyperFocusLyricStyle {
             views.setInt(R.id.focustflyric, "setMaxLines", style.translationMaxLines)
             views.setInt(R.id.focustflyric, "setGravity", style.gravityValue)
             views.setViewVisibility(R.id.focustflyric, View.VISIBLE)
-
-            if (style.strokeEnabled && style.strokeWidth > 0) {
-                views.setInt(R.id.focustflyric, "setShadowLayer",
-                    style.strokeWidth.toInt(), 0, 0, style.strokeColor)
-            }
         }
 
         if (style.backgroundColor != null) {

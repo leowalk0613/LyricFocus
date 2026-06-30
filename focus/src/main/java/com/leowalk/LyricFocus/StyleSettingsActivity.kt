@@ -37,11 +37,6 @@ class StyleSettingsActivity : AppCompatActivity() {
     private lateinit var colorExtractionHint: TextView
     private lateinit var colorExtractionSwitch: MaterialSwitch
     private lateinit var monetDynamicSwitch: MaterialSwitch
-    private lateinit var strokeCard: MaterialCardView
-    private lateinit var strokeSwitch: MaterialSwitch
-    private lateinit var strokeWidthSlider: Slider
-    private lateinit var strokeWidthLabel: TextView
-    private lateinit var strokeColorGroup: MaterialButtonToggleGroup
 
     private var isBindingUi = false
     private var isTextSizeSliderUpdating = false
@@ -73,11 +68,6 @@ class StyleSettingsActivity : AppCompatActivity() {
         colorExtractionHint = findViewById(R.id.color_extraction_hint)
         colorExtractionSwitch = findViewById(R.id.color_extraction_switch)
         monetDynamicSwitch = findViewById(R.id.monet_dynamic_switch)
-        strokeCard = findViewById(R.id.stroke_card)
-        strokeSwitch = findViewById(R.id.stroke_switch)
-        strokeWidthSlider = findViewById(R.id.stroke_width_slider)
-        strokeWidthLabel = findViewById(R.id.stroke_width_label)
-        strokeColorGroup = findViewById(R.id.stroke_color_group)
 
         bindUiFromPreferences()
         setupListeners()
@@ -142,16 +132,6 @@ class StyleSettingsActivity : AppCompatActivity() {
 
         monetDynamicSwitch.isChecked = FocusPreferences.isMonetDynamicColorEnabled(this)
         colorExtractionSwitch.isChecked = FocusPreferences.isTextColorExtractionEnabled(this)
-
-        strokeSwitch.isChecked = FocusPreferences.isTextStrokeEnabled(this)
-        bindStrokeWidthSlider(FocusPreferences.getTextStrokeWidth(this))
-        strokeColorGroup.check(
-            when (FocusPreferences.getTextStrokeColorMode(this)) {
-                FocusPreferences.STROKE_COLOR_BLACK -> R.id.stroke_color_black
-                FocusPreferences.STROKE_COLOR_WHITE -> R.id.stroke_color_white
-                else -> R.id.stroke_color_auto
-            }
-        )
 
         updateDynamicColorUi()
 
@@ -226,17 +206,6 @@ class StyleSettingsActivity : AppCompatActivity() {
     }
 
     private fun formatTextSizeLabel(sizeSp: Float): String = "${sizeSp.roundToInt()} sp"
-
-    private var isStrokeWidthSliderUpdating = false
-
-    private fun bindStrokeWidthSlider(width: Float) {
-        isStrokeWidthSliderUpdating = true
-        strokeWidthSlider.value = width
-        strokeWidthLabel.text = formatStrokeWidthLabel(width)
-        isStrokeWidthSliderUpdating = false
-    }
-
-    private fun formatStrokeWidthLabel(width: Float): String = "${width.roundToInt()} px"
 
     private fun isManualTextColorLocked(): Boolean {
         return FocusPreferences.isMonetDynamicColorEnabled(this) ||
@@ -336,40 +305,6 @@ class StyleSettingsActivity : AppCompatActivity() {
                 FocusPreferences.clearExtractedTextColor(this)
             }
             updateDynamicColorUi()
-            notifyStyleChanged()
-        }
-
-        strokeSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (isBindingUi) return@setOnCheckedChangeListener
-            FocusPreferences.setTextStrokeEnabled(this, isChecked)
-            notifyStyleChanged()
-        }
-
-        strokeWidthSlider.addOnChangeListener { _, value, fromUser ->
-            if (!fromUser || isStrokeWidthSliderUpdating) return@addOnChangeListener
-            strokeWidthLabel.text = formatStrokeWidthLabel(value)
-        }
-        strokeWidthSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
-            override fun onStartTrackingTouch(slider: Slider) = Unit
-            override fun onStopTrackingTouch(slider: Slider) {
-                val normalized = slider.value.coerceIn(
-                    FocusPreferences.MIN_TEXT_STROKE_WIDTH,
-                    FocusPreferences.MAX_TEXT_STROKE_WIDTH
-                )
-                FocusPreferences.setTextStrokeWidth(this@StyleSettingsActivity, normalized)
-                bindStrokeWidthSlider(normalized)
-                notifyStyleChanged()
-            }
-        })
-
-        strokeColorGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
-            val mode = when (checkedId) {
-                R.id.stroke_color_black -> FocusPreferences.STROKE_COLOR_BLACK
-                R.id.stroke_color_white -> FocusPreferences.STROKE_COLOR_WHITE
-                else -> FocusPreferences.STROKE_COLOR_AUTO
-            }
-            FocusPreferences.setTextStrokeColorMode(this, mode)
             notifyStyleChanged()
         }
     }
