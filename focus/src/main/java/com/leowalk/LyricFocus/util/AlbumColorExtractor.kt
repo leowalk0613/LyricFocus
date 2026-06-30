@@ -77,11 +77,28 @@ object AlbumColorExtractor {
         val bg = when (backgroundMode) {
             FocusPreferences.BACKGROUND_BLACK -> Color.BLACK
             FocusPreferences.BACKGROUND_WHITE -> Color.WHITE
-            else -> backgroundEstimate
+            else -> Color.BLACK  // 焦点通知实际使用系统深色背景
         }
         val primary = ensureContrast(accent, bg, MIN_PRIMARY_CONTRAST)
         val secondary = ensureContrast(blendSecondary(primary, bg), bg, MIN_SECONDARY_CONTRAST)
-        return primary to secondary
+        
+        // 如果取到黑色或接近黑色，强制改为灰白色
+        val finalPrimary = avoidPureBlack(primary)
+        val finalSecondary = avoidPureBlack(secondary)
+        
+        return finalPrimary to finalSecondary
+    }
+
+    /**
+     * 如果颜色是黑色或接近黑色，改为灰白色（#E0E0E0）
+     */
+    private fun avoidPureBlack(color: Int): Int {
+        val luminance = relativeLuminance(color)
+        // 如果亮度低于 0.08（接近黑色），改为灰白色
+        if (luminance < 0.08) {
+            return Color.rgb(224, 224, 224)  // #E0E0E0
+        }
+        return color
     }
 
     fun extractAccentColor(bitmap: Bitmap?): Int? {
