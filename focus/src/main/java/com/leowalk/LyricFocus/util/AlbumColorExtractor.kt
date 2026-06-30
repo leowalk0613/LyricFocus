@@ -9,8 +9,10 @@ import kotlin.math.pow
 
 object AlbumColorExtractor {
 
-    private const val MIN_PRIMARY_CONTRAST = 4.0
-    private const val MIN_SECONDARY_CONTRAST = 3.0
+    // 提高最小对比度要求，确保文字更清晰
+    private const val MIN_PRIMARY_CONTRAST = 4.5  // WCAG AA 标准
+    private const val MIN_SECONDARY_CONTRAST = 3.5
+    private const val TARGET_CONTRAST = 7.0  // WCAG AAA 标准作为目标
 
     data class LyricColors(
         val accent: Int,
@@ -97,19 +99,58 @@ object AlbumColorExtractor {
     }
 
     fun ensureContrast(foreground: Int, background: Int, minRatio: Double = MIN_PRIMARY_CONTRAST): Int {
-        if (contrastRatio(foreground, background) >= minRatio) {
+        val currentContrast = contrastRatio(foreground, background)
+        
+        // 如果已经达到目标对比度，直接返回
+        if (currentContrast >= TARGET_CONTRAST) {
+            return foreground
+        }
+        
+        // 如果达到最小对比度但未达到目标，尝试进一步优化
+        if (currentContrast >= minRatio) {
+            // 尝试向更极端的方向调整，以达到更高的对比度
+            val bgLuminance = relativeLuminance(background)
+            val fgLuminance = relativeLuminance(foreground)
+            
+            // 如果背景是深色，尝试让文字更亮
+            if (bgLuminance < 0.35 && fgLuminance > 0.5) {
+                val brighter = blendColors(foreground, Color.WHITE, 0.25f)
+                if (contrastRatio(brighter, background) > currentContrast) {
+                    return brighter
+                }
+            }
+            // 如果背景是浅色，尝试让文字更暗
+            else if (bgLuminance > 0.65 && fgLuminance < 0.5) {
+                val darker = blendColors(foreground, Color.BLACK, 0.25f)
+                if (contrastRatio(darker, background) > currentContrast) {
+                    return darker
+                }
+            }
             return foreground
         }
 
+        // 对比度不足，需要大幅调整
         val lighten = relativeLuminance(background) < 0.45
         val target = if (lighten) Color.WHITE else Color.BLACK
-        var ratio = 0.12f
+        var ratio = 0.15f  // 从更高的比例开始
         while (ratio <= 1f) {
             val candidate = blendColors(foreground, target, ratio)
             if (contrastRatio(candidate, background) >= minRatio) {
-                return candidate
+                // 继续尝试更高的比例以达到更好的对比度
+                var bestRatio = ratio
+                var bestColor = candidate
+                var testRatio = ratio + 0.05f
+                while (testRatio <= 1f) {
+                    val testColor = blendColors(foreground, target, testRatio)
+                    if (contrastRatio(testColor, background) > contrastRatio(bestColor, background)) {
+                        bestRatio = testRatio
+                        bestColor = testColor
+                    }
+                    testRatio += 0.05f
+                }
+                return bestColor
             }
-            ratio += 0.07f
+            ratio += 0.08f
         }
         return if (lighten) Color.WHITE else Color.BLACK
     }
