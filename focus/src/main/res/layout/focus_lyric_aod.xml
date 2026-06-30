@@ -27,7 +27,7 @@
             android:layout_marginBottom="6dp"
             android:contentDescription="@null" />
 
-        <TextView
+        <com.leowalk.LyricFocus.widget.StrokeTextView
             android:id="@+id/focuslyric"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -39,7 +39,7 @@
             android:textSize="18sp"
             android:textStyle="bold" />
 
-        <TextView
+        <com.leowalk.LyricFocus.widget.StrokeTextView
             android:id="@+id/focustflyric"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
