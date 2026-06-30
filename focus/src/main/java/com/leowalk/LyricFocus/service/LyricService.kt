@@ -141,7 +141,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                     clearLyricStateForBlockedApp()
                     return
                 }
-                if (FocusPreferences.isColorExtractionEnabled(this@LyricService)) {
+                if (FocusPreferences.shouldExtractAlbumColors(this@LyricService)) {
                     extractAndSaveAlbumColor(currentAlbumArt)
                 } else {
                     FocusPreferences.clearExtractedTextColor(this@LyricService)
@@ -153,7 +153,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                     return
                 }
                 if (intent.getBooleanExtra(FocusStyleSnapshot.EXTRA_STYLE_CHANGED, false)) {
-                    val needsColorResync = FocusPreferences.isColorExtractionEnabled(this@LyricService) &&
+                    val needsColorResync = FocusPreferences.shouldExtractAlbumColors(this@LyricService) &&
                         FocusPreferences.getExtractedTextColor(this@LyricService) != null &&
                         !intent.hasExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_COLOR)
                     if (needsColorResync) {
@@ -663,7 +663,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     }
 
     private fun scheduleAlbumArtRetry() {
-        if (!FocusPreferences.isColorExtractionEnabled(this)) return
+        if (!FocusPreferences.shouldExtractAlbumColors(this)) return
         albumArtRetryJob?.cancel()
         albumArtRetryJob = serviceScope.launch {
             for (attempt in 0 until 6) {
@@ -687,7 +687,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     }
 
     private fun clearAlbumColorForNewSong() {
-        if (!FocusPreferences.isColorExtractionEnabled(this)) return
+        if (!FocusPreferences.shouldExtractAlbumColors(this)) return
         FocusPreferences.clearExtractedTextColor(this)
         publishAlbumColorUpdate()
     }
@@ -773,7 +773,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             currentAlbumArtKey = artKey
             currentAlbumArt = AlbumArtLoader.load(this, metadata)
             extractAndSaveAlbumColor(currentAlbumArt, forceNotify = songChanged || artChanged)
-            if (currentAlbumArt == null && FocusPreferences.isColorExtractionEnabled(this)) {
+            if (currentAlbumArt == null && FocusPreferences.shouldExtractAlbumColors(this)) {
                 scheduleAlbumArtRetry()
             }
         }

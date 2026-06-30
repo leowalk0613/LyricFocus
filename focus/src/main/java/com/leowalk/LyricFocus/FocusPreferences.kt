@@ -12,6 +12,20 @@ object FocusPreferences {
     const val PREF_PIN_ABOVE_MEDIA = "pin_above_media_controls"
     const val PREF_SHOW_ON_ISLAND = "show_on_super_island"
     const val PREF_AOD_KEEPALIVE_SEC = "aod_keepalive_sec"
+    /** 万象息屏（自定义）AOD：使用横向 rvAod 布局，默认关（锁屏样式 AOD 保持竖排布局） */
+    const val PREF_CUSTOM_AOD_LAYOUT = "custom_aod_layout"
+    /** 全局：歌词与翻译位置互换 */
+    const val PREF_SWAP_LYRIC_TRANSLATION = "swap_lyric_translation"
+    /** 全局：仅显示第一行（隐藏第二行翻译/歌词） */
+    const val PREF_SINGLE_LINE_ONLY = "single_line_only"
+    /** 万象息屏 AOD 独立样式 */
+    const val PREF_CUSTOM_AOD_TEXT_SIZE = "custom_aod_text_size"
+    const val PREF_CUSTOM_AOD_LYRIC_WIDTH = "custom_aod_lyric_width"
+    const val PREF_CUSTOM_AOD_LYRIC_MAX_LINES = "custom_aod_lyric_max_lines"
+    const val PREF_CUSTOM_AOD_TRANSLATION_MAX_LINES = "custom_aod_translation_max_lines"
+    const val PREF_CUSTOM_AOD_COLOR_MODE = "custom_aod_color_mode"
+    const val PREF_CUSTOM_AOD_PRESET_COLOR = "custom_aod_preset_color"
+    const val PREF_CUSTOM_AOD_GRAVITY = "custom_aod_gravity"
     const val PREF_SYNC_ADVANCE_MS = "sync_advance_ms"
     const val PREF_APP_WHITELIST_ENABLED = "app_whitelist_enabled"
     const val PREF_APP_WHITELIST_PACKAGES = "app_whitelist_packages"
@@ -42,6 +56,14 @@ object FocusPreferences {
     const val LYRIC_SOURCE_AUTO = "auto"
     const val LYRIC_SOURCE_NETEASE = "netease"
     const val LYRIC_SOURCE_QQ = "qq"
+
+    const val CUSTOM_AOD_COLOR_WHITE = "white"
+    const val CUSTOM_AOD_COLOR_ALBUM = "album"
+    const val CUSTOM_AOD_COLOR_PRESET = "preset"
+
+    const val DEFAULT_CUSTOM_AOD_LYRIC_WIDTH = 100
+    const val MIN_CUSTOM_AOD_LYRIC_WIDTH = 50
+    const val MAX_CUSTOM_AOD_LYRIC_WIDTH = 100
 
     const val ACTION_SETTINGS_CHANGED = "com.leowalk.LyricFocus.action.SETTINGS_CHANGED"
     /** SystemUI 重启后请求 App 重推当前歌词/焦点状态 */
@@ -263,6 +285,199 @@ object FocusPreferences {
 
     fun readShowOnIsland(context: Context): Boolean = false
 
+    fun isCustomAodLayout(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_CUSTOM_AOD_LAYOUT, false)
+    }
+
+    fun setCustomAodLayout(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_CUSTOM_AOD_LAYOUT, enabled)
+            .apply()
+    }
+
+    fun readCustomAodLayout(context: Context): Boolean {
+        return readFromModule(context) { isCustomAodLayout(it) } ?: false
+    }
+
+    fun isSwapLyricTranslation(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_SWAP_LYRIC_TRANSLATION, false)
+    }
+
+    fun setSwapLyricTranslation(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_SWAP_LYRIC_TRANSLATION, enabled)
+            .apply()
+    }
+
+    fun readSwapLyricTranslation(context: Context): Boolean {
+        return readFromModule(context) { isSwapLyricTranslation(it) } ?: false
+    }
+
+    fun isSingleLineOnly(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_SINGLE_LINE_ONLY, false)
+    }
+
+    fun setSingleLineOnly(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_SINGLE_LINE_ONLY, enabled)
+            .apply()
+    }
+
+    fun readSingleLineOnly(context: Context): Boolean {
+        return readFromModule(context) { isSingleLineOnly(it) } ?: false
+    }
+
+    fun getCustomAodTextSize(context: Context): Float {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getFloat(PREF_CUSTOM_AOD_TEXT_SIZE, DEFAULT_LYRIC_TEXT_SIZE_SP)
+            .coerceIn(MIN_LYRIC_TEXT_SIZE_SP, MAX_LYRIC_TEXT_SIZE_SP)
+    }
+
+    fun setCustomAodTextSize(context: Context, sizeSp: Float) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putFloat(
+                PREF_CUSTOM_AOD_TEXT_SIZE,
+                sizeSp.coerceIn(MIN_LYRIC_TEXT_SIZE_SP, MAX_LYRIC_TEXT_SIZE_SP)
+            )
+            .commit()
+    }
+
+    fun readCustomAodTextSize(context: Context): Float {
+        return readFromModule(context) { getCustomAodTextSize(it) } ?: DEFAULT_LYRIC_TEXT_SIZE_SP
+    }
+
+    fun getCustomAodLyricWidth(context: Context): Int {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(PREF_CUSTOM_AOD_LYRIC_WIDTH, DEFAULT_CUSTOM_AOD_LYRIC_WIDTH)
+            .coerceIn(MIN_CUSTOM_AOD_LYRIC_WIDTH, MAX_CUSTOM_AOD_LYRIC_WIDTH)
+    }
+
+    fun setCustomAodLyricWidth(context: Context, widthPercent: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(
+                PREF_CUSTOM_AOD_LYRIC_WIDTH,
+                widthPercent.coerceIn(MIN_CUSTOM_AOD_LYRIC_WIDTH, MAX_CUSTOM_AOD_LYRIC_WIDTH)
+            )
+            .commit()
+    }
+
+    fun readCustomAodLyricWidth(context: Context): Int {
+        return readFromModule(context) { getCustomAodLyricWidth(it) } ?: DEFAULT_CUSTOM_AOD_LYRIC_WIDTH
+    }
+
+    fun formatCustomAodLyricWidthLabel(widthPercent: Int): String = "${widthPercent}%"
+
+    fun getCustomAodLyricMaxLines(context: Context): Int {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(PREF_CUSTOM_AOD_LYRIC_MAX_LINES, DEFAULT_LYRIC_MAX_LINES)
+            .coerceIn(1, 2)
+    }
+
+    fun setCustomAodLyricMaxLines(context: Context, lines: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(PREF_CUSTOM_AOD_LYRIC_MAX_LINES, lines.coerceIn(1, 2))
+            .commit()
+    }
+
+    fun readCustomAodLyricMaxLines(context: Context): Int {
+        return readFromModule(context) { getCustomAodLyricMaxLines(it) } ?: DEFAULT_LYRIC_MAX_LINES
+    }
+
+    fun getCustomAodTranslationMaxLines(context: Context): Int {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(PREF_CUSTOM_AOD_TRANSLATION_MAX_LINES, DEFAULT_TRANSLATION_MAX_LINES)
+            .coerceIn(1, 2)
+    }
+
+    fun setCustomAodTranslationMaxLines(context: Context, lines: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(PREF_CUSTOM_AOD_TRANSLATION_MAX_LINES, lines.coerceIn(1, 2))
+            .commit()
+    }
+
+    fun readCustomAodTranslationMaxLines(context: Context): Int {
+        return readFromModule(context) { getCustomAodTranslationMaxLines(it) }
+            ?: DEFAULT_TRANSLATION_MAX_LINES
+    }
+
+    fun getCustomAodColorMode(context: Context): String {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(PREF_CUSTOM_AOD_COLOR_MODE, CUSTOM_AOD_COLOR_WHITE)
+            ?: CUSTOM_AOD_COLOR_WHITE
+    }
+
+    fun setCustomAodColorMode(context: Context, mode: String) {
+        val normalized = when (mode) {
+            CUSTOM_AOD_COLOR_ALBUM, CUSTOM_AOD_COLOR_PRESET -> mode
+            else -> CUSTOM_AOD_COLOR_WHITE
+        }
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(PREF_CUSTOM_AOD_COLOR_MODE, normalized)
+            .commit()
+    }
+
+    fun readCustomAodColorMode(context: Context): String {
+        return readFromModule(context) { getCustomAodColorMode(it) } ?: CUSTOM_AOD_COLOR_WHITE
+    }
+
+    fun getCustomAodPresetColor(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getInt(
+            PREF_CUSTOM_AOD_PRESET_COLOR,
+            com.leowalk.LyricFocus.util.AodColorPresets.defaultPresetColor()
+        )
+    }
+
+    fun setCustomAodPresetColor(context: Context, color: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(PREF_CUSTOM_AOD_PRESET_COLOR, color)
+            .commit()
+    }
+
+    fun readCustomAodPresetColor(context: Context): Int {
+        return readFromModule(context) { getCustomAodPresetColor(it) }
+            ?: com.leowalk.LyricFocus.util.AodColorPresets.defaultPresetColor()
+    }
+
+    fun formatCustomAodColorModeLabel(mode: String): String = when (mode) {
+        CUSTOM_AOD_COLOR_ALBUM -> "专辑主色取色"
+        CUSTOM_AOD_COLOR_PRESET -> "推荐颜色"
+        else -> "白色"
+    }
+
+    fun getCustomAodGravity(context: Context): String {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(PREF_CUSTOM_AOD_GRAVITY, GRAVITY_CENTER)
+            ?: GRAVITY_CENTER
+    }
+
+    fun setCustomAodGravity(context: Context, gravity: String) {
+        val normalized = when (gravity) {
+            GRAVITY_LEFT, GRAVITY_RIGHT -> gravity
+            else -> GRAVITY_CENTER
+        }
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(PREF_CUSTOM_AOD_GRAVITY, normalized)
+            .commit()
+    }
+
+    fun readCustomAodGravity(context: Context): String {
+        return readFromModule(context) { getCustomAodGravity(it) } ?: GRAVITY_CENTER
+    }
+
     fun readAodKeepaliveSec(context: Context): Int {
         return readFromModule(context) { getAodKeepaliveSec(it) } ?: DEFAULT_AOD_KEEPALIVE_SEC
     }
@@ -407,6 +622,11 @@ object FocusPreferences {
 
     fun isColorExtractionEnabled(context: Context): Boolean = isAlbumColorExtractionActive(context)
 
+    fun shouldExtractAlbumColors(context: Context): Boolean {
+        return isAlbumColorExtractionActive(context) ||
+            (isCustomAodLayout(context) && getCustomAodColorMode(context) == CUSTOM_AOD_COLOR_ALBUM)
+    }
+
     fun setColorExtractionEnabled(context: Context, enabled: Boolean) {
         setTextColorExtractionEnabled(context, enabled)
     }
@@ -525,6 +745,46 @@ object FocusPreferences {
                 )
                 putExtra(FocusStyleSnapshot.EXTRA_STYLE_GRAVITY, getLyricGravity(context))
                 putExtra(FocusStyleSnapshot.EXTRA_STYLE_BACKGROUND, getFocusBackground(context))
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_LAYOUT,
+                    isCustomAodLayout(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_SWAP_LYRIC_TRANSLATION,
+                    isSwapLyricTranslation(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_SINGLE_LINE_ONLY,
+                    isSingleLineOnly(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_TEXT_SIZE,
+                    getCustomAodTextSize(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_LYRIC_WIDTH,
+                    getCustomAodLyricWidth(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_LYRIC_MAX_LINES,
+                    getCustomAodLyricMaxLines(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_TRANSLATION_MAX_LINES,
+                    getCustomAodTranslationMaxLines(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_COLOR_MODE,
+                    getCustomAodColorMode(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_PRESET_COLOR,
+                    getCustomAodPresetColor(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_GRAVITY,
+                    getCustomAodGravity(context)
+                )
                 putExtra(
                     FocusStyleSnapshot.EXTRA_STYLE_MONET_DYNAMIC_COLOR,
                     isMonetDynamicColorEnabled(context)

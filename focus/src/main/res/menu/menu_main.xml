@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_restart_systemui"
+        android:icon="@drawable/ic_restart"
+        android:title="重启系统界面"
+        app:iconTint="?attr/colorOnSurface"
+        app:iconTintMode="src_in"
+        app:showAsAction="always" />
+</menu>

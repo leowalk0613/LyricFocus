@@ -17,6 +17,16 @@ object FocusStyleSnapshot {
     const val EXTRA_STYLE_TRANSLATION_MAX_LINES = "style_translation_max_lines"
     const val EXTRA_STYLE_GRAVITY = "style_gravity"
     const val EXTRA_STYLE_BACKGROUND = "style_background"
+    const val EXTRA_STYLE_CUSTOM_AOD_LAYOUT = "style_custom_aod_layout"
+    const val EXTRA_STYLE_SWAP_LYRIC_TRANSLATION = "style_swap_lyric_translation"
+    const val EXTRA_STYLE_SINGLE_LINE_ONLY = "style_single_line_only"
+    const val EXTRA_STYLE_CUSTOM_AOD_TEXT_SIZE = "style_custom_aod_text_size"
+    const val EXTRA_STYLE_CUSTOM_AOD_LYRIC_WIDTH = "style_custom_aod_lyric_width"
+    const val EXTRA_STYLE_CUSTOM_AOD_LYRIC_MAX_LINES = "style_custom_aod_lyric_max_lines"
+    const val EXTRA_STYLE_CUSTOM_AOD_TRANSLATION_MAX_LINES = "style_custom_aod_translation_max_lines"
+    const val EXTRA_STYLE_CUSTOM_AOD_COLOR_MODE = "style_custom_aod_color_mode"
+    const val EXTRA_STYLE_CUSTOM_AOD_PRESET_COLOR = "style_custom_aod_preset_color"
+    const val EXTRA_STYLE_CUSTOM_AOD_GRAVITY = "style_custom_aod_gravity"
     const val EXTRA_STYLE_MONET_DYNAMIC_COLOR = "style_monet_dynamic_color"
     const val EXTRA_STYLE_COLOR_EXTRACTION = "style_color_extraction"
     const val EXTRA_STYLE_EXTRACTED_COLOR = "style_extracted_color"
@@ -46,6 +56,46 @@ object FocusStyleSnapshot {
 
     @Volatile
     var background: String = FocusPreferences.BACKGROUND_DEFAULT
+        private set
+
+    @Volatile
+    var customAodLayout: Boolean = false
+        private set
+
+    @Volatile
+    var swapLyricTranslation: Boolean = false
+        private set
+
+    @Volatile
+    var singleLineOnly: Boolean = false
+        private set
+
+    @Volatile
+    var customAodTextSizeSp: Float = FocusPreferences.DEFAULT_LYRIC_TEXT_SIZE_SP
+        private set
+
+    @Volatile
+    var customAodLyricWidth: Int = FocusPreferences.DEFAULT_CUSTOM_AOD_LYRIC_WIDTH
+        private set
+
+    @Volatile
+    var customAodLyricMaxLines: Int = FocusPreferences.DEFAULT_LYRIC_MAX_LINES
+        private set
+
+    @Volatile
+    var customAodTranslationMaxLines: Int = FocusPreferences.DEFAULT_TRANSLATION_MAX_LINES
+        private set
+
+    @Volatile
+    var customAodColorMode: String = FocusPreferences.CUSTOM_AOD_COLOR_WHITE
+        private set
+
+    @Volatile
+    var customAodPresetColor: Int = com.leowalk.LyricFocus.util.AodColorPresets.defaultPresetColor()
+        private set
+
+    @Volatile
+    var customAodGravity: String = FocusPreferences.GRAVITY_CENTER
         private set
 
     @Volatile
@@ -98,6 +148,52 @@ object FocusStyleSnapshot {
             FocusPreferences.PREF_FOCUS_BACKGROUND,
             FocusPreferences.BACKGROUND_DEFAULT
         ) ?: FocusPreferences.BACKGROUND_DEFAULT
+        customAodLayout = prefs.getBoolean(
+            FocusPreferences.PREF_CUSTOM_AOD_LAYOUT,
+            false
+        )
+        swapLyricTranslation = prefs.getBoolean(
+            FocusPreferences.PREF_SWAP_LYRIC_TRANSLATION,
+            false
+        )
+        singleLineOnly = prefs.getBoolean(
+            FocusPreferences.PREF_SINGLE_LINE_ONLY,
+            false
+        )
+        customAodTextSizeSp = prefs.getFloat(
+            FocusPreferences.PREF_CUSTOM_AOD_TEXT_SIZE,
+            FocusPreferences.DEFAULT_LYRIC_TEXT_SIZE_SP
+        ).coerceIn(
+            FocusPreferences.MIN_LYRIC_TEXT_SIZE_SP,
+            FocusPreferences.MAX_LYRIC_TEXT_SIZE_SP
+        )
+        customAodLyricWidth = prefs.getInt(
+            FocusPreferences.PREF_CUSTOM_AOD_LYRIC_WIDTH,
+            FocusPreferences.DEFAULT_CUSTOM_AOD_LYRIC_WIDTH
+        ).coerceIn(
+            FocusPreferences.MIN_CUSTOM_AOD_LYRIC_WIDTH,
+            FocusPreferences.MAX_CUSTOM_AOD_LYRIC_WIDTH
+        )
+        customAodLyricMaxLines = prefs.getInt(
+            FocusPreferences.PREF_CUSTOM_AOD_LYRIC_MAX_LINES,
+            FocusPreferences.DEFAULT_LYRIC_MAX_LINES
+        ).coerceIn(1, 2)
+        customAodTranslationMaxLines = prefs.getInt(
+            FocusPreferences.PREF_CUSTOM_AOD_TRANSLATION_MAX_LINES,
+            FocusPreferences.DEFAULT_TRANSLATION_MAX_LINES
+        ).coerceIn(1, 2)
+        customAodColorMode = prefs.getString(
+            FocusPreferences.PREF_CUSTOM_AOD_COLOR_MODE,
+            FocusPreferences.CUSTOM_AOD_COLOR_WHITE
+        ) ?: FocusPreferences.CUSTOM_AOD_COLOR_WHITE
+        customAodPresetColor = prefs.getInt(
+            FocusPreferences.PREF_CUSTOM_AOD_PRESET_COLOR,
+            com.leowalk.LyricFocus.util.AodColorPresets.defaultPresetColor()
+        )
+        customAodGravity = prefs.getString(
+            FocusPreferences.PREF_CUSTOM_AOD_GRAVITY,
+            FocusPreferences.GRAVITY_CENTER
+        ) ?: FocusPreferences.GRAVITY_CENTER
         monetDynamicColorEnabled = prefs.getBoolean(
             FocusPreferences.PREF_MONET_DYNAMIC_COLOR,
             false
@@ -161,6 +257,58 @@ object FocusStyleSnapshot {
         }
         if (intent.hasExtra(EXTRA_STYLE_BACKGROUND)) {
             background = intent.getStringExtra(EXTRA_STYLE_BACKGROUND) ?: background
+        }
+        if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_LAYOUT)) {
+            customAodLayout = intent.getBooleanExtra(EXTRA_STYLE_CUSTOM_AOD_LAYOUT, customAodLayout)
+        }
+        if (intent.hasExtra(EXTRA_STYLE_SWAP_LYRIC_TRANSLATION)) {
+            swapLyricTranslation = intent.getBooleanExtra(
+                EXTRA_STYLE_SWAP_LYRIC_TRANSLATION,
+                swapLyricTranslation
+            )
+        }
+        if (intent.hasExtra(EXTRA_STYLE_SINGLE_LINE_ONLY)) {
+            singleLineOnly = intent.getBooleanExtra(EXTRA_STYLE_SINGLE_LINE_ONLY, singleLineOnly)
+        }
+        if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_TEXT_SIZE)) {
+            customAodTextSizeSp = intent.getFloatExtra(EXTRA_STYLE_CUSTOM_AOD_TEXT_SIZE, customAodTextSizeSp)
+                .coerceIn(
+                    FocusPreferences.MIN_LYRIC_TEXT_SIZE_SP,
+                    FocusPreferences.MAX_LYRIC_TEXT_SIZE_SP
+                )
+        }
+        if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_LYRIC_WIDTH)) {
+            customAodLyricWidth = intent.getIntExtra(EXTRA_STYLE_CUSTOM_AOD_LYRIC_WIDTH, customAodLyricWidth)
+                .coerceIn(
+                    FocusPreferences.MIN_CUSTOM_AOD_LYRIC_WIDTH,
+                    FocusPreferences.MAX_CUSTOM_AOD_LYRIC_WIDTH
+                )
+        }
+        if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_LYRIC_MAX_LINES)) {
+            customAodLyricMaxLines = intent.getIntExtra(
+                EXTRA_STYLE_CUSTOM_AOD_LYRIC_MAX_LINES,
+                customAodLyricMaxLines
+            ).coerceIn(1, 2)
+        }
+        if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_TRANSLATION_MAX_LINES)) {
+            customAodTranslationMaxLines = intent.getIntExtra(
+                EXTRA_STYLE_CUSTOM_AOD_TRANSLATION_MAX_LINES,
+                customAodTranslationMaxLines
+            ).coerceIn(1, 2)
+        }
+        if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_COLOR_MODE)) {
+            customAodColorMode = intent.getStringExtra(EXTRA_STYLE_CUSTOM_AOD_COLOR_MODE)
+                ?: customAodColorMode
+        }
+        if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_PRESET_COLOR)) {
+            customAodPresetColor = intent.getIntExtra(
+                EXTRA_STYLE_CUSTOM_AOD_PRESET_COLOR,
+                customAodPresetColor
+            )
+        }
+        if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_GRAVITY)) {
+            customAodGravity = intent.getStringExtra(EXTRA_STYLE_CUSTOM_AOD_GRAVITY)
+                ?: customAodGravity
         }
         if (intent.hasExtra(EXTRA_STYLE_MONET_DYNAMIC_COLOR)) {
             monetDynamicColorEnabled = intent.getBooleanExtra(EXTRA_STYLE_MONET_DYNAMIC_COLOR, false)

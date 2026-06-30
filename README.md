@@ -7,7 +7,7 @@
 ![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)
 
 在小米 HyperOS 上于**锁屏、AOD（息屏显示）、通知栏**展示同步歌词。  
-通过 LSPosed 注入 SystemUI，使用 HyperOS **焦点通知**（`miui.focus.*`）渲染歌词，可选超级岛。
+通过 LSPosed 注入 SystemUI，使用 HyperOS **焦点通知**（`miui.focus.*`）渲染歌词；主界面副标题：**实现 HyperOS 锁屏息屏焦点歌词的 LSP 模块**。
 
 包名：`com.leowalk.LyricFocus`
 
@@ -38,16 +38,20 @@
 
 ## 功能概览
 
-- **Material 3 界面**：主界面、样式设置、关于页统一 Tonal 按钮风格
-- **样式设置（v1.3）**：独立二级页面，可调文字大小、颜色、行数、对齐、焦点通知背景；支持 **Monet 动态取色** 与 **通知文字取色**
+- **Material 3 界面**：主界面、样式设置、关于页统一 Tonal 风格；工具栏 **重启 SystemUI** 图标（需 Root）
+- **样式设置（v1.5）**：分 **通用**、**锁屏样式 AOD**、**万象息屏 AOD** 三类；开启万象息屏时锁屏样式项置灰，关闭时万象息屏专用项置灰
+- **通用样式**：歌词与翻译位置互换、仅显示第一行（全局作用于全部布局）
+- **锁屏样式 AOD**：字号、文字颜色、行数、排版、焦点通知背景；**Monet 动态取色** 与 **通知文字取色**
+- **万象息屏 AOD 专用样式**：字号、歌词宽度（50–100%）、歌词/翻译行数、排版（靠左/居中/靠右）、颜色（白/专辑取色/24 色推荐色 + RGB 自定义）；歌名 · 歌手 3:2 居中块，长标题代码 ellipsize
 - **Monet 动态取色**：从当前播放专辑封面实时提取背景与文字色（Material You 风格），自动增强对比度以保证歌词可读性；开启后手动背景/文字/文字取色选项置灰
 - **实时歌词**：`NotificationListenerService` 绑定 MediaSession，监听播放进度与元数据
 - **多歌词源**：网易云音乐、QQ 音乐（自动链式回退或指定单一源）
 - **焦点通知**：锁屏 / AOD 使用 `miui.focus.rv`、`miui.focus.rvAod` 自定义 RemoteViews，支持 updatable 会话续期
+- **万象息屏（自定义）AOD**：主界面开关；横向 `rvAod` 布局，修复万象/自定义息屏歌词只显示首字的问题
 - **超级岛（默认关闭）**：主界面已移除开关，代码层固定关闭
 - **应用白名单**：可选仅对指定音乐 App 的 MediaSession 响应；支持搜索已安装应用、手动添加包名
 - **歌词提前量**：可调同步偏移（默认提前 200 ms）
-- **Root 重启 SystemUI**：设置页一键重启系统界面，Hook 变更后快速生效
+- **Root 重启 SystemUI**：主界面右上角一键重启，Hook / 样式变更后快速生效
 - **统一通知渠道**：后台服务通知合并为单一渠道，前台通知显示当前播放状态
 - **关于界面**：软件信息、GitHub / 酷安链接、联系邮箱弹窗、系统要求、致谢与开源许可证
 - **LSPosed 日志查看**：应用内选择日志文件/ZIP 压缩包，自动筛选 LyricFocus 相关日志，支持一键复制
@@ -253,7 +257,9 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 
 **同步偏移**：歌词偏慢向右拖，偏快向左拖（默认提前 200 ms）。
 
-**样式设置**：主界面顶部「样式设置」入口，可配置 Monet 动态取色、文字颜色、焦点通知背景等。
+**样式设置**：主界面「样式设置」入口（位于显示设置与权限设置之间），按场景分三类配置；修改后立即广播至 SystemUI 刷新当前歌词。
+
+**万象息屏 AOD**：主界面「万象息屏（自定义）AOD」开关与样式设置内「万象息屏 AOD」区块配合使用；未开启开关时，专用样式项不可调整。
 
 ---
 
@@ -293,11 +299,21 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 | 歌词获取源 | `lyric_source` | `auto` | `auto` / `netease` / `qq` |
 | 歌词提前量 | `sync_advance_ms` | `200` | -1000 ~ 3000 ms |
 | AOD 保活间隔 | `aod_keepalive_sec` | `9` | 受焦点会话 ~9s 系统上限约束 |
-| 歌词字号 | `lyric_text_size` | `18` sp | 12 ~ 32 sp |
+| 万象息屏 AOD | `custom_aod_layout` | 关 | 万象/自定义息屏时使用横向 rvAod 布局 |
+| 歌词与翻译互换 | `swap_lyric_translation` | 关 | 全局：第一行显示翻译 |
+| 仅显示第一行 | `single_line_only` | 关 | 全局：隐藏第二行 |
+| 万象息屏字号 | `custom_aod_text_size` | `18` sp | 12 ~ 32 sp；仅万象息屏 AOD |
+| 万象息屏歌词宽度 | `custom_aod_lyric_width` | `100` | 50 ~ 100 % |
+| 万象息屏歌词行数 | `custom_aod_lyric_max_lines` | `2` | 1 ~ 2 |
+| 万象息屏翻译行数 | `custom_aod_translation_max_lines` | `1` | 1 ~ 2 |
+| 万象息屏排版 | `custom_aod_gravity` | `center` | `left` / `center` / `right`；歌名与歌词 |
+| 万象息屏颜色模式 | `custom_aod_color_mode` | `white` | `white` / `album` / `preset` |
+| 万象息屏推荐色 | `custom_aod_preset_color` | 默认蓝 | `preset` 模式下生效 |
+| 歌词字号 | `lyric_text_size` | `18` sp | 12 ~ 32 sp；锁屏样式 AOD |
 | 文字颜色 | `lyric_text_color` | `white` | `white` / `black`；Monet 或文字取色开启时无效 |
 | 歌词行数 | `lyric_max_lines` | `2` | 1 ~ 2 |
 | 翻译行数 | `translation_max_lines` | `1` | 1 ~ 2 |
-| 对齐方式 | `lyric_gravity` | `center` | `left` / `center` / `right` |
+| 对齐方式 | `lyric_gravity` | `center` | `left` / `center` / `right`；锁屏样式 AOD |
 | 焦点通知背景 | `focus_background` | `default` | `default` / `black` / `white`；Monet 开启时无效 |
 | Monet 动态取色 | `monet_dynamic_color` | 关 | 专辑封面实时取背景+文字色 |
 | 通知文字取色 | `lyric_color_extraction` | 关 | 仅文字取色；与 Monet 互斥 |
@@ -366,6 +382,16 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 ---
 
 ## 版本更新
+
+### v1.5.0
+
+- **万象息屏（自定义）AOD 支持**：新增「万象息屏（自定义）AOD」开关；开启后使用横向 `rvAod` 布局（`focus_lyric_aod_custom`），修复万象/自定义息屏下歌词与翻译只显示首字的问题
+- **万象息屏内容增强**：显示歌名 · 歌手（3:2 宽度、居中块布局）、完整歌词与翻译；长歌名在绑定前 `TextUtils.ellipsize`，避免 RemoteViews 截断失效
+- **样式设置三类分区**：**通用**（互换/单行）、**锁屏样式 AOD**、**万象息屏 AOD**；两类 AOD 样式互斥置灰，并显示对应提示
+- **万象息屏专用样式**：独立字号、歌词宽度、行数、排版、颜色（白 / 专辑取色 / 24 推荐色 + RGB 自定义）
+- **主界面**：副标题「实现 HyperOS 锁屏息屏焦点歌词的 LSP 模块」；「样式设置」移至显示设置与权限设置之间；**重启 SystemUI** 改为工具栏图标按钮
+- **默认行为不变**：万象息屏开关默认关闭，锁屏样式 AOD 仍使用原有竖排 `focus_lyric_aod` 布局
+- **版本号**：`1.5.0`（versionCode 6）
 
 ### v1.4.0
 
@@ -506,8 +532,14 @@ LSPosed 日志目录结构：
 
 **Q：Hook 或设置改了不生效**
 
-- 使用应用内 **重启系统界面**（需 Root）
+- 使用主界面右上角 **重启系统界面**（需 Root）
 - 或重启手机
+
+**Q：重启系统界面后万象息屏显示异常怎么办？**
+
+重启 SystemUI 后，若万象息屏（自定义）AOD 出现样式错乱、不刷新或布局异常，一般属于重启后的短暂不同步，无需反复开关或再次重启。
+
+**切到下一首歌即可恢复**：换歌会重新推送歌词与焦点通知，万象息屏显示通常会立即回到正常状态。
 
 **Q：非小米 / 非 HyperOS 能否使用？**
 

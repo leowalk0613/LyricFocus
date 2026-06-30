@@ -24,6 +24,8 @@ import android.graphics.drawable.Icon
 
 import android.os.Bundle
 
+import android.text.TextPaint
+import android.text.TextUtils
 import android.util.TypedValue
 
 import android.view.View
@@ -182,7 +184,14 @@ object HyperFocusLyricStyle {
 
         val lockViews = buildLyricRemoteViews(moduleContext, R.layout.focus_lyric_lock, lyric, translation)
 
-        val aodViews = buildAodRemoteViews(moduleContext, lyric, translation, lightIcon)
+        val aodViews = buildAodRemoteViews(
+            moduleContext,
+            content.songTitle,
+            content.artist,
+            lyric,
+            translation,
+            lightIcon
+        )
 
 
 
@@ -467,7 +476,7 @@ object HyperFocusLyricStyle {
     ): RemoteViews {
         val views = RemoteViews(moduleContext.packageName, layoutId)
         val style = resolveLyricStyle(moduleContext, layoutId)
-        applyLyricStyle(views, lyric, translation, style, hideSongTitle = layoutId == R.layout.focus_lyric_lock)
+        applyLyricStyle(views, lyric, translation, style, hideSongTitle = layoutId == R.layout.focus_lyric_lock, layoutId = layoutId)
         return views
     }
 
@@ -483,6 +492,9 @@ object HyperFocusLyricStyle {
     )
 
     private fun resolveLyricStyle(moduleContext: Context, layoutId: Int): LyricStyle {
+        if (layoutId == R.layout.focus_lyric_aod_custom) {
+            return resolveCustomAodLyricStyle(moduleContext)
+        }
         val textSize = FocusStyleSnapshot.textSizeSp
         val textColor = FocusStyleSnapshot.textColor
         val lyricMaxLines = FocusStyleSnapshot.lyricMaxLines
@@ -545,11 +557,7 @@ object HyperFocusLyricStyle {
             }
         }
 
-        val gravityValue = when (gravity) {
-            FocusPreferences.GRAVITY_LEFT -> android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
-            FocusPreferences.GRAVITY_RIGHT -> android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL
-            else -> android.view.Gravity.CENTER
-        }
+        val gravityValue = lyricGravityValue(gravity)
 
         val primarySize = if (layoutId == R.layout.focus_lyric_island) {
             textSize * 0.94f
@@ -569,25 +577,104 @@ object HyperFocusLyricStyle {
         )
     }
 
+    private fun resolveCustomAodLyricStyle(moduleContext: Context): LyricStyle {
+        val textSize = FocusStyleSnapshot.customAodTextSizeSp
+        val lyricMaxLines = FocusStyleSnapshot.customAodLyricMaxLines
+        val translationMaxLines = FocusStyleSnapshot.customAodTranslationMaxLines
+        val extractedColor = FocusStyleSnapshot.extractedTextColor
+        val extractedBgColor = FocusStyleSnapshot.extractedBgColor
+
+        val colorPrimary: Int
+        val colorSecondary: Int
+        when (FocusStyleSnapshot.customAodColorMode) {
+            FocusPreferences.CUSTOM_AOD_COLOR_ALBUM -> {
+                if (extractedColor != null) {
+                    colorPrimary = extractedColor
+                    colorSecondary = AlbumColorExtractor.ensureContrast(
+                        AlbumColorExtractor.blendSecondary(
+                            extractedColor,
+                            extractedBgColor ?: Color.GRAY
+                        ),
+                        extractedBgColor ?: Color.GRAY,
+                        3.0
+                    )
+                } else {
+                    colorPrimary = COLOR_LYRIC_PRIMARY
+                    colorSecondary = COLOR_LYRIC_SECONDARY
+                }
+            }
+            FocusPreferences.CUSTOM_AOD_COLOR_PRESET -> {
+                colorPrimary = FocusStyleSnapshot.customAodPresetColor
+                colorSecondary = blendSecondaryTextColor(colorPrimary)
+            }
+            else -> {
+                colorPrimary = COLOR_LYRIC_PRIMARY
+                colorSecondary = COLOR_LYRIC_SECONDARY
+            }
+        }
+
+        return LyricStyle(
+            primarySizeSp = textSize,
+            secondarySizeSp = textSize * 0.78f,
+            colorPrimary = colorPrimary,
+            colorSecondary = colorSecondary,
+            lyricMaxLines = lyricMaxLines,
+            translationMaxLines = translationMaxLines,
+            gravityValue = lyricGravityValue(FocusStyleSnapshot.customAodGravity),
+            backgroundColor = null
+        )
+    }
+
+    private fun lyricGravityValue(gravity: String): Int {
+        return when (gravity) {
+            FocusPreferences.GRAVITY_LEFT ->
+                android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+            FocusPreferences.GRAVITY_RIGHT ->
+                android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL
+            else -> android.view.Gravity.CENTER
+        }
+    }
+
+    private fun blendSecondaryTextColor(primary: Int): Int {
+        val r = ((Color.red(primary) * 0.82f) + (255 * 0.18f)).toInt().coerceIn(0, 255)
+        val g = ((Color.green(primary) * 0.82f) + (255 * 0.18f)).toInt().coerceIn(0, 255)
+        val b = ((Color.blue(primary) * 0.82f) + (255 * 0.18f)).toInt().coerceIn(0, 255)
+        return Color.rgb(r, g, b)
+    }
+
     private fun applyLyricStyle(
         views: RemoteViews,
         lyric: String,
         translation: String?,
         style: LyricStyle,
-        hideSongTitle: Boolean
+        hideSongTitle: Boolean,
+        trackLabel: String? = null,
+        songTitle: String? = null,
+        songArtist: String? = null,
+        layoutId: Int = 0
     ) {
         views.setInt(R.id.focus_lyric_content, "setGravity", style.gravityValue)
 
-        views.setTextViewText(R.id.focuslyric, lyric)
+        var primaryText = lyric
+        var secondaryText = translation?.takeIf { it.isNotBlank() }
+        if (FocusStyleSnapshot.swapLyricTranslation && secondaryText != null) {
+            primaryText = secondaryText
+            secondaryText = lyric
+        }
+        if (FocusStyleSnapshot.singleLineOnly) {
+            secondaryText = null
+        }
+
+        views.setTextViewText(R.id.focuslyric, primaryText)
         views.setTextColor(R.id.focuslyric, style.colorPrimary)
         views.setTextViewTextSize(R.id.focuslyric, TypedValue.COMPLEX_UNIT_SP, style.primarySizeSp)
         views.setInt(R.id.focuslyric, "setMaxLines", style.lyricMaxLines)
         views.setInt(R.id.focuslyric, "setGravity", style.gravityValue)
 
-        if (translation.isNullOrBlank()) {
+        if (secondaryText.isNullOrBlank()) {
             views.setViewVisibility(R.id.focustflyric, View.GONE)
         } else {
-            views.setTextViewText(R.id.focustflyric, translation)
+            views.setTextViewText(R.id.focustflyric, secondaryText)
             views.setTextColor(R.id.focustflyric, style.colorSecondary)
             views.setTextViewTextSize(R.id.focustflyric, TypedValue.COMPLEX_UNIT_SP, style.secondarySizeSp)
             views.setInt(R.id.focustflyric, "setMaxLines", style.translationMaxLines)
@@ -596,14 +683,214 @@ object HyperFocusLyricStyle {
         }
 
         if (style.backgroundColor != null) {
-            views.setViewVisibility(R.id.focus_lyric_bg, View.VISIBLE)
-            views.setImageViewBitmap(R.id.focus_lyric_bg, solidColorBitmap(style.backgroundColor))
+            safeSetViewVisibility(views, R.id.focus_lyric_bg, View.VISIBLE)
+            safeSetImageViewBitmap(views, R.id.focus_lyric_bg, solidColorBitmap(style.backgroundColor))
         } else {
-            views.setViewVisibility(R.id.focus_lyric_bg, View.GONE)
+            safeSetViewVisibility(views, R.id.focus_lyric_bg, View.GONE)
         }
 
-        if (hideSongTitle) {
-            views.setViewVisibility(R.id.focus_song_title, View.GONE)
+        when {
+            hideSongTitle -> {
+                safeSetViewVisibility(views, R.id.focus_song_row, View.GONE)
+                safeSetViewVisibility(views, R.id.focus_song_title, View.GONE)
+            }
+            layoutId == R.layout.focus_lyric_aod_custom -> {
+                applyCustomAodSongRow(views, songTitle.orEmpty(), songArtist.orEmpty(), style)
+            }
+            !trackLabel.isNullOrBlank() -> {
+                views.setTextViewText(R.id.focus_song_title, trackLabel)
+                views.setTextColor(R.id.focus_song_title, style.colorSecondary)
+                views.setTextViewTextSize(
+                    R.id.focus_song_title,
+                    TypedValue.COMPLEX_UNIT_SP,
+                    style.secondarySizeSp * 0.85f
+                )
+                views.setInt(R.id.focus_song_title, "setMaxLines", 1)
+                views.setInt(R.id.focus_song_title, "setGravity", style.gravityValue)
+                safeSetBoolean(views, R.id.focus_song_title, "setSingleLine", true)
+                safeSetViewVisibility(views, R.id.focus_song_title, View.VISIBLE)
+            }
+            else -> {
+                safeSetViewVisibility(views, R.id.focus_song_row, View.GONE)
+                safeSetViewVisibility(views, R.id.focus_song_title, View.GONE)
+            }
+        }
+
+        if (layoutId == R.layout.focus_lyric_aod_custom) {
+            applyCustomAodContentWidth(views)
+        }
+    }
+
+    private fun applyCustomAodSongRow(
+        views: RemoteViews,
+        title: String,
+        artist: String,
+        style: LyricStyle
+    ) {
+        val t = title.trim()
+        val a = artist.trim()
+        val songSize = style.secondarySizeSp * 0.85f
+        val songColor = style.colorSecondary
+        val rowGravity = style.gravityValue
+        val metrics = android.content.res.Resources.getSystem().displayMetrics
+        val slotWidth = estimateCustomAodContentWidthPx(metrics)
+        val dotWidth = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            12f,
+            metrics
+        ).toInt()
+        val textBudget = (slotWidth - dotWidth).coerceAtLeast(60)
+
+        when {
+            t.isNotEmpty() && a.isNotEmpty() -> {
+                val titleMax = (textBudget * 3 / 5f).toInt()
+                val artistMax = (textBudget * 2 / 5f).toInt()
+                views.setTextViewText(
+                    R.id.focus_song_title,
+                    ellipsizeForAodSong(t, titleMax, songSize, metrics)
+                )
+                views.setTextViewText(
+                    R.id.focus_song_artist,
+                    ellipsizeForAodSong(a, artistMax, songSize, metrics)
+                )
+                views.setTextColor(R.id.focus_song_title, songColor)
+                views.setTextColor(R.id.focus_song_artist, songColor)
+                views.setTextViewTextSize(R.id.focus_song_title, TypedValue.COMPLEX_UNIT_SP, songSize)
+                views.setTextViewTextSize(R.id.focus_song_artist, TypedValue.COMPLEX_UNIT_SP, songSize)
+                views.setTextColor(R.id.focus_song_dot, songColor)
+                views.setInt(R.id.focus_song_row, "setGravity", rowGravity)
+                views.setInt(R.id.focus_song_title, "setGravity", rowGravity)
+                views.setInt(R.id.focus_song_artist, "setGravity", rowGravity)
+                applyCustomAodSongMaxWidths(views, titleMax, artistMax)
+                safeSetViewVisibility(views, R.id.focus_song_row, View.VISIBLE)
+                safeSetViewVisibility(views, R.id.focus_song_inner, View.VISIBLE)
+                views.setViewVisibility(R.id.focus_song_title, View.VISIBLE)
+                views.setViewVisibility(R.id.focus_song_dot, View.VISIBLE)
+                views.setViewVisibility(R.id.focus_song_artist, View.VISIBLE)
+            }
+            t.isNotEmpty() -> {
+                views.setTextViewText(
+                    R.id.focus_song_title,
+                    ellipsizeForAodSong(t, slotWidth, songSize, metrics)
+                )
+                views.setTextColor(R.id.focus_song_title, songColor)
+                views.setTextViewTextSize(R.id.focus_song_title, TypedValue.COMPLEX_UNIT_SP, songSize)
+                views.setInt(R.id.focus_song_row, "setGravity", rowGravity)
+                views.setInt(R.id.focus_song_title, "setGravity", rowGravity)
+                applyCustomAodSongMaxWidths(views, slotWidth, slotWidth)
+                safeSetViewVisibility(views, R.id.focus_song_row, View.VISIBLE)
+                safeSetViewVisibility(views, R.id.focus_song_inner, View.VISIBLE)
+                views.setViewVisibility(R.id.focus_song_title, View.VISIBLE)
+                safeSetViewVisibility(views, R.id.focus_song_dot, View.GONE)
+                safeSetViewVisibility(views, R.id.focus_song_artist, View.GONE)
+            }
+            a.isNotEmpty() -> {
+                views.setTextViewText(
+                    R.id.focus_song_title,
+                    ellipsizeForAodSong(a, slotWidth, songSize, metrics)
+                )
+                views.setTextColor(R.id.focus_song_title, songColor)
+                views.setTextViewTextSize(R.id.focus_song_title, TypedValue.COMPLEX_UNIT_SP, songSize)
+                views.setInt(R.id.focus_song_row, "setGravity", rowGravity)
+                views.setInt(R.id.focus_song_title, "setGravity", rowGravity)
+                applyCustomAodSongMaxWidths(views, slotWidth, slotWidth)
+                safeSetViewVisibility(views, R.id.focus_song_row, View.VISIBLE)
+                safeSetViewVisibility(views, R.id.focus_song_inner, View.VISIBLE)
+                views.setViewVisibility(R.id.focus_song_title, View.VISIBLE)
+                safeSetViewVisibility(views, R.id.focus_song_dot, View.GONE)
+                safeSetViewVisibility(views, R.id.focus_song_artist, View.GONE)
+            }
+            else -> {
+                safeSetViewVisibility(views, R.id.focus_song_row, View.GONE)
+                safeSetViewVisibility(views, R.id.focus_song_inner, View.GONE)
+            }
+        }
+    }
+
+    private fun ellipsizeForAodSong(
+        text: String,
+        maxWidthPx: Int,
+        textSizeSp: Float,
+        metrics: android.util.DisplayMetrics
+    ): String {
+        if (text.isEmpty() || maxWidthPx <= 0) return text
+        val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_SP,
+                textSizeSp,
+                metrics
+            )
+        }
+        if (paint.measureText(text) <= maxWidthPx) return text
+        val ellipsized = TextUtils.ellipsize(
+            text,
+            paint,
+            maxWidthPx.toFloat(),
+            TextUtils.TruncateAt.END
+        )
+        return ellipsized?.toString()?.trimEnd().orEmpty().ifEmpty { text }
+    }
+
+    private fun applyCustomAodSongMaxWidths(
+        views: RemoteViews,
+        titleMax: Int,
+        artistMax: Int
+    ) {
+        try {
+            views.setInt(R.id.focus_song_title, "setMaxWidth", titleMax.coerceAtLeast(1))
+            views.setInt(R.id.focus_song_artist, "setMaxWidth", artistMax.coerceAtLeast(1))
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun estimateCustomAodContentWidthPx(metrics: android.util.DisplayMetrics): Int {
+        val widthPercent = FocusStyleSnapshot.customAodLyricWidth
+        val basePadDp = 4
+        val extraPadDp = ((100 - widthPercent) * 48 / 50).coerceAtLeast(0)
+        val padPx = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            (basePadDp + extraPadDp).toFloat(),
+            metrics
+        ).toInt()
+        return ((metrics.widthPixels - padPx * 2) * widthPercent / 100f * 0.92f)
+            .toInt()
+            .coerceAtLeast(120)
+    }
+
+    private fun applyCustomAodContentWidth(views: RemoteViews) {
+        val metrics = android.content.res.Resources.getSystem().displayMetrics
+        val widthPercent = FocusStyleSnapshot.customAodLyricWidth
+        val basePadDp = 4
+        val extraPadDp = ((100 - widthPercent) * 48 / 50).coerceAtLeast(0)
+        val padPx = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            (basePadDp + extraPadDp).toFloat(),
+            metrics
+        ).toInt()
+        try {
+            views.setViewPadding(R.id.focus_lyric_content, padPx, 0, padPx, 0)
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun safeSetViewVisibility(views: RemoteViews, viewId: Int, visibility: Int) {
+        try {
+            views.setViewVisibility(viewId, visibility)
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun safeSetImageViewBitmap(views: RemoteViews, viewId: Int, bitmap: Bitmap) {
+        try {
+            views.setImageViewBitmap(viewId, bitmap)
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun safeSetBoolean(views: RemoteViews, viewId: Int, method: String, value: Boolean) {
+        try {
+            views.setBoolean(viewId, method, value)
+        } catch (_: Throwable) {
         }
     }
 
@@ -623,6 +910,10 @@ object HyperFocusLyricStyle {
 
         moduleContext: Context,
 
+        songTitle: String,
+
+        artist: String,
+
         lyric: String,
 
         translation: String?,
@@ -631,13 +922,31 @@ object HyperFocusLyricStyle {
 
     ): RemoteViews {
 
-        val views = RemoteViews(moduleContext.packageName, R.layout.focus_lyric_aod)
+        val useCustomLayout = FocusStyleSnapshot.customAodLayout
+        val layoutId = if (useCustomLayout) {
+            R.layout.focus_lyric_aod_custom
+        } else {
+            R.layout.focus_lyric_aod
+        }
 
-        views.setImageViewIcon(R.id.focusicon, icon)
+        val views = RemoteViews(moduleContext.packageName, layoutId)
 
-        val style = resolveLyricStyle(moduleContext, R.layout.focus_lyric_aod)
+        if (!useCustomLayout) {
+            views.setImageViewIcon(R.id.focusicon, icon)
+        }
 
-        applyLyricStyle(views, lyric, translation, style, hideSongTitle = false)
+        val style = resolveLyricStyle(moduleContext, layoutId)
+
+        applyLyricStyle(
+            views,
+            lyric,
+            translation,
+            style,
+            hideSongTitle = !useCustomLayout,
+            songTitle = if (useCustomLayout) songTitle else null,
+            songArtist = if (useCustomLayout) artist else null,
+            layoutId = layoutId
+        )
 
         return views
 

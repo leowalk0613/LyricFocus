@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -26,6 +27,7 @@ import com.leowalk.LyricFocus.AboutActivity
 class MainActivity : AppCompatActivity() {
 
     private lateinit var switchFocusLyric: MaterialSwitch
+    private lateinit var switchCustomAodLayout: MaterialSwitch
     private lateinit var switchAppWhitelist: MaterialSwitch
     private lateinit var btnManageWhitelist: MaterialButton
     private lateinit var btnSwitchLyricSource: MaterialButton
@@ -39,7 +41,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnGrantNotification: MaterialButton
     private lateinit var btnGrantPostNotification: MaterialButton
     private lateinit var tvRootPermission: TextView
-    private lateinit var btnRestartSystemUi: MaterialButton
+    private lateinit var btnRestartSystemUi: ImageButton
     private lateinit var btnAbout: MaterialButton
     private lateinit var btnStyleSettings: MaterialButton
     private var isSyncAdvanceSliderUpdating = false
@@ -57,6 +59,7 @@ class MainActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_main)
         setupWindowInsets()
+        setupToolbar()
         initViews()
         setupListeners()
         updateStatus()
@@ -70,6 +73,10 @@ class MainActivity : AppCompatActivity() {
         updateLyricSourceUi()
         updateStatus()
         checkRootAccessAsync()
+    }
+
+    private fun setupToolbar() {
+        setSupportActionBar(findViewById(R.id.toolbar))
     }
 
     private fun setupWindowInsets() {
@@ -90,6 +97,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun initViews() {
         switchFocusLyric = findViewById(R.id.switch_focus_lyric)
+        switchCustomAodLayout = findViewById(R.id.switch_custom_aod_layout)
         switchAppWhitelist = findViewById(R.id.switch_app_whitelist)
         btnManageWhitelist = findViewById(R.id.btn_manage_whitelist)
         btnSwitchLyricSource = findViewById(R.id.btn_switch_lyric_source)
@@ -108,6 +116,7 @@ class MainActivity : AppCompatActivity() {
         btnStyleSettings = findViewById(R.id.btn_style_settings)
 
         switchFocusLyric.isChecked = FocusPreferences.isFocusEnabled(this)
+        switchCustomAodLayout.isChecked = FocusPreferences.isCustomAodLayout(this)
         switchAppWhitelist.isChecked = FocusPreferences.isAppWhitelistEnabled(this)
         updateWhitelistUi()
         bindSyncAdvanceSlider(FocusPreferences.getSyncAdvanceMs(this))
@@ -125,6 +134,10 @@ class MainActivity : AppCompatActivity() {
         switchFocusLyric.setOnCheckedChangeListener { _, checked ->
             FocusPreferences.setFocusEnabled(this, checked)
             broadcastSettingsChanged()
+        }
+        switchCustomAodLayout.setOnCheckedChangeListener { _, checked ->
+            FocusPreferences.setCustomAodLayout(this, checked)
+            FocusPreferences.notifyStyleSettingsChanged(this)
         }
         switchAppWhitelist.setOnCheckedChangeListener { _, checked ->
             FocusPreferences.setAppWhitelistEnabled(this, checked)
@@ -320,6 +333,7 @@ class MainActivity : AppCompatActivity() {
         tvRootPermission.text = "检测中…"
         tvRootPermission.setTextColor(getColor(R.color.grey))
         btnRestartSystemUi.isEnabled = false
+        btnRestartSystemUi.alpha = 0.38f
         Thread {
             val granted = RootHelper.checkRootAccess()
             runOnUiThread {
@@ -332,6 +346,7 @@ class MainActivity : AppCompatActivity() {
                     tvRootPermission.setTextColor(getColor(R.color.red))
                 }
                 btnRestartSystemUi.isEnabled = true
+                btnRestartSystemUi.alpha = 1f
             }
         }.start()
     }
@@ -347,11 +362,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun restartSystemUi() {
         btnRestartSystemUi.isEnabled = false
-        btnRestartSystemUi.text = "重启中…"
+        btnRestartSystemUi.alpha = 0.38f
         RootHelper.restartSystemUiAsync { success, message ->
             runOnUiThread {
                 btnRestartSystemUi.isEnabled = true
-                btnRestartSystemUi.text = "重启"
+                btnRestartSystemUi.alpha = 1f
                 if (success) {
                     Toast.makeText(this, "已发送重启指令，系统界面即将恢复", Toast.LENGTH_SHORT).show()
                     checkRootAccessAsync()

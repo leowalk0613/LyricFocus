@@ -87,6 +87,13 @@ class SystemUIHyperFocusHook : BaseHook() {
 
         private const val MIN_TICK_MS = 500L
         private const val LAYOUT_REFLOW_DEBOUNCE_MS = 5_000L
+        /** 亮屏/解锁后重发焦点通知，等待 Keyguard 与 SystemUI 就绪 */
+        private const val SCREEN_REPOST_DELAY_MS = 400L
+        /** 息屏进 AOD 后略延迟，确保 isInteractive=false 且 com.miui.aod 可绑定 rvAod */
+        private const val SCREEN_OFF_REPOST_DELAY_MS = 550L
+
+        @Volatile
+        private var needsAodRebind = false
 
         private enum class FocusRefreshMode {
             LINE_CHANGE,
@@ -130,6 +137,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         hookHideFromShadeIfNeeded(lpparam.classLoader)
         hookPinAboveMediaCompat(lpparam.classLoader)
         hookSuppressIslandIfNeeded(lpparam.classLoader)
+        hookKeyguardRepost(lpparam.classLoader)
     }
 
     private fun hookSuppressIslandIfNeeded(classLoader: ClassLoader) {
@@ -557,6 +565,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         lastNotifiedSecond = ""
         lastNotifiedTitle = ""
         lastNotifiedArtist = ""
+        needsAodRebind = false
         invalidateLayoutCache()
         HyperFocusLyricStyle.resetPostedCache()
     }
@@ -646,30 +655,104 @@ class SystemUIHyperFocusHook : BaseHook() {
         registerReceiverSafe(alarmReceiver!!, IntentFilter(ACTION_ALARM_TICK))
     }
 
+    /** 锁屏显示时重发，避免亮屏锁屏下 rv 未绑定 */
+    private fun hookKeyguardRepost(classLoader: ClassLoader) {
+        val callback = Runnable {
+            if (!isKeyguardLocked()) return@Runnable
+            repostFocusForDisplayChange()
+        }
+        val hook = object : XC_MethodHook() {
+            override fun afterHookedMethod(param: MethodHookParam) {
+                handler.postDelayed(callback, SCREEN_REPOST_DELAY_MS)
+            }
+        }
+        val keyguardShowingHook = object : XC_MethodHook() {
+            override fun afterHookedMethod(param: MethodHookParam) {
+                val showing = param.args.getOrNull(0) as? Boolean ?: return
+                if (!showing) return
+                handler.postDelayed(callback, SCREEN_REPOST_DELAY_MS)
+            }
+        }
+        val methodNames = listOf(
+            "notifyKeyguardStateChanged",
+            "handleKeyguardChanged",
+            "updateKeyguardState"
+        )
+        for (name in methodNames) {
+            try {
+                if (name == "notifyKeyguardStateChanged") {
+                    XposedHelpers.findAndHookMethod(
+                        "com.android.keyguard.KeyguardUpdateMonitor",
+                        classLoader,
+                        name,
+                        Boolean::class.java,
+                        Boolean::class.java,
+                        keyguardShowingHook
+                    )
+                } else {
+                    XposedHelpers.findAndHookMethod(
+                        "com.android.keyguard.KeyguardUpdateMonitor",
+                        classLoader,
+                        name,
+                        hook
+                    )
+                }
+                log("Keyguard repost hook: KeyguardUpdateMonitor.$name")
+                return
+            } catch (_: Throwable) {
+            }
+        }
+        log("Keyguard repost hook skipped")
+    }
+
     private fun registerScreenReceiver() {
         unregisterReceiverSafe(screenReceiver)
         screenReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
-                    Intent.ACTION_SCREEN_ON -> handler.postDelayed({ repostFocusIfNeeded() }, 400L)
+                    Intent.ACTION_SCREEN_OFF -> {
+                        needsAodRebind = true
+                        handler.postDelayed(
+                            { repostFocusForDisplayChange() },
+                            SCREEN_OFF_REPOST_DELAY_MS
+                        )
+                    }
+                    Intent.ACTION_SCREEN_ON -> {
+                        needsAodRebind = false
+                        handler.postDelayed(
+                            { repostFocusForDisplayChange() },
+                            SCREEN_REPOST_DELAY_MS
+                        )
+                    }
                     Intent.ACTION_USER_PRESENT -> handler.postDelayed({
                         hideFocusRowsInUnlockedShade()
-                        repostFocusIfNeeded()
-                    }, 400L)
+                        needsAodRebind = false
+                        repostFocusForDisplayChange()
+                    }, SCREEN_REPOST_DELAY_MS)
                 }
             }
         }
         val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_USER_PRESENT)
         }
         registerReceiverSafe(screenReceiver!!, filter)
     }
 
-    private fun repostFocusIfNeeded() {
+    private fun repostFocusForDisplayChange() {
         if (!focusEnabled || !isPlaying || currentLyricText.isBlank()) return
+        prepareFocusSessionRecreate(
+            songChanged = false,
+            leavingPlaceholder = false,
+            force = true
+        )
         postFocusUpdate(FocusRefreshMode.LINE_CHANGE, force = true)
         scheduleNextUpdate()
+    }
+
+    private fun repostFocusIfNeeded() {
+        repostFocusForDisplayChange()
     }
 
     private fun unregisterReceiverSafe(receiver: BroadcastReceiver?) {
@@ -1139,6 +1222,14 @@ class SystemUIHyperFocusHook : BaseHook() {
                 cancelFocusNotification()
                 return
             }
+            val aodActive = isAodActive()
+            val recreateForAod = aodActive && (
+                refreshKind == HyperFocusLyricStyle.RefreshKind.LINE_CHANGE ||
+                    (refreshKind == HyperFocusLyricStyle.RefreshKind.KEEPALIVE && needsAodRebind)
+                )
+            val effectiveForceRefresh = forceRefresh ||
+                (aodActive && needsAodRebind &&
+                    refreshKind == HyperFocusLyricStyle.RefreshKind.KEEPALIVE)
             HyperFocusLyricStyle.postFocusNotification(
                 systemContext = context,
                 notificationManager = nm,
@@ -1153,10 +1244,12 @@ class SystemUIHyperFocusHook : BaseHook() {
                 pinAboveMedia = pinAboveMedia,
                 showOnIsland = showOnIsland,
                 refreshKind = refreshKind,
-                forceRefresh = forceRefresh,
-                recreateForAod = refreshKind == HyperFocusLyricStyle.RefreshKind.LINE_CHANGE &&
-                    isAodActive()
+                forceRefresh = effectiveForceRefresh,
+                recreateForAod = recreateForAod
             )
+            if (aodActive && recreateForAod) {
+                needsAodRebind = false
+            }
             if (refreshKind == HyperFocusLyricStyle.RefreshKind.LINE_CHANGE) {
                 markLayoutReflowAllowed(true)
             }
@@ -1169,6 +1262,7 @@ class SystemUIHyperFocusHook : BaseHook() {
     private fun cancelFocusNotification() {
         try {
             lastFocusNotifyTime = 0L
+            needsAodRebind = false
             lastNotifiedLyric = ""
             lastNotifiedSecond = ""
             lastNotifiedTitle = ""
