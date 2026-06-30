@@ -601,9 +601,10 @@ object HyperFocusLyricStyle {
         views.setInt(R.id.focuslyric, "setMaxLines", style.lyricMaxLines)
         views.setInt(R.id.focuslyric, "setGravity", style.gravityValue)
 
-        views.setBoolean(R.id.focuslyric, "setStrokeEnabled", style.strokeEnabled)
-        views.setFloat(R.id.focuslyric, "setStrokeWidth", style.strokeWidth)
-        views.setInt(R.id.focuslyric, "setStrokeColor", style.strokeColor)
+        if (style.strokeEnabled && style.strokeWidth > 0) {
+            views.setInt(R.id.focuslyric, "setShadowLayer",
+                style.strokeWidth.toInt(), 0, 0, style.strokeColor)
+        }
 
         if (translation.isNullOrBlank()) {
             views.setViewVisibility(R.id.focustflyric, View.GONE)
@@ -615,9 +616,10 @@ object HyperFocusLyricStyle {
             views.setInt(R.id.focustflyric, "setGravity", style.gravityValue)
             views.setViewVisibility(R.id.focustflyric, View.VISIBLE)
 
-            views.setBoolean(R.id.focustflyric, "setStrokeEnabled", style.strokeEnabled)
-            views.setFloat(R.id.focustflyric, "setStrokeWidth", style.strokeWidth)
-            views.setInt(R.id.focustflyric, "setStrokeColor", style.strokeColor)
+            if (style.strokeEnabled && style.strokeWidth > 0) {
+                views.setInt(R.id.focustflyric, "setShadowLayer",
+                    style.strokeWidth.toInt(), 0, 0, style.strokeColor)
+            }
         }
 
         if (style.backgroundColor != null) {

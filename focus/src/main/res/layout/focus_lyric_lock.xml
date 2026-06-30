@@ -33,7 +33,7 @@
             android:maxLines="1"
             android:textSize="12sp" />
 
-        <com.leowalk.LyricFocus.widget.StrokeTextView
+        <TextView
             android:id="@+id/focuslyric"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -46,7 +46,7 @@
             android:textSize="18sp"
             android:textStyle="bold" />
 
-        <com.leowalk.LyricFocus.widget.StrokeTextView
+        <TextView
             android:id="@+id/focustflyric"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
