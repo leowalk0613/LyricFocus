@@ -9,8 +9,12 @@ import kotlin.math.pow
 
 object AlbumColorExtractor {
 
-    private const val MIN_PRIMARY_CONTRAST = 4.0
-    private const val MIN_SECONDARY_CONTRAST = 3.0
+    // 提高对比度阈值，确保文字在深色/浅色背景下都更清晰
+    private const val MIN_PRIMARY_CONTRAST = 4.5
+    private const val MIN_SECONDARY_CONTRAST = 3.5
+    // 系统通知背景通常使用的中灰色调（HyperOS 深色模式约 0.15-0.25，浅色模式约 0.85-0.95）
+    private const val DARK_BG_THRESHOLD = 0.3
+    private const val LIGHT_BG_THRESHOLD = 0.7
 
     data class LyricColors(
         val accent: Int,
@@ -21,7 +25,8 @@ object AlbumColorExtractor {
         val background: Int,
         val primaryText: Int,
         val secondaryText: Int,
-        val accent: Int
+        val accent: Int,
+        val strokeColor: Int? = null // 描边颜色（可选）
     )
 
     fun extractMonetScheme(bitmap: Bitmap?): MonetScheme? {
@@ -94,6 +99,25 @@ object AlbumColorExtractor {
     fun blendSecondary(primary: Int, background: Int = Color.BLACK): Int {
         val blend = if (relativeLuminance(background) > 0.45) Color.BLACK else Color.WHITE
         return blendColors(primary, blend, 0.35f)
+    }
+
+    fun computeStrokeColor(textColor: Int, colorMode: String): Int {
+        return when (colorMode) {
+            "black" -> Color.BLACK
+            "white" -> Color.WHITE
+            else -> computeAutoStrokeColor(textColor)
+        }
+    }
+
+    private fun computeAutoStrokeColor(textColor: Int): Int {
+        val luminance = relativeLuminance(textColor)
+        return if (luminance > 0.5) {
+            // 文字颜色较亮，使用黑色阴影
+            Color.BLACK
+        } else {
+            // 文字颜色较暗，使用白色阴影
+            Color.WHITE
+        }
     }
 
     fun ensureContrast(foreground: Int, background: Int, minRatio: Double = MIN_PRIMARY_CONTRAST): Int {

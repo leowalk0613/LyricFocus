@@ -27,9 +27,16 @@ object FocusPreferences {
     const val PREF_MONET_DYNAMIC_COLOR = "monet_dynamic_color"
     const val PREF_EXTRACTED_TEXT_COLOR = "extracted_text_color"
     const val PREF_EXTRACTED_BG_COLOR = "extracted_bg_color"
+    const val PREF_TEXT_STROKE_ENABLED = "text_stroke_enabled"
+    const val PREF_TEXT_STROKE_WIDTH = "text_stroke_width"
+    const val PREF_TEXT_STROKE_COLOR_MODE = "text_stroke_color_mode"
 
     const val TEXT_COLOR_BLACK = "black"
     const val TEXT_COLOR_WHITE = "white"
+
+    const val STROKE_COLOR_AUTO = "auto"
+    const val STROKE_COLOR_BLACK = "black"
+    const val STROKE_COLOR_WHITE = "white"
 
     const val GRAVITY_LEFT = "left"
     const val GRAVITY_CENTER = "center"
@@ -71,6 +78,10 @@ object FocusPreferences {
 
     const val DEFAULT_LYRIC_MAX_LINES = 2
     const val DEFAULT_TRANSLATION_MAX_LINES = 1
+
+    const val DEFAULT_TEXT_STROKE_WIDTH = 3f
+    const val MIN_TEXT_STROKE_WIDTH = 0f
+    const val MAX_TEXT_STROKE_WIDTH = 10f
 
     fun defaultMusicPackages(): Set<String> = linkedSetOf(
         "com.netease.cloudmusic",
@@ -482,6 +493,44 @@ object FocusPreferences {
             .commit()
     }
 
+    fun isTextStrokeEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_TEXT_STROKE_ENABLED, false)
+    }
+
+    fun setTextStrokeEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_TEXT_STROKE_ENABLED, enabled)
+            .commit()
+    }
+
+    fun getTextStrokeWidth(context: Context): Float {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getFloat(PREF_TEXT_STROKE_WIDTH, DEFAULT_TEXT_STROKE_WIDTH)
+            .coerceIn(MIN_TEXT_STROKE_WIDTH, MAX_TEXT_STROKE_WIDTH)
+    }
+
+    fun setTextStrokeWidth(context: Context, width: Float) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putFloat(PREF_TEXT_STROKE_WIDTH, width.coerceIn(MIN_TEXT_STROKE_WIDTH, MAX_TEXT_STROKE_WIDTH))
+            .commit()
+    }
+
+    fun getTextStrokeColorMode(context: Context): String {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(PREF_TEXT_STROKE_COLOR_MODE, STROKE_COLOR_AUTO)
+            ?: STROKE_COLOR_AUTO
+    }
+
+    fun setTextStrokeColorMode(context: Context, mode: String) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(PREF_TEXT_STROKE_COLOR_MODE, mode)
+            .commit()
+    }
+
     fun readExtractedTextColor(context: Context): Int? {
         return readFromModule(context) { getExtractedTextColor(it) }
     }
@@ -533,6 +582,9 @@ object FocusPreferences {
                     FocusStyleSnapshot.EXTRA_STYLE_COLOR_EXTRACTION,
                     isTextColorExtractionEnabled(context)
                 )
+                putExtra(FocusStyleSnapshot.EXTRA_STYLE_STROKE_ENABLED, isTextStrokeEnabled(context))
+                putExtra(FocusStyleSnapshot.EXTRA_STYLE_STROKE_WIDTH, getTextStrokeWidth(context))
+                putExtra(FocusStyleSnapshot.EXTRA_STYLE_STROKE_COLOR_MODE, getTextStrokeColorMode(context))
                 val extracted = getExtractedTextColor(context)
                 putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_COLOR_SET, extracted != null)
                 if (extracted != null) {
