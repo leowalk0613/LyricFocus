@@ -26,6 +26,7 @@ object FocusPreferences {
     const val PREF_CUSTOM_AOD_COLOR_MODE = "custom_aod_color_mode"
     const val PREF_CUSTOM_AOD_PRESET_COLOR = "custom_aod_preset_color"
     const val PREF_CUSTOM_AOD_GRAVITY = "custom_aod_gravity"
+    const val PREF_CUSTOM_AOD_SONG_INFO = "custom_aod_song_info"
     const val PREF_SYNC_ADVANCE_MS = "sync_advance_ms"
     const val PREF_APP_WHITELIST_ENABLED = "app_whitelist_enabled"
     const val PREF_APP_WHITELIST_PACKAGES = "app_whitelist_packages"
@@ -60,6 +61,11 @@ object FocusPreferences {
     const val CUSTOM_AOD_COLOR_WHITE = "white"
     const val CUSTOM_AOD_COLOR_ALBUM = "album"
     const val CUSTOM_AOD_COLOR_PRESET = "preset"
+
+    const val CUSTOM_AOD_SONG_INFO_ALL = "all"
+    const val CUSTOM_AOD_SONG_INFO_HIDE_TITLE = "hide_title"
+    const val CUSTOM_AOD_SONG_INFO_HIDE_ARTIST = "hide_artist"
+    const val CUSTOM_AOD_SONG_INFO_HIDE_ALL = "hide_all"
 
     const val DEFAULT_CUSTOM_AOD_LYRIC_WIDTH = 100
     const val MIN_CUSTOM_AOD_LYRIC_WIDTH = 50
@@ -478,6 +484,29 @@ object FocusPreferences {
         return readFromModule(context) { getCustomAodGravity(it) } ?: GRAVITY_CENTER
     }
 
+    fun getCustomAodSongInfo(context: Context): String {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(PREF_CUSTOM_AOD_SONG_INFO, CUSTOM_AOD_SONG_INFO_ALL)
+            ?: CUSTOM_AOD_SONG_INFO_ALL
+    }
+
+    fun setCustomAodSongInfo(context: Context, mode: String) {
+        val normalized = when (mode) {
+            CUSTOM_AOD_SONG_INFO_HIDE_TITLE,
+            CUSTOM_AOD_SONG_INFO_HIDE_ARTIST,
+            CUSTOM_AOD_SONG_INFO_HIDE_ALL -> mode
+            else -> CUSTOM_AOD_SONG_INFO_ALL
+        }
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(PREF_CUSTOM_AOD_SONG_INFO, normalized)
+            .commit()
+    }
+
+    fun readCustomAodSongInfo(context: Context): String {
+        return readFromModule(context) { getCustomAodSongInfo(it) } ?: CUSTOM_AOD_SONG_INFO_ALL
+    }
+
     fun readAodKeepaliveSec(context: Context): Int {
         return readFromModule(context) { getAodKeepaliveSec(it) } ?: DEFAULT_AOD_KEEPALIVE_SEC
     }
@@ -784,6 +813,10 @@ object FocusPreferences {
                 putExtra(
                     FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_GRAVITY,
                     getCustomAodGravity(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_SONG_INFO,
+                    getCustomAodSongInfo(context)
                 )
                 putExtra(
                     FocusStyleSnapshot.EXTRA_STYLE_MONET_DYNAMIC_COLOR,

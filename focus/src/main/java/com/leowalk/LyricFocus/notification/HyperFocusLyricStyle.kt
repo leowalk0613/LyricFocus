@@ -727,8 +727,17 @@ object HyperFocusLyricStyle {
         artist: String,
         style: LyricStyle
     ) {
-        val t = title.trim()
-        val a = artist.trim()
+        val songInfoMode = FocusStyleSnapshot.customAodSongInfo
+        if (songInfoMode == FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_ALL) {
+            safeSetViewVisibility(views, R.id.focus_song_row, View.GONE)
+            safeSetViewVisibility(views, R.id.focus_song_inner, View.GONE)
+            return
+        }
+
+        val showTitle = songInfoMode != FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_TITLE
+        val showArtist = songInfoMode != FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_ARTIST
+        val t = if (showTitle) title.trim() else ""
+        val a = if (showArtist) artist.trim() else ""
         val songSize = style.secondarySizeSp * 0.85f
         val songColor = style.colorSecondary
         val rowGravity = style.gravityValue

@@ -27,6 +27,7 @@ object FocusStyleSnapshot {
     const val EXTRA_STYLE_CUSTOM_AOD_COLOR_MODE = "style_custom_aod_color_mode"
     const val EXTRA_STYLE_CUSTOM_AOD_PRESET_COLOR = "style_custom_aod_preset_color"
     const val EXTRA_STYLE_CUSTOM_AOD_GRAVITY = "style_custom_aod_gravity"
+    const val EXTRA_STYLE_CUSTOM_AOD_SONG_INFO = "style_custom_aod_song_info"
     const val EXTRA_STYLE_MONET_DYNAMIC_COLOR = "style_monet_dynamic_color"
     const val EXTRA_STYLE_COLOR_EXTRACTION = "style_color_extraction"
     const val EXTRA_STYLE_EXTRACTED_COLOR = "style_extracted_color"
@@ -96,6 +97,10 @@ object FocusStyleSnapshot {
 
     @Volatile
     var customAodGravity: String = FocusPreferences.GRAVITY_CENTER
+        private set
+
+    @Volatile
+    var customAodSongInfo: String = FocusPreferences.CUSTOM_AOD_SONG_INFO_ALL
         private set
 
     @Volatile
@@ -194,6 +199,10 @@ object FocusStyleSnapshot {
             FocusPreferences.PREF_CUSTOM_AOD_GRAVITY,
             FocusPreferences.GRAVITY_CENTER
         ) ?: FocusPreferences.GRAVITY_CENTER
+        customAodSongInfo = prefs.getString(
+            FocusPreferences.PREF_CUSTOM_AOD_SONG_INFO,
+            FocusPreferences.CUSTOM_AOD_SONG_INFO_ALL
+        ) ?: FocusPreferences.CUSTOM_AOD_SONG_INFO_ALL
         monetDynamicColorEnabled = prefs.getBoolean(
             FocusPreferences.PREF_MONET_DYNAMIC_COLOR,
             false
@@ -309,6 +318,10 @@ object FocusStyleSnapshot {
         if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_GRAVITY)) {
             customAodGravity = intent.getStringExtra(EXTRA_STYLE_CUSTOM_AOD_GRAVITY)
                 ?: customAodGravity
+        }
+        if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_SONG_INFO)) {
+            customAodSongInfo = intent.getStringExtra(EXTRA_STYLE_CUSTOM_AOD_SONG_INFO)
+                ?: customAodSongInfo
         }
         if (intent.hasExtra(EXTRA_STYLE_MONET_DYNAMIC_COLOR)) {
             monetDynamicColorEnabled = intent.getBooleanExtra(EXTRA_STYLE_MONET_DYNAMIC_COLOR, false)

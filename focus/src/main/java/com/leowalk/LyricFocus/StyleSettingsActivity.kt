@@ -27,26 +27,27 @@ class StyleSettingsActivity : AppCompatActivity() {
     private lateinit var switchSingleLineOnly: MaterialSwitch
     private lateinit var lockScreenSection: LinearLayout
     private lateinit var lockScreenSectionHint: TextView
+    private lateinit var lockScreenStyleCard: MaterialCardView
     private lateinit var customAodSection: LinearLayout
     private lateinit var customAodSectionHint: TextView
     private lateinit var customAodStyleCard: MaterialCardView
 
     private lateinit var sliderTextSize: Slider
     private lateinit var tvTextSizeLabel: TextView
-    private lateinit var textColorCard: MaterialCardView
+    private lateinit var textColorSection: View
     private lateinit var textColorTitle: TextView
     private lateinit var textColorHint: TextView
     private lateinit var textColorGroup: MaterialButtonToggleGroup
     private lateinit var textColorWhite: MaterialButton
     private lateinit var textColorBlack: MaterialButton
-    private lateinit var backgroundCard: MaterialCardView
+    private lateinit var backgroundSection: View
     private lateinit var backgroundTitle: TextView
     private lateinit var backgroundHint: TextView
     private lateinit var backgroundGroup: MaterialButtonToggleGroup
     private lateinit var backgroundDefault: MaterialButton
     private lateinit var backgroundBlack: MaterialButton
     private lateinit var backgroundWhite: MaterialButton
-    private lateinit var colorExtractionCard: MaterialCardView
+    private lateinit var colorExtractionSection: View
     private lateinit var colorExtractionTitle: TextView
     private lateinit var colorExtractionHint: TextView
     private lateinit var colorExtractionSwitch: MaterialSwitch
@@ -61,7 +62,6 @@ class StyleSettingsActivity : AppCompatActivity() {
     private lateinit var customAodColorPalette: GridLayout
     private lateinit var btnCustomAodPickColor: MaterialButton
 
-    private val lockScreenCards = mutableListOf<MaterialCardView>()
     private val lockScreenControls = mutableListOf<View>()
     private val customAodControls = mutableListOf<View>()
     private val colorPresetViews = mutableListOf<View>()
@@ -99,26 +99,27 @@ class StyleSettingsActivity : AppCompatActivity() {
         switchSingleLineOnly = findViewById(R.id.switch_single_line_only)
         lockScreenSection = findViewById(R.id.lock_screen_style_section)
         lockScreenSectionHint = findViewById(R.id.lock_screen_section_hint)
+        lockScreenStyleCard = findViewById(R.id.lock_screen_style_card)
         customAodSection = findViewById(R.id.custom_aod_style_section)
         customAodSectionHint = findViewById(R.id.custom_aod_section_hint)
         customAodStyleCard = findViewById(R.id.custom_aod_style_card)
 
         sliderTextSize = findViewById(R.id.slider_text_size)
         tvTextSizeLabel = findViewById(R.id.text_size_label)
-        textColorCard = findViewById(R.id.text_color_card)
+        textColorSection = findViewById(R.id.text_color_card)
         textColorTitle = findViewById(R.id.text_color_title)
         textColorHint = findViewById(R.id.text_color_hint)
         textColorGroup = findViewById(R.id.text_color_group)
         textColorWhite = findViewById(R.id.text_color_white)
         textColorBlack = findViewById(R.id.text_color_black)
-        backgroundCard = findViewById(R.id.background_card)
+        backgroundSection = findViewById(R.id.background_card)
         backgroundTitle = findViewById(R.id.background_title)
         backgroundHint = findViewById(R.id.background_hint)
         backgroundGroup = findViewById(R.id.background_group)
         backgroundDefault = findViewById(R.id.background_default)
         backgroundBlack = findViewById(R.id.background_black)
         backgroundWhite = findViewById(R.id.background_white)
-        colorExtractionCard = findViewById(R.id.color_extraction_card)
+        colorExtractionSection = findViewById(R.id.color_extraction_card)
         colorExtractionTitle = findViewById(R.id.color_extraction_title)
         colorExtractionHint = findViewById(R.id.color_extraction_hint)
         colorExtractionSwitch = findViewById(R.id.color_extraction_switch)
@@ -133,15 +134,6 @@ class StyleSettingsActivity : AppCompatActivity() {
         customAodColorPalette = findViewById(R.id.custom_aod_color_palette)
         btnCustomAodPickColor = findViewById(R.id.btn_custom_aod_pick_color)
 
-        lockScreenCards += listOf(
-            findViewById(R.id.text_size_card),
-            findViewById(R.id.text_color_card),
-            findViewById(R.id.lines_card),
-            findViewById(R.id.gravity_card),
-            findViewById(R.id.background_card),
-            findViewById(R.id.monet_card),
-            findViewById(R.id.color_extraction_card)
-        )
         lockScreenControls += listOf(
             sliderTextSize,
             textColorGroup,
@@ -160,6 +152,7 @@ class StyleSettingsActivity : AppCompatActivity() {
         customAodControls += listOf(
             sliderCustomAodTextSize,
             sliderCustomAodWidth,
+            findViewById(R.id.custom_aod_song_info_group),
             findViewById(R.id.custom_aod_lyric_lines_group),
             findViewById(R.id.custom_aod_translation_lines_group),
             findViewById(R.id.custom_aod_gravity_group),
@@ -306,6 +299,14 @@ class StyleSettingsActivity : AppCompatActivity() {
                 else -> R.id.custom_aod_gravity_center
             }
         )
+        findViewById<MaterialButtonToggleGroup>(R.id.custom_aod_song_info_group).check(
+            when (FocusPreferences.getCustomAodSongInfo(this)) {
+                FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_TITLE -> R.id.custom_aod_song_info_hide_title
+                FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_ARTIST -> R.id.custom_aod_song_info_hide_artist
+                FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_ALL -> R.id.custom_aod_song_info_hide_all
+                else -> R.id.custom_aod_song_info_all
+            }
+        )
 
         val colorMode = FocusPreferences.getCustomAodColorMode(this)
         customAodColorModeGroup.check(
@@ -328,17 +329,12 @@ class StyleSettingsActivity : AppCompatActivity() {
         val alpha = if (enabled) 1f else 0.38f
 
         lockScreenSectionHint.visibility = if (customAodEnabled) View.VISIBLE else View.GONE
-        lockScreenSection.alpha = if (enabled) 1f else 0.72f
-        lockScreenCards.forEach { card ->
-            card.alpha = if (enabled) 1f else 0.72f
-        }
+        lockScreenStyleCard.alpha = if (enabled) 1f else 0.72f
         lockScreenControls.forEach { control ->
             control.isEnabled = enabled
             control.alpha = alpha
         }
-        if (!enabled) {
-            updateDynamicColorUi()
-        }
+        updateDynamicColorUi()
     }
 
     private fun updateCustomAodSectionState() {
@@ -346,7 +342,6 @@ class StyleSettingsActivity : AppCompatActivity() {
         val alpha = if (customAodEnabled) 1f else 0.38f
 
         customAodSectionHint.visibility = if (customAodEnabled) View.GONE else View.VISIBLE
-        customAodSection.alpha = if (customAodEnabled) 1f else 0.72f
         customAodStyleCard.alpha = if (customAodEnabled) 1f else 0.72f
         customAodControls.forEach { control ->
             control.isEnabled = customAodEnabled
@@ -365,11 +360,11 @@ class StyleSettingsActivity : AppCompatActivity() {
         val lockEnabled = !FocusPreferences.isCustomAodLayout(this)
 
         setSectionEnabled(
-            card = textColorCard,
+            section = textColorSection,
             title = textColorTitle,
             hint = textColorHint,
             hintText = when {
-                !lockEnabled -> "万象息屏 AOD 已开启，请使用下方专用样式"
+                !lockEnabled -> null
                 monetEnabled -> "Monet 动态取色已接管文字颜色"
                 textExtractionEnabled -> "通知文字取色已接管文字颜色"
                 else -> null
@@ -379,11 +374,11 @@ class StyleSettingsActivity : AppCompatActivity() {
         )
 
         setSectionEnabled(
-            card = backgroundCard,
+            section = backgroundSection,
             title = backgroundTitle,
             hint = backgroundHint,
             hintText = when {
-                !lockEnabled -> "万象息屏 AOD 已开启，请使用下方专用样式"
+                !lockEnabled -> null
                 monetEnabled -> "Monet 动态取色已接管焦点通知背景"
                 else -> null
             },
@@ -392,11 +387,11 @@ class StyleSettingsActivity : AppCompatActivity() {
         )
 
         setSectionEnabled(
-            card = colorExtractionCard,
+            section = colorExtractionSection,
             title = colorExtractionTitle,
             hint = colorExtractionHint,
             hintText = when {
-                !lockEnabled -> "万象息屏 AOD 已开启，请使用下方专用样式"
+                !lockEnabled -> null
                 monetEnabled -> "Monet 动态取色已包含文字取色"
                 else -> null
             },
@@ -415,7 +410,7 @@ class StyleSettingsActivity : AppCompatActivity() {
     }
 
     private fun setSectionEnabled(
-        card: MaterialCardView,
+        section: View,
         title: TextView,
         hint: TextView,
         hintText: String?,
@@ -423,7 +418,7 @@ class StyleSettingsActivity : AppCompatActivity() {
         controls: List<View>
     ) {
         val alpha = if (enabled) 1f else 0.38f
-        card.alpha = if (enabled) 1f else 0.72f
+        section.alpha = if (enabled) 1f else 0.72f
         title.alpha = alpha
         controls.forEach { control ->
             control.isEnabled = enabled
@@ -638,6 +633,22 @@ class StyleSettingsActivity : AppCompatActivity() {
                     else -> FocusPreferences.GRAVITY_CENTER
                 }
                 FocusPreferences.setCustomAodGravity(this, gravity)
+                notifyStyleChanged()
+            }
+
+        findViewById<MaterialButtonToggleGroup>(R.id.custom_aod_song_info_group)
+            .addOnButtonCheckedListener { _, checkedId, isChecked ->
+                if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
+                val mode = when (checkedId) {
+                    R.id.custom_aod_song_info_hide_title ->
+                        FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_TITLE
+                    R.id.custom_aod_song_info_hide_artist ->
+                        FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_ARTIST
+                    R.id.custom_aod_song_info_hide_all ->
+                        FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_ALL
+                    else -> FocusPreferences.CUSTOM_AOD_SONG_INFO_ALL
+                }
+                FocusPreferences.setCustomAodSongInfo(this, mode)
                 notifyStyleChanged()
             }
 
