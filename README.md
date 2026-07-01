@@ -406,6 +406,13 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 
 ## 版本更新
 
+### v1.5.4
+
+- **编译错误修复**：修复 `StyleSettingsFragment.kt` 中因 `view` 非类属性导致的 `view?.findViewById` 空安全错误，新增 `lyricLinesGroup`、`translationLinesGroup`、`gravityGroup` 等6个类属性并在 `bindViews()` 中统一绑定
+- **欢迎界面跳转修复**：`setWelcomeCompleted()` 中 `apply()` 改为 `commit()`，确保 SharedPreferences 同步写入后再启动主界面，避免因异步写入导致的循环跳转
+- **主界面启动崩溃修复**：调整 `setupWindowInsets()` 调用顺序，移至 `bottomNav` 初始化之后，修复 `lateinit property bottomNav has not been initialized` 崩溃
+- **版本号**：`1.5.4`（versionCode 10）
+
 ### v1.5.2
 
 - **歌名显示选项布局**：万象息屏「歌名显示」改为两行（全部显示 / 隐藏歌名 · 隐藏歌手 / 全部隐藏），避免四字挤在一行

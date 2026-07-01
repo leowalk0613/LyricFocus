@@ -1,4 +1,4 @@
-package com.leowalk.LyricFocus
+package com.leowalk.LyricFocus.ui
 
 import android.content.ClipboardManager
 import android.content.Intent
@@ -11,23 +11,19 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import com.google.android.material.appbar.MaterialToolbar
+import androidx.fragment.app.Fragment
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.tabs.TabLayout
+import com.leowalk.LyricFocus.R
 import com.leowalk.LyricFocus.util.LyricFocusLogFilter
 import com.leowalk.LyricFocus.util.RootHelper
 import java.io.BufferedReader
-import java.io.InputStream
 import java.io.InputStreamReader
 import java.util.zip.ZipInputStream
 
-class AboutActivity : AppCompatActivity() {
+class AboutFragment : Fragment(R.layout.activity_about) {
 
     private val TAG = "LyricFocus_About"
     private val contactEmail = "walkalone9990613@gmail.com"
@@ -43,81 +39,55 @@ class AboutActivity : AppCompatActivity() {
         uri?.let { handleSelectedLogFile(it) }
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        setContentView(R.layout.activity_about)
-        setupWindowInsets()
-        setupToolbar()
-        setupVersionLabel()
-        setupLinks()
-        setupLogViewer()
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        view.findViewById<View>(R.id.app_bar_about).visibility = View.GONE
+        setupVersionLabel(view)
+        setupLinks(view)
+        setupLogViewer(view)
     }
 
-    private fun setupVersionLabel() {
-        findViewById<TextView>(R.id.tv_version).text = runCatching {
+    private fun setupVersionLabel(view: View) {
+        view.findViewById<TextView>(R.id.tv_version).text = runCatching {
+            val ctx = requireContext()
             @Suppress("DEPRECATION")
-            val info = packageManager.getPackageInfo(packageName, 0)
+            val info = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
             "v${info.versionName}"
         }.getOrElse { getString(R.string.app_version) }
     }
 
-    private fun setupWindowInsets() {
-        val appBar = findViewById<View>(R.id.app_bar_about)
-        ViewCompat.setOnApplyWindowInsetsListener(appBar) { view, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.setPadding(view.paddingLeft, bars.top, view.paddingRight, view.paddingBottom)
-            insets
-        }
-        ViewCompat.requestApplyInsets(appBar)
-
-        val content = findViewById<View>(R.id.about_content)
-        ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, bars.bottom)
-            insets
-        }
-    }
-
-    private fun setupToolbar() {
-        val toolbar = findViewById<MaterialToolbar>(R.id.toolbar_about)
-        toolbar.setNavigationOnClickListener {
-            finish()
-        }
-    }
-
-    private fun setupLinks() {
-        findViewById<MaterialButton>(R.id.btn_github_repo).setOnClickListener {
+    private fun setupLinks(view: View) {
+        view.findViewById<MaterialButton>(R.id.btn_github_repo).setOnClickListener {
             openUrl("https://github.com/leowalk0613/LyricFocus")
         }
 
-        findViewById<MaterialButton>(R.id.btn_github_issue).setOnClickListener {
+        view.findViewById<MaterialButton>(R.id.btn_github_issue).setOnClickListener {
             openUrl("https://github.com/leowalk0613/LyricFocus/issues")
         }
 
-        findViewById<MaterialButton>(R.id.btn_contact_email).setOnClickListener {
+        view.findViewById<MaterialButton>(R.id.btn_contact_email).setOnClickListener {
             showContactEmailDialog()
         }
 
-        findViewById<MaterialButton>(R.id.btn_coolapk).setOnClickListener {
+        view.findViewById<MaterialButton>(R.id.btn_coolapk).setOnClickListener {
             openUrl("https://www.coolapk.com/u/551303")
         }
 
-        findViewById<MaterialButton>(R.id.btn_hyperfocus_api).setOnClickListener {
+        view.findViewById<MaterialButton>(R.id.btn_hyperfocus_api).setOnClickListener {
             openUrl("https://github.com/ghhccghk/HyperFocusApi")
         }
 
-        findViewById<MaterialButton>(R.id.btn_hyperceiler).setOnClickListener {
+        view.findViewById<MaterialButton>(R.id.btn_hyperceiler).setOnClickListener {
             openUrl("https://github.com/ReChronoRain/HyperCeiler")
         }
 
-        findViewById<MaterialButton>(R.id.btn_lsposed).setOnClickListener {
+        view.findViewById<MaterialButton>(R.id.btn_lsposed).setOnClickListener {
             openUrl("https://github.com/LSPosed/LSPosed")
         }
     }
 
     private fun showContactEmailDialog() {
-        MaterialAlertDialogBuilder(this)
+        MaterialAlertDialogBuilder(requireContext())
             .setTitle("联系邮箱")
             .setMessage(contactEmail)
             .setPositiveButton("发邮件") { _, _ -> sendContactEmail() }
@@ -133,14 +103,14 @@ class AboutActivity : AppCompatActivity() {
                 }
             )
         } catch (_: Exception) {
-            val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("email", contactEmail))
-            Toast.makeText(this, "未找到邮件应用，邮箱已复制", Toast.LENGTH_SHORT).show()
+            val clipboard = ContextCompat.getSystemService(requireContext(), ClipboardManager::class.java)
+            clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("email", contactEmail))
+            Toast.makeText(requireContext(), "未找到邮件应用，邮箱已复制", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun setupLogViewer() {
-        findViewById<MaterialButton>(R.id.btn_view_logs).setOnClickListener {
+    private fun setupLogViewer(view: View) {
+        view.findViewById<MaterialButton>(R.id.btn_view_logs).setOnClickListener {
             showLogSourceSelection()
         }
     }
@@ -148,7 +118,7 @@ class AboutActivity : AppCompatActivity() {
     private fun showLogSourceSelection() {
         val options = arrayOf("自动扫描 LSPosed 日志", "手动选择日志文件")
 
-        MaterialAlertDialogBuilder(this)
+        MaterialAlertDialogBuilder(requireContext())
             .setTitle("选择日志来源")
             .setItems(options) { _, which ->
                 when (which) {
@@ -168,25 +138,25 @@ class AboutActivity : AppCompatActivity() {
         val actionBar = dialogView.findViewById<LinearLayout>(R.id.action_bar)
         val btnCopyLog = dialogView.findViewById<MaterialButton>(R.id.btn_copy_log)
 
-        val dialog = MaterialAlertDialogBuilder(this)
+        val dialog = MaterialAlertDialogBuilder(requireContext())
             .setTitle("LSPosed 日志")
-            .setView(dialogView!!)
+            .setView(dialogView)
             .setNegativeButton("关闭", null)
             .setCancelable(true)
             .create()
 
-        loadingIndicator!!.visibility = View.VISIBLE
-        logContent!!.visibility = View.GONE
-        emptyState!!.visibility = View.GONE
-        tabLayout!!.visibility = View.GONE
-        actionBar!!.visibility = View.GONE
+        loadingIndicator.visibility = View.VISIBLE
+        logContent.visibility = View.GONE
+        emptyState.visibility = View.GONE
+        tabLayout.visibility = View.GONE
+        actionBar.visibility = View.GONE
 
         Thread {
             val logs = mutableMapOf<String, String>()
 
             try {
                 if (!RootHelper.checkRootAccess()) {
-                    runOnUiThread {
+                    requireActivity().runOnUiThread {
                         loadingIndicator!!.visibility = View.GONE
                         emptyState!!.visibility = View.VISIBLE
                         emptyState.text = "未获取 Root 权限\n\n请在 Magisk / KernelSU 中允许本应用\n或使用手动选择文件方式"
@@ -220,7 +190,7 @@ class AboutActivity : AppCompatActivity() {
 
             val logFiles = logs.keys.sortedByDescending { it }.toList()
 
-            runOnUiThread {
+            requireActivity().runOnUiThread {
                 loadingIndicator!!.visibility = View.GONE
 
                 if (logs.isEmpty()) {
@@ -270,7 +240,7 @@ class AboutActivity : AppCompatActivity() {
 
     private fun readLogsFromZipFileViaRoot(zipPath: String, logs: MutableMap<String, String>) {
         try {
-            val tempDir = cacheDir.absolutePath
+            val tempDir = requireContext().cacheDir.absolutePath
             val extractPath = "$tempDir/lsp_log_extract"
 
             RootHelper.runSuCommand("mkdir -p '$extractPath'")
@@ -313,24 +283,24 @@ class AboutActivity : AppCompatActivity() {
         val actionBar = dialogView.findViewById<LinearLayout>(R.id.action_bar)
         val btnCopyLog = dialogView.findViewById<MaterialButton>(R.id.btn_copy_log)
 
-        val dialog = MaterialAlertDialogBuilder(this)
+        val dialog = MaterialAlertDialogBuilder(requireContext())
             .setTitle("日志查看")
-            .setView(dialogView!!)
+            .setView(dialogView)
             .setNegativeButton("关闭", null)
             .setCancelable(true)
             .create()
 
-        loadingIndicator!!.visibility = View.VISIBLE
-        logContent!!.visibility = View.GONE
-        emptyState!!.visibility = View.GONE
-        tabLayout!!.visibility = View.GONE
-        actionBar!!.visibility = View.GONE
+        loadingIndicator.visibility = View.VISIBLE
+        logContent.visibility = View.GONE
+        emptyState.visibility = View.GONE
+        tabLayout.visibility = View.GONE
+        actionBar.visibility = View.GONE
 
         Thread {
             val logs = mutableMapOf<String, String>()
 
             try {
-                val mimeType = contentResolver.getType(uri)
+                val mimeType = requireContext().contentResolver.getType(uri)
                 val isZip = mimeType == "application/zip" ||
                         mimeType == "application/x-zip-compressed" ||
                         uri.lastPathSegment?.endsWith(".zip", true) == true
@@ -346,7 +316,7 @@ class AboutActivity : AppCompatActivity() {
 
             val logFiles = logs.keys.toList()
 
-            runOnUiThread {
+            requireActivity().runOnUiThread {
                 loadingIndicator!!.visibility = View.GONE
 
                 if (logs.isEmpty()) {
@@ -393,14 +363,14 @@ class AboutActivity : AppCompatActivity() {
     }
 
     private fun copyToClipboard(text: String) {
-        val clipboard = ContextCompat.getSystemService(this, ClipboardManager::class.java)
+        val clipboard = ContextCompat.getSystemService(requireContext(), ClipboardManager::class.java)
         val clip = android.content.ClipData.newPlainText("LyricFocus 日志", text)
         clipboard?.setPrimaryClip(clip)
-        Toast.makeText(this, "日志已复制到剪贴板", Toast.LENGTH_SHORT).show()
+        Toast.makeText(requireContext(), "日志已复制到剪贴板", Toast.LENGTH_SHORT).show()
     }
 
     private fun readLogsFromZip(uri: Uri, logs: MutableMap<String, String>) {
-        contentResolver.openInputStream(uri)?.use { inputStream ->
+        requireContext().contentResolver.openInputStream(uri)?.use { inputStream ->
             ZipInputStream(inputStream).use { zip ->
                 var entry = zip.nextEntry
                 var foundEntries = 0
@@ -429,7 +399,7 @@ class AboutActivity : AppCompatActivity() {
     }
 
     private fun readLogsFromTextFile(uri: Uri, logs: MutableMap<String, String>) {
-        contentResolver.openInputStream(uri)?.use { inputStream ->
+        requireContext().contentResolver.openInputStream(uri)?.use { inputStream ->
             BufferedReader(InputStreamReader(inputStream)).use { reader ->
                 val filteredLines = reader.lineSequence()
                     .filter(LyricFocusLogFilter::matches)

@@ -3,7 +3,6 @@ package com.leowalk.LyricFocus
 import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
-import android.text.InputType
 import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
@@ -152,23 +151,14 @@ class AppWhitelistActivity : AppCompatActivity() {
     private var pickerDialog: androidx.appcompat.app.AlertDialog? = null
 
     private fun showAddPackageDialog() {
-        val horizontalPadding = (20 * resources.displayMetrics.density).toInt()
-        val inputLayout = TextInputLayout(this).apply {
-            hint = "应用包名"
-            boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
-            setPaddingRelative(horizontalPadding, 0, horizontalPadding, 0)
-        }
-        val input = TextInputEditText(inputLayout.context).apply {
-            hint = "com.example.music"
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-            setSingleLine()
-        }
-        inputLayout.addView(input)
+        val dialogView = layoutInflater.inflate(R.layout.dialog_add_package, null)
+        val inputLayout = dialogView.findViewById<TextInputLayout>(R.id.package_input_layout)
+        val input = dialogView.findViewById<TextInputEditText>(R.id.package_input)
 
         MaterialAlertDialogBuilder(this)
             .setTitle("添加包名")
             .setMessage("可手动输入音乐应用的包名，未安装的应用也会保留在白名单中。")
-            .setView(inputLayout)
+            .setView(dialogView)
             .setPositiveButton("添加", null)
             .setNegativeButton(android.R.string.cancel, null)
             .create()

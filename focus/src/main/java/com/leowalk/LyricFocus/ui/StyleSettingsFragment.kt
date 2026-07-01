@@ -1,4 +1,4 @@
-package com.leowalk.LyricFocus
+package com.leowalk.LyricFocus.ui
 
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -7,21 +7,21 @@ import android.view.View
 import android.widget.GridLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import com.google.android.material.appbar.MaterialToolbar
+import androidx.fragment.app.Fragment
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
+import com.leowalk.LyricFocus.FocusPreferences
+import com.leowalk.LyricFocus.R
 import com.leowalk.LyricFocus.util.AodColorPresets
 import kotlin.math.roundToInt
 
-class StyleSettingsActivity : AppCompatActivity() {
+class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
 
     private lateinit var switchSwapLyricTranslation: MaterialSwitch
     private lateinit var switchSingleLineOnly: MaterialSwitch
@@ -64,6 +64,13 @@ class StyleSettingsActivity : AppCompatActivity() {
     private lateinit var customAodColorPalette: GridLayout
     private lateinit var btnCustomAodPickColor: MaterialButton
 
+    private lateinit var lyricLinesGroup: MaterialButtonToggleGroup
+    private lateinit var translationLinesGroup: MaterialButtonToggleGroup
+    private lateinit var gravityGroup: MaterialButtonToggleGroup
+    private lateinit var customAodLyricLinesGroup: MaterialButtonToggleGroup
+    private lateinit var customAodTranslationLinesGroup: MaterialButtonToggleGroup
+    private lateinit var customAodGravityGroup: MaterialButtonToggleGroup
+
     private val lockScreenControls = mutableListOf<View>()
     private val customAodControls = mutableListOf<View>()
     private val colorPresetViews = mutableListOf<View>()
@@ -74,14 +81,11 @@ class StyleSettingsActivity : AppCompatActivity() {
     private var isCustomAodWidthUpdating = false
     private var selectedPresetColor: Int = AodColorPresets.defaultPresetColor()
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        setContentView(R.layout.activity_style_settings)
-        setupWindowInsets()
-        findViewById<MaterialToolbar>(R.id.toolbar).setNavigationOnClickListener { finish() }
-
-        bindViews()
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        view.findViewById<View>(R.id.app_bar).visibility = View.GONE
+        setupContentInsets(view)
+        bindViews(view)
         setupColorPresetGrid()
         bindUiFromPreferences()
         setupListeners()
@@ -96,56 +100,63 @@ class StyleSettingsActivity : AppCompatActivity() {
         updateCustomAodSectionState()
     }
 
-    private fun bindViews() {
-        switchSwapLyricTranslation = findViewById(R.id.switch_swap_lyric_translation)
-        switchSingleLineOnly = findViewById(R.id.switch_single_line_only)
-        lockScreenSection = findViewById(R.id.lock_screen_style_section)
-        lockScreenSectionHint = findViewById(R.id.lock_screen_section_hint)
-        lockScreenStyleCard = findViewById(R.id.lock_screen_style_card)
-        customAodSection = findViewById(R.id.custom_aod_style_section)
-        customAodSectionHint = findViewById(R.id.custom_aod_section_hint)
-        customAodStyleCard = findViewById(R.id.custom_aod_style_card)
+    private fun bindViews(view: View) {
+        switchSwapLyricTranslation = view.findViewById(R.id.switch_swap_lyric_translation)
+        switchSingleLineOnly = view.findViewById(R.id.switch_single_line_only)
+        lockScreenSection = view.findViewById(R.id.lock_screen_style_section)
+        lockScreenSectionHint = view.findViewById(R.id.lock_screen_section_hint)
+        lockScreenStyleCard = view.findViewById(R.id.lock_screen_style_card)
+        customAodSection = view.findViewById(R.id.custom_aod_style_section)
+        customAodSectionHint = view.findViewById(R.id.custom_aod_section_hint)
+        customAodStyleCard = view.findViewById(R.id.custom_aod_style_card)
 
-        sliderTextSize = findViewById(R.id.slider_text_size)
-        tvTextSizeLabel = findViewById(R.id.text_size_label)
-        textColorSection = findViewById(R.id.text_color_card)
-        textColorTitle = findViewById(R.id.text_color_title)
-        textColorHint = findViewById(R.id.text_color_hint)
-        textColorGroup = findViewById(R.id.text_color_group)
-        textColorWhite = findViewById(R.id.text_color_white)
-        textColorBlack = findViewById(R.id.text_color_black)
-        backgroundSection = findViewById(R.id.background_card)
-        backgroundTitle = findViewById(R.id.background_title)
-        backgroundHint = findViewById(R.id.background_hint)
-        backgroundGroup = findViewById(R.id.background_group)
-        backgroundDefault = findViewById(R.id.background_default)
-        backgroundBlack = findViewById(R.id.background_black)
-        backgroundWhite = findViewById(R.id.background_white)
-        colorExtractionSection = findViewById(R.id.color_extraction_card)
-        colorExtractionTitle = findViewById(R.id.color_extraction_title)
-        colorExtractionHint = findViewById(R.id.color_extraction_hint)
-        colorExtractionSwitch = findViewById(R.id.color_extraction_switch)
-        monetDynamicSwitch = findViewById(R.id.monet_dynamic_switch)
+        sliderTextSize = view.findViewById(R.id.slider_text_size)
+        tvTextSizeLabel = view.findViewById(R.id.text_size_label)
+        textColorSection = view.findViewById(R.id.text_color_card)
+        textColorTitle = view.findViewById(R.id.text_color_title)
+        textColorHint = view.findViewById(R.id.text_color_hint)
+        textColorGroup = view.findViewById(R.id.text_color_group)
+        textColorWhite = view.findViewById(R.id.text_color_white)
+        textColorBlack = view.findViewById(R.id.text_color_black)
+        backgroundSection = view.findViewById(R.id.background_card)
+        backgroundTitle = view.findViewById(R.id.background_title)
+        backgroundHint = view.findViewById(R.id.background_hint)
+        backgroundGroup = view.findViewById(R.id.background_group)
+        backgroundDefault = view.findViewById(R.id.background_default)
+        backgroundBlack = view.findViewById(R.id.background_black)
+        backgroundWhite = view.findViewById(R.id.background_white)
+        colorExtractionSection = view.findViewById(R.id.color_extraction_card)
+        colorExtractionTitle = view.findViewById(R.id.color_extraction_title)
+        colorExtractionHint = view.findViewById(R.id.color_extraction_hint)
+        colorExtractionSwitch = view.findViewById(R.id.color_extraction_switch)
+        monetDynamicSwitch = view.findViewById(R.id.monet_dynamic_switch)
 
-        sliderCustomAodTextSize = findViewById(R.id.slider_custom_aod_text_size)
-        tvCustomAodTextSizeLabel = findViewById(R.id.custom_aod_text_size_label)
-        sliderCustomAodWidth = findViewById(R.id.slider_custom_aod_width)
-        tvCustomAodWidthLabel = findViewById(R.id.custom_aod_width_label)
-        customAodColorModeGroup = findViewById(R.id.custom_aod_color_mode_group)
-        customAodSongInfoGroup = findViewById(R.id.custom_aod_song_info_group)
-        customAodSongInfoGroupRow2 = findViewById(R.id.custom_aod_song_info_group_row2)
-        customAodColorPaletteSection = findViewById(R.id.custom_aod_color_palette_section)
-        customAodColorPalette = findViewById(R.id.custom_aod_color_palette)
-        btnCustomAodPickColor = findViewById(R.id.btn_custom_aod_pick_color)
+        sliderCustomAodTextSize = view.findViewById(R.id.slider_custom_aod_text_size)
+        tvCustomAodTextSizeLabel = view.findViewById(R.id.custom_aod_text_size_label)
+        sliderCustomAodWidth = view.findViewById(R.id.slider_custom_aod_width)
+        tvCustomAodWidthLabel = view.findViewById(R.id.custom_aod_width_label)
+        customAodColorModeGroup = view.findViewById(R.id.custom_aod_color_mode_group)
+        customAodSongInfoGroup = view.findViewById(R.id.custom_aod_song_info_group)
+        customAodSongInfoGroupRow2 = view.findViewById(R.id.custom_aod_song_info_group_row2)
+        customAodColorPaletteSection = view.findViewById(R.id.custom_aod_color_palette_section)
+        customAodColorPalette = view.findViewById(R.id.custom_aod_color_palette)
+        btnCustomAodPickColor = view.findViewById(R.id.btn_custom_aod_pick_color)
+
+        lyricLinesGroup = view.findViewById(R.id.lyric_lines_group)
+        translationLinesGroup = view.findViewById(R.id.translation_lines_group)
+        gravityGroup = view.findViewById(R.id.gravity_group)
+        customAodLyricLinesGroup = view.findViewById(R.id.custom_aod_lyric_lines_group)
+        customAodTranslationLinesGroup = view.findViewById(R.id.custom_aod_translation_lines_group)
+        customAodGravityGroup = view.findViewById(R.id.custom_aod_gravity_group)
 
         lockScreenControls += listOf(
             sliderTextSize,
             textColorGroup,
             textColorWhite,
             textColorBlack,
-            findViewById(R.id.lyric_lines_group),
-            findViewById(R.id.translation_lines_group),
-            findViewById(R.id.gravity_group),
+            lyricLinesGroup,
+            translationLinesGroup,
+            gravityGroup,
             backgroundGroup,
             backgroundDefault,
             backgroundBlack,
@@ -158,27 +169,16 @@ class StyleSettingsActivity : AppCompatActivity() {
             sliderCustomAodWidth,
             customAodSongInfoGroup,
             customAodSongInfoGroupRow2,
-            findViewById(R.id.custom_aod_lyric_lines_group),
-            findViewById(R.id.custom_aod_translation_lines_group),
-            findViewById(R.id.custom_aod_gravity_group),
+            customAodLyricLinesGroup,
+            customAodTranslationLinesGroup,
+            customAodGravityGroup,
             customAodColorModeGroup,
             btnCustomAodPickColor
         )
     }
 
-    private fun setupWindowInsets() {
-        val appBar = findViewById<View>(R.id.app_bar)
-        ViewCompat.setOnApplyWindowInsetsListener(appBar) { view, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.setPadding(view.paddingLeft, bars.top, view.paddingRight, view.paddingBottom)
-            insets
-        }
-        ViewCompat.requestApplyInsets(appBar)
-
-        val content = findViewById<View>(R.id.style_content)
-        ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, bars.bottom)
+    private fun setupContentInsets(view: View) {
+        ViewCompat.setOnApplyWindowInsetsListener(view.findViewById(R.id.style_content)) { content, insets ->
             insets
         }
     }
@@ -190,7 +190,7 @@ class StyleSettingsActivity : AppCompatActivity() {
         customAodColorPalette.removeAllViews()
 
         AodColorPresets.presets.forEach { preset ->
-            val chip = View(this).apply {
+            val chip = View(requireContext()).apply {
                 layoutParams = GridLayout.LayoutParams().apply {
                     width = size
                     height = size
@@ -200,8 +200,8 @@ class StyleSettingsActivity : AppCompatActivity() {
                 contentDescription = preset.name
                 setOnClickListener {
                     selectPresetColor(preset.color)
-                    FocusPreferences.setCustomAodColorMode(this@StyleSettingsActivity, FocusPreferences.CUSTOM_AOD_COLOR_PRESET)
-                    FocusPreferences.setCustomAodPresetColor(this@StyleSettingsActivity, preset.color)
+                    FocusPreferences.setCustomAodColorMode(requireContext(), FocusPreferences.CUSTOM_AOD_COLOR_PRESET)
+                    FocusPreferences.setCustomAodPresetColor(requireContext(), preset.color)
                     notifyStyleChanged()
                 }
             }
@@ -240,73 +240,73 @@ class StyleSettingsActivity : AppCompatActivity() {
     private fun bindUiFromPreferences() {
         isBindingUi = true
 
-        switchSwapLyricTranslation.isChecked = FocusPreferences.isSwapLyricTranslation(this)
-        switchSingleLineOnly.isChecked = FocusPreferences.isSingleLineOnly(this)
+        switchSwapLyricTranslation.isChecked = FocusPreferences.isSwapLyricTranslation(requireContext())
+        switchSingleLineOnly.isChecked = FocusPreferences.isSingleLineOnly(requireContext())
 
-        bindTextSizeSlider(FocusPreferences.getLyricTextSize(this))
+        bindTextSizeSlider(FocusPreferences.getLyricTextSize(requireContext()))
 
-        val textColorId = if (FocusPreferences.getLyricTextColor(this) == FocusPreferences.TEXT_COLOR_BLACK) {
+        val textColorId = if (FocusPreferences.getLyricTextColor(requireContext()) == FocusPreferences.TEXT_COLOR_BLACK) {
             R.id.text_color_black
         } else {
             R.id.text_color_white
         }
         textColorGroup.check(textColorId)
 
-        findViewById<MaterialButtonToggleGroup>(R.id.lyric_lines_group).check(
-            if (FocusPreferences.getLyricMaxLines(this) == 1) R.id.lyric_lines_1 else R.id.lyric_lines_2
+        lyricLinesGroup.check(
+            if (FocusPreferences.getLyricMaxLines(requireContext()) == 1) R.id.lyric_lines_1 else R.id.lyric_lines_2
         )
-        findViewById<MaterialButtonToggleGroup>(R.id.translation_lines_group).check(
-            if (FocusPreferences.getTranslationMaxLines(this) == 1) {
+        translationLinesGroup.check(
+            if (FocusPreferences.getTranslationMaxLines(requireContext()) == 1) {
                 R.id.translation_lines_1
             } else {
                 R.id.translation_lines_2
             }
         )
-        findViewById<MaterialButtonToggleGroup>(R.id.gravity_group).check(
-            when (FocusPreferences.getLyricGravity(this)) {
+        gravityGroup.check(
+            when (FocusPreferences.getLyricGravity(requireContext())) {
                 FocusPreferences.GRAVITY_LEFT -> R.id.gravity_left
                 FocusPreferences.GRAVITY_RIGHT -> R.id.gravity_right
                 else -> R.id.gravity_center
             }
         )
         backgroundGroup.check(
-            when (FocusPreferences.getFocusBackground(this)) {
+            when (FocusPreferences.getFocusBackground(requireContext())) {
                 FocusPreferences.BACKGROUND_BLACK -> R.id.background_black
                 FocusPreferences.BACKGROUND_WHITE -> R.id.background_white
                 else -> R.id.background_default
             }
         )
 
-        monetDynamicSwitch.isChecked = FocusPreferences.isMonetDynamicColorEnabled(this)
-        colorExtractionSwitch.isChecked = FocusPreferences.isTextColorExtractionEnabled(this)
+        monetDynamicSwitch.isChecked = FocusPreferences.isMonetDynamicColorEnabled(requireContext())
+        colorExtractionSwitch.isChecked = FocusPreferences.isTextColorExtractionEnabled(requireContext())
 
-        bindCustomAodTextSizeSlider(FocusPreferences.getCustomAodTextSize(this))
-        bindCustomAodWidthSlider(FocusPreferences.getCustomAodLyricWidth(this))
+        bindCustomAodTextSizeSlider(FocusPreferences.getCustomAodTextSize(requireContext()))
+        bindCustomAodWidthSlider(FocusPreferences.getCustomAodLyricWidth(requireContext()))
 
-        findViewById<MaterialButtonToggleGroup>(R.id.custom_aod_lyric_lines_group).check(
-            if (FocusPreferences.getCustomAodLyricMaxLines(this) == 1) {
+        customAodLyricLinesGroup.check(
+            if (FocusPreferences.getCustomAodLyricMaxLines(requireContext()) == 1) {
                 R.id.custom_aod_lyric_lines_1
             } else {
                 R.id.custom_aod_lyric_lines_2
             }
         )
-        findViewById<MaterialButtonToggleGroup>(R.id.custom_aod_translation_lines_group).check(
-            if (FocusPreferences.getCustomAodTranslationMaxLines(this) == 1) {
+        customAodTranslationLinesGroup.check(
+            if (FocusPreferences.getCustomAodTranslationMaxLines(requireContext()) == 1) {
                 R.id.custom_aod_translation_lines_1
             } else {
                 R.id.custom_aod_translation_lines_2
             }
         )
-        findViewById<MaterialButtonToggleGroup>(R.id.custom_aod_gravity_group).check(
-            when (FocusPreferences.getCustomAodGravity(this)) {
+        customAodGravityGroup.check(
+            when (FocusPreferences.getCustomAodGravity(requireContext())) {
                 FocusPreferences.GRAVITY_LEFT -> R.id.custom_aod_gravity_left
                 FocusPreferences.GRAVITY_RIGHT -> R.id.custom_aod_gravity_right
                 else -> R.id.custom_aod_gravity_center
             }
         )
-        bindCustomAodSongInfo(FocusPreferences.getCustomAodSongInfo(this))
+        bindCustomAodSongInfo(FocusPreferences.getCustomAodSongInfo(requireContext()))
 
-        val colorMode = FocusPreferences.getCustomAodColorMode(this)
+        val colorMode = FocusPreferences.getCustomAodColorMode(requireContext())
         customAodColorModeGroup.check(
             when (colorMode) {
                 FocusPreferences.CUSTOM_AOD_COLOR_ALBUM -> R.id.custom_aod_color_album
@@ -314,7 +314,7 @@ class StyleSettingsActivity : AppCompatActivity() {
                 else -> R.id.custom_aod_color_white
             }
         )
-        selectedPresetColor = FocusPreferences.getCustomAodPresetColor(this)
+        selectedPresetColor = FocusPreferences.getCustomAodPresetColor(requireContext())
         selectPresetColor(selectedPresetColor)
 
         updateDynamicColorUi()
@@ -322,7 +322,7 @@ class StyleSettingsActivity : AppCompatActivity() {
     }
 
     private fun updateLockScreenSectionState() {
-        val customAodEnabled = FocusPreferences.isCustomAodLayout(this)
+        val customAodEnabled = FocusPreferences.isCustomAodLayout(requireContext())
         val enabled = !customAodEnabled
         val alpha = if (enabled) 1f else 0.38f
 
@@ -336,7 +336,7 @@ class StyleSettingsActivity : AppCompatActivity() {
     }
 
     private fun updateCustomAodSectionState() {
-        val customAodEnabled = FocusPreferences.isCustomAodLayout(this)
+        val customAodEnabled = FocusPreferences.isCustomAodLayout(requireContext())
         val alpha = if (customAodEnabled) 1f else 0.38f
 
         customAodSectionHint.visibility = if (customAodEnabled) View.GONE else View.VISIBLE
@@ -352,10 +352,10 @@ class StyleSettingsActivity : AppCompatActivity() {
     }
 
     private fun updateDynamicColorUi() {
-        val monetEnabled = FocusPreferences.isMonetDynamicColorEnabled(this)
-        val textExtractionEnabled = FocusPreferences.isTextColorExtractionEnabled(this)
+        val monetEnabled = FocusPreferences.isMonetDynamicColorEnabled(requireContext())
+        val textExtractionEnabled = FocusPreferences.isTextColorExtractionEnabled(requireContext())
         val manualTextEnabled = !monetEnabled && !textExtractionEnabled
-        val lockEnabled = !FocusPreferences.isCustomAodLayout(this)
+        val lockEnabled = !FocusPreferences.isCustomAodLayout(requireContext())
 
         setSectionEnabled(
             section = textColorSection,
@@ -425,11 +425,11 @@ class StyleSettingsActivity : AppCompatActivity() {
     }
 
     private fun updateCustomAodColorUi() {
-        val mode = FocusPreferences.getCustomAodColorMode(this)
+        val mode = FocusPreferences.getCustomAodColorMode(requireContext())
         val showPalette = mode == FocusPreferences.CUSTOM_AOD_COLOR_PRESET
         customAodColorPaletteSection.visibility = if (showPalette) View.VISIBLE else View.GONE
         if (showPalette) {
-            selectPresetColor(FocusPreferences.getCustomAodPresetColor(this))
+            selectPresetColor(FocusPreferences.getCustomAodPresetColor(requireContext()))
         }
     }
 
@@ -480,19 +480,19 @@ class StyleSettingsActivity : AppCompatActivity() {
     private fun formatTextSizeLabel(sizeSp: Float): String = "${sizeSp.roundToInt()} sp"
 
     private fun isManualTextColorLocked(): Boolean {
-        return FocusPreferences.isMonetDynamicColorEnabled(this) ||
-            FocusPreferences.isTextColorExtractionEnabled(this)
+        return FocusPreferences.isMonetDynamicColorEnabled(requireContext()) ||
+            FocusPreferences.isTextColorExtractionEnabled(requireContext())
     }
 
     private fun setupListeners() {
         switchSwapLyricTranslation.setOnCheckedChangeListener { _, checked ->
             if (isBindingUi) return@setOnCheckedChangeListener
-            FocusPreferences.setSwapLyricTranslation(this, checked)
+            FocusPreferences.setSwapLyricTranslation(requireContext(), checked)
             notifyStyleChanged()
         }
         switchSingleLineOnly.setOnCheckedChangeListener { _, checked ->
             if (isBindingUi) return@setOnCheckedChangeListener
-            FocusPreferences.setSingleLineOnly(this, checked)
+            FocusPreferences.setSingleLineOnly(requireContext(), checked)
             notifyStyleChanged()
         }
 
@@ -508,7 +508,7 @@ class StyleSettingsActivity : AppCompatActivity() {
                     FocusPreferences.MIN_LYRIC_TEXT_SIZE_SP,
                     FocusPreferences.MAX_LYRIC_TEXT_SIZE_SP
                 )
-                FocusPreferences.setLyricTextSize(this@StyleSettingsActivity, normalized)
+                FocusPreferences.setLyricTextSize(requireContext(), normalized)
                 bindTextSizeSlider(normalized)
                 notifyStyleChanged()
             }
@@ -526,7 +526,7 @@ class StyleSettingsActivity : AppCompatActivity() {
                     FocusPreferences.MIN_LYRIC_TEXT_SIZE_SP,
                     FocusPreferences.MAX_LYRIC_TEXT_SIZE_SP
                 )
-                FocusPreferences.setCustomAodTextSize(this@StyleSettingsActivity, normalized)
+                FocusPreferences.setCustomAodTextSize(requireContext(), normalized)
                 bindCustomAodTextSizeSlider(normalized)
                 notifyStyleChanged()
             }
@@ -544,7 +544,7 @@ class StyleSettingsActivity : AppCompatActivity() {
                     FocusPreferences.MIN_CUSTOM_AOD_LYRIC_WIDTH,
                     FocusPreferences.MAX_CUSTOM_AOD_LYRIC_WIDTH
                 )
-                FocusPreferences.setCustomAodLyricWidth(this@StyleSettingsActivity, normalized)
+                FocusPreferences.setCustomAodLyricWidth(requireContext(), normalized)
                 bindCustomAodWidthSlider(normalized)
                 notifyStyleChanged()
             }
@@ -556,44 +556,41 @@ class StyleSettingsActivity : AppCompatActivity() {
                 R.id.text_color_black -> FocusPreferences.TEXT_COLOR_BLACK
                 else -> FocusPreferences.TEXT_COLOR_WHITE
             }
-            FocusPreferences.setLyricTextColor(this, color)
+            FocusPreferences.setLyricTextColor(requireContext(), color)
             notifyStyleChanged()
         }
 
-        findViewById<MaterialButtonToggleGroup>(R.id.lyric_lines_group)
-            .addOnButtonCheckedListener { _, checkedId, isChecked ->
-                if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
-                FocusPreferences.setLyricMaxLines(
-                    this,
-                    if (checkedId == R.id.lyric_lines_1) 1 else 2
-                )
-                notifyStyleChanged()
-            }
+        lyricLinesGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
+            FocusPreferences.setLyricMaxLines(
+                requireContext(),
+                if (checkedId == R.id.lyric_lines_1) 1 else 2
+            )
+            notifyStyleChanged()
+        }
 
-        findViewById<MaterialButtonToggleGroup>(R.id.translation_lines_group)
-            .addOnButtonCheckedListener { _, checkedId, isChecked ->
-                if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
-                FocusPreferences.setTranslationMaxLines(
-                    this,
-                    if (checkedId == R.id.translation_lines_1) 1 else 2
-                )
-                notifyStyleChanged()
-            }
+        translationLinesGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
+            FocusPreferences.setTranslationMaxLines(
+                requireContext(),
+                if (checkedId == R.id.translation_lines_1) 1 else 2
+            )
+            notifyStyleChanged()
+        }
 
-        findViewById<MaterialButtonToggleGroup>(R.id.gravity_group)
-            .addOnButtonCheckedListener { _, checkedId, isChecked ->
-                if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
-                val gravity = when (checkedId) {
-                    R.id.gravity_left -> FocusPreferences.GRAVITY_LEFT
-                    R.id.gravity_right -> FocusPreferences.GRAVITY_RIGHT
-                    else -> FocusPreferences.GRAVITY_CENTER
-                }
-                FocusPreferences.setLyricGravity(this, gravity)
-                notifyStyleChanged()
+        gravityGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
+            val gravity = when (checkedId) {
+                R.id.gravity_left -> FocusPreferences.GRAVITY_LEFT
+                R.id.gravity_right -> FocusPreferences.GRAVITY_RIGHT
+                else -> FocusPreferences.GRAVITY_CENTER
             }
+            FocusPreferences.setLyricGravity(requireContext(), gravity)
+            notifyStyleChanged()
+        }
 
         backgroundGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (isBindingUi || !isChecked || FocusPreferences.isMonetDynamicColorEnabled(this)) {
+            if (isBindingUi || !isChecked || FocusPreferences.isMonetDynamicColorEnabled(requireContext())) {
                 return@addOnButtonCheckedListener
             }
             val background = when (checkedId) {
@@ -601,64 +598,61 @@ class StyleSettingsActivity : AppCompatActivity() {
                 R.id.background_white -> FocusPreferences.BACKGROUND_WHITE
                 else -> FocusPreferences.BACKGROUND_DEFAULT
             }
-            FocusPreferences.setFocusBackground(this, background)
+            FocusPreferences.setFocusBackground(requireContext(), background)
             notifyStyleChanged()
         }
 
         monetDynamicSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (isBindingUi) return@setOnCheckedChangeListener
-            FocusPreferences.setMonetDynamicColorEnabled(this, isChecked)
+            FocusPreferences.setMonetDynamicColorEnabled(requireContext(), isChecked)
             if (isChecked) {
-                FocusPreferences.setTextColorExtractionEnabled(this, false)
+                FocusPreferences.setTextColorExtractionEnabled(requireContext(), false)
                 colorExtractionSwitch.isChecked = false
             } else {
-                FocusPreferences.clearExtractedTextColor(this)
+                FocusPreferences.clearExtractedTextColor(requireContext())
             }
             updateDynamicColorUi()
             notifyStyleChanged()
         }
 
         colorExtractionSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (isBindingUi || FocusPreferences.isMonetDynamicColorEnabled(this)) return@setOnCheckedChangeListener
-            FocusPreferences.setTextColorExtractionEnabled(this, isChecked)
+            if (isBindingUi || FocusPreferences.isMonetDynamicColorEnabled(requireContext())) return@setOnCheckedChangeListener
+            FocusPreferences.setTextColorExtractionEnabled(requireContext(), isChecked)
             if (!isChecked) {
-                FocusPreferences.clearExtractedTextColor(this)
+                FocusPreferences.clearExtractedTextColor(requireContext())
             }
             updateDynamicColorUi()
             notifyStyleChanged()
         }
 
-        findViewById<MaterialButtonToggleGroup>(R.id.custom_aod_lyric_lines_group)
-            .addOnButtonCheckedListener { _, checkedId, isChecked ->
-                if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
-                FocusPreferences.setCustomAodLyricMaxLines(
-                    this,
-                    if (checkedId == R.id.custom_aod_lyric_lines_1) 1 else 2
-                )
-                notifyStyleChanged()
-            }
+        customAodLyricLinesGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
+            FocusPreferences.setCustomAodLyricMaxLines(
+                requireContext(),
+                if (checkedId == R.id.custom_aod_lyric_lines_1) 1 else 2
+            )
+            notifyStyleChanged()
+        }
 
-        findViewById<MaterialButtonToggleGroup>(R.id.custom_aod_translation_lines_group)
-            .addOnButtonCheckedListener { _, checkedId, isChecked ->
-                if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
-                FocusPreferences.setCustomAodTranslationMaxLines(
-                    this,
-                    if (checkedId == R.id.custom_aod_translation_lines_1) 1 else 2
-                )
-                notifyStyleChanged()
-            }
+        customAodTranslationLinesGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
+            FocusPreferences.setCustomAodTranslationMaxLines(
+                requireContext(),
+                if (checkedId == R.id.custom_aod_translation_lines_1) 1 else 2
+            )
+            notifyStyleChanged()
+        }
 
-        findViewById<MaterialButtonToggleGroup>(R.id.custom_aod_gravity_group)
-            .addOnButtonCheckedListener { _, checkedId, isChecked ->
-                if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
-                val gravity = when (checkedId) {
-                    R.id.custom_aod_gravity_left -> FocusPreferences.GRAVITY_LEFT
-                    R.id.custom_aod_gravity_right -> FocusPreferences.GRAVITY_RIGHT
-                    else -> FocusPreferences.GRAVITY_CENTER
-                }
-                FocusPreferences.setCustomAodGravity(this, gravity)
-                notifyStyleChanged()
+        customAodGravityGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
+            val gravity = when (checkedId) {
+                R.id.custom_aod_gravity_left -> FocusPreferences.GRAVITY_LEFT
+                R.id.custom_aod_gravity_right -> FocusPreferences.GRAVITY_RIGHT
+                else -> FocusPreferences.GRAVITY_CENTER
             }
+            FocusPreferences.setCustomAodGravity(requireContext(), gravity)
+            notifyStyleChanged()
+        }
 
         val songInfoListener = MaterialButtonToggleGroup.OnButtonCheckedListener { group, checkedId, isChecked ->
             if (isBindingUi || !isChecked) return@OnButtonCheckedListener
@@ -669,7 +663,7 @@ class StyleSettingsActivity : AppCompatActivity() {
                 customAodSongInfoGroup.clearChecked()
             }
             isBindingUi = false
-            FocusPreferences.setCustomAodSongInfo(this, songInfoModeFromCheckedId(checkedId))
+            FocusPreferences.setCustomAodSongInfo(requireContext(), songInfoModeFromCheckedId(checkedId))
             notifyStyleChanged()
         }
         customAodSongInfoGroup.addOnButtonCheckedListener(songInfoListener)
@@ -682,7 +676,7 @@ class StyleSettingsActivity : AppCompatActivity() {
                 R.id.custom_aod_color_preset -> FocusPreferences.CUSTOM_AOD_COLOR_PRESET
                 else -> FocusPreferences.CUSTOM_AOD_COLOR_WHITE
             }
-            FocusPreferences.setCustomAodColorMode(this, mode)
+            FocusPreferences.setCustomAodColorMode(requireContext(), mode)
             updateCustomAodColorUi()
             notifyStyleChanged()
         }
@@ -705,7 +699,7 @@ class StyleSettingsActivity : AppCompatActivity() {
 
         fun refreshPreview() {
             val color = Color.rgb(sliderR.value.toInt(), sliderG.value.toInt(), sliderB.value.toInt())
-            preview.background = chipDrawable(color, true)
+            preview.setBackgroundDrawable(chipDrawable(color, true))
             labelR.text = "R ${sliderR.value.toInt()}"
             labelG.text = "G ${sliderG.value.toInt()}"
             labelB.text = "B ${sliderB.value.toInt()}"
@@ -721,13 +715,13 @@ class StyleSettingsActivity : AppCompatActivity() {
         sliderG.addOnChangeListener(listener)
         sliderB.addOnChangeListener(listener)
 
-        MaterialAlertDialogBuilder(this)
+        MaterialAlertDialogBuilder(requireContext())
             .setTitle("自定义颜色")
             .setView(dialogView)
             .setPositiveButton("确定") { _, _ ->
                 val color = Color.rgb(sliderR.value.toInt(), sliderG.value.toInt(), sliderB.value.toInt())
-                FocusPreferences.setCustomAodColorMode(this, FocusPreferences.CUSTOM_AOD_COLOR_PRESET)
-                FocusPreferences.setCustomAodPresetColor(this, color)
+                FocusPreferences.setCustomAodColorMode(requireContext(), FocusPreferences.CUSTOM_AOD_COLOR_PRESET)
+                FocusPreferences.setCustomAodPresetColor(requireContext(), color)
                 customAodColorModeGroup.check(R.id.custom_aod_color_preset)
                 selectPresetColor(color)
                 updateCustomAodColorUi()
@@ -738,6 +732,6 @@ class StyleSettingsActivity : AppCompatActivity() {
     }
 
     private fun notifyStyleChanged() {
-        FocusPreferences.notifyStyleSettingsChanged(this)
+        FocusPreferences.notifyStyleSettingsChanged(requireContext())
     }
 }

@@ -7,6 +7,7 @@ object FocusPreferences {
 
     const val MODULE_PACKAGE = "com.leowalk.LyricFocus"
     const val PREFS_NAME = "lyric_focus_prefs"
+    const val PREF_WELCOME_COMPLETED = "welcome_completed"
     const val PREF_FOCUS_ENABLED = "focus_lyric_enabled"
     const val PREF_SHOW_IN_SHADE = "show_in_notification_shade"
     const val PREF_PIN_ABOVE_MEDIA = "pin_above_media_controls"
@@ -179,6 +180,18 @@ object FocusPreferences {
             return false
         }
         return getWhitelistedPackages(context).contains(packageName)
+    }
+
+    fun isWelcomeCompleted(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_WELCOME_COMPLETED, false)
+    }
+
+    fun setWelcomeCompleted(context: Context, completed: Boolean = true) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_WELCOME_COMPLETED, completed)
+            .commit()
     }
 
     fun isFocusEnabled(context: Context): Boolean {

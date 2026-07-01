@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.textfield.TextInputLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/package_input_layout"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:hint="包名"
+    app:helperText="例如 com.netease.cloudmusic"
+    app:helperTextEnabled="true">
+
+    <com.google.android.material.textfield.TextInputEditText
+        android:id="@+id/package_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:inputType="textNoSuggestions"
+        android:maxLines="1"
+        android:singleLine="true" />
+
+</com.google.android.material.textfield.TextInputLayout>

@@ -53,17 +53,11 @@
         </activity>
 
         <activity
+            android:name=".WelcomeActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".AppWhitelistActivity"
-            android:exported="false"
-            android:parentActivityName=".MainActivity" />
-
-        <activity
-            android:name=".AboutActivity"
-            android:exported="false"
-            android:parentActivityName=".MainActivity" />
-
-        <activity
-            android:name=".StyleSettingsActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />
 
