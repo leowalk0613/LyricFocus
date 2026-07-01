@@ -17,6 +17,7 @@ local.properties
 *.aar
 *.jks
 *.keystore
+keystore.properties
 *.pro
 *.log
 

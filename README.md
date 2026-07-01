@@ -182,19 +182,39 @@ LyricFocus/
 
 **环境要求**：JDK 17、Android SDK（`compileSdk 34`）、Gradle（随仓库 Wrapper）
 
+**Release 签名（安装 Release APK 必需）**：
+
+1. 复制 `keystore.properties.example` 为 `keystore.properties`（已在 `.gitignore`，不会提交）
+2. 若尚无密钥库，在项目根目录生成：
+
+```bash
+keytool -genkeypair -v -keystore lyricfocus-release.jks -alias lyricfocus \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -storepass <你的密码> -keypass <你的密码> \
+  -dname "CN=LyricFocus, OU=Dev, O=leowalk, L=Unknown, ST=Unknown, C=CN"
+```
+
+3. 在 `keystore.properties` 中填写 `storeFile`、`storePassword`、`keyAlias`、`keyPassword`
+
+> 请妥善备份 `lyricfocus-release.jks` 与 `keystore.properties`，后续版本更新须使用同一签名，否则无法覆盖安装。
+
 ```bash
 # 克隆仓库
 git clone https://github.com/leowalk0613/LyricFocus.git
 cd LyricFocus
 
-# 编译 Debug APK
+# 编译 Debug APK（使用 debug 签名，可直接 adb 安装）
 ./gradlew :focus:assembleDebug
+
+# 编译 Release APK（需 keystore.properties）
+./gradlew :focus:assembleRelease
 ```
 
 产物路径：
 
 ```
 focus/build/outputs/apk/debug/focus-debug.apk
+focus/build/outputs/apk/release/focus-release.apk
 ```
 
 **Android Studio**：打开项目根目录 → Sync Gradle → 选择运行配置 **`focus`** → Run。
@@ -203,6 +223,7 @@ focus/build/outputs/apk/debug/focus-debug.apk
 
 ```bash
 adb install -r focus/build/outputs/apk/debug/focus-debug.apk
+adb install -r focus/build/outputs/apk/release/focus-release.apk
 ```
 
 ---
