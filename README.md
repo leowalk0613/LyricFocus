@@ -406,6 +406,11 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 
 ## 版本更新
 
+### v1.5.5
+
+- **Monet 动态取色与通知文字取色改为通用功能**：移除这两个功能与锁屏样式 AOD 的绑定关系，现在它们作为通用设置始终可用，不受万象息屏 AOD 开关影响；这两个功能仅作用于焦点通知（通知中心和锁屏界面），不影响万象息屏 AOD 歌词效果，也不与万象息屏 AOD 的专辑取色方式绑定
+- **版本号**：`1.5.5`（versionCode 11）
+
 ### v1.5.4
 
 - **编译错误修复**：修复 `StyleSettingsFragment.kt` 中因 `view` 非类属性导致的 `view?.findViewById` 空安全错误，新增 `lyricLinesGroup`、`translationLinesGroup`、`gravityGroup` 等6个类属性并在 `bindViews()` 中统一绑定

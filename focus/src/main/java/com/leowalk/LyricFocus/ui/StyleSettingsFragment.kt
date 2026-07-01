@@ -160,9 +160,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             backgroundGroup,
             backgroundDefault,
             backgroundBlack,
-            backgroundWhite,
-            monetDynamicSwitch,
-            colorExtractionSwitch
+            backgroundWhite
         )
         customAodControls += listOf(
             sliderCustomAodTextSize,
@@ -355,19 +353,17 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         val monetEnabled = FocusPreferences.isMonetDynamicColorEnabled(requireContext())
         val textExtractionEnabled = FocusPreferences.isTextColorExtractionEnabled(requireContext())
         val manualTextEnabled = !monetEnabled && !textExtractionEnabled
-        val lockEnabled = !FocusPreferences.isCustomAodLayout(requireContext())
 
         setSectionEnabled(
             section = textColorSection,
             title = textColorTitle,
             hint = textColorHint,
             hintText = when {
-                !lockEnabled -> null
                 monetEnabled -> "Monet 动态取色已接管文字颜色"
                 textExtractionEnabled -> "通知文字取色已接管文字颜色"
                 else -> null
             },
-            enabled = lockEnabled && manualTextEnabled,
+            enabled = manualTextEnabled,
             controls = listOf(textColorGroup, textColorWhite, textColorBlack)
         )
 
@@ -376,11 +372,10 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             title = backgroundTitle,
             hint = backgroundHint,
             hintText = when {
-                !lockEnabled -> null
                 monetEnabled -> "Monet 动态取色已接管焦点通知背景"
                 else -> null
             },
-            enabled = lockEnabled && !monetEnabled,
+            enabled = !monetEnabled,
             controls = listOf(backgroundGroup, backgroundDefault, backgroundBlack, backgroundWhite)
         )
 
@@ -389,11 +384,10 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             title = colorExtractionTitle,
             hint = colorExtractionHint,
             hintText = when {
-                !lockEnabled -> null
                 monetEnabled -> "Monet 动态取色已包含文字取色"
                 else -> null
             },
-            enabled = lockEnabled && !monetEnabled,
+            enabled = !monetEnabled,
             controls = listOf(colorExtractionSwitch)
         )
     }
