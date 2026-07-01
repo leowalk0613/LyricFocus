@@ -207,6 +207,7 @@ class LyricNotificationManager(private val context: Context) {
         offset: Long = 0L,
         lyricText: String = "",
         secondLineText: String = "",
+        lineTranslation: String? = null,
         musicPackage: String = "",
         forceResync: Boolean = false
     ) {
@@ -222,6 +223,9 @@ class LyricNotificationManager(private val context: Context) {
                 putExtra("sync_advance", FocusPreferences.getSyncAdvanceMs(context))
                 putExtra("lyric_text", lyricText)
                 putExtra("second_line", secondLineText)
+                if (lineTranslation != null) {
+                    putExtra("line_translation", lineTranslation)
+                }
                 putExtra("music_package", musicPackage)
                 if (forceResync) {
                     putExtra("force_resync", true)

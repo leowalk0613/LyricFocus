@@ -27,6 +27,8 @@ import com.leowalk.LyricFocus.lyric.LyricInfo
 import com.leowalk.LyricFocus.lyric.LyricManager
 import com.leowalk.LyricFocus.util.AlbumColorExtractor
 import com.leowalk.LyricFocus.util.AlbumArtLoader
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -45,6 +47,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         const val ACTION_RESYNC = FocusPreferences.ACTION_REQUEST_RESYNC
         const val EXTRA_LYRIC_TEXT = "lyric_text"
         const val EXTRA_SECOND_LINE = "second_line"
+        const val EXTRA_LINE_TRANSLATION = "line_translation"
         const val EXTRA_IS_PLAYING = "is_playing"
         const val EXTRA_TITLE = "title"
         const val EXTRA_ARTIST = "artist"
@@ -431,12 +434,15 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         val currentLine = currentLyricInfo.getCurrentLine(currentPosition, syncAdvanceMs)
         val currentLyricText: String
         val secondLineText: String
+        val lineTranslation: String?
         if (currentLine == null && currentTitle.isNotBlank()) {
             // 还没到第一句歌词，显示歌名+歌手
             currentLyricText = currentTitle
             secondLineText = currentArtist
+            lineTranslation = null
         } else {
             currentLyricText = currentLine?.text?.ifBlank { "\u266A" } ?: "\u266A"
+            lineTranslation = currentLyricInfo.getCurrentTranslation(currentPosition, syncAdvanceMs)
             secondLineText = currentLyricInfo.getSecondLineText(
                 currentPosition,
                 syncAdvanceMs,
@@ -460,7 +466,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             )
         }
 
-        sendLyricBroadcastIfChanged(currentLyricText, secondLineText)
+        sendLyricBroadcastIfChanged(currentLyricText, secondLineText, lineTranslation)
     }
 
     private fun resyncFocusState() {
@@ -514,12 +520,15 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         val currentLine = currentLyricInfo.getCurrentLine(currentPosition, syncAdvanceMs)
         val lyricText: String
         val secondLineText: String
+        val lineTranslation: String?
         if (currentLine == null && currentTitle.isNotBlank()) {
             // 还没到第一句歌词，显示歌名+歌手
             lyricText = currentTitle
             secondLineText = currentArtist
+            lineTranslation = null
         } else {
             lyricText = currentLine?.text ?: "\u266A"
+            lineTranslation = currentLyricInfo.getCurrentTranslation(currentPosition, syncAdvanceMs)
             secondLineText = currentLyricInfo.getSecondLineText(
                 currentPosition,
                 syncAdvanceMs,
@@ -528,7 +537,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         }
         lastBroadcastLyric = lyricText
         lastBroadcastSecond = secondLineText
-        sendLyricBroadcastTo(PACKAGE_SYSTEMUI, lyricText, secondLineText, force = true)
+        sendLyricBroadcastTo(PACKAGE_SYSTEMUI, lyricText, secondLineText, lineTranslation, force = true)
     }
 
     private fun resetBroadcastCache() {
@@ -536,18 +545,26 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         lastBroadcastSecond = ""
     }
 
-    private fun sendLyricBroadcastIfChanged(lyricText: String, secondLine: String) {
+    private fun sendLyricBroadcastIfChanged(
+        lyricText: String,
+        secondLine: String,
+        lineTranslation: String? = null
+    ) {
         if (lyricText == lastBroadcastLyric && secondLine == lastBroadcastSecond) {
             return
         }
         lastBroadcastLyric = lyricText
         lastBroadcastSecond = secondLine
-        sendLyricBroadcast(lyricText, secondLine)
+        sendLyricBroadcast(lyricText, secondLine, lineTranslation)
     }
 
-    private fun sendLyricBroadcast(lyricText: String, secondLine: String) {
+    private fun sendLyricBroadcast(
+        lyricText: String,
+        secondLine: String,
+        lineTranslation: String? = null
+    ) {
         if (FocusPreferences.isFocusEnabled(this)) {
-            sendLyricBroadcastTo(PACKAGE_SYSTEMUI, lyricText, secondLine)
+            sendLyricBroadcastTo(PACKAGE_SYSTEMUI, lyricText, secondLine, lineTranslation)
         }
     }
 
@@ -555,6 +572,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         packageName: String,
         lyricText: String,
         secondLine: String,
+        lineTranslation: String? = null,
         force: Boolean = false
     ) {
         try {
@@ -562,6 +580,9 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                 setPackage(packageName)
                 putExtra(EXTRA_LYRIC_TEXT, lyricText)
                 putExtra(EXTRA_SECOND_LINE, secondLine)
+                if (lineTranslation != null) {
+                    putExtra(EXTRA_LINE_TRANSLATION, lineTranslation)
+                }
                 putExtra(EXTRA_IS_PLAYING, isPlaying)
                 putExtra(EXTRA_TITLE, currentTitle)
                 putExtra(EXTRA_ARTIST, currentArtist)
@@ -593,12 +614,15 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         val currentLine = lyricInfo.getCurrentLine(currentPosition, syncAdvanceMs)
         val currentLyricText: String
         val secondLineText: String
+        val lineTranslation: String?
         if (currentLine == null && title.isNotBlank()) {
             // 还没到第一句歌词，显示歌名+歌手
             currentLyricText = title
             secondLineText = artist
+            lineTranslation = null
         } else {
             currentLyricText = currentLine?.text?.takeIf { it.isNotBlank() } ?: "\u266A"
+            lineTranslation = lyricInfo.getCurrentTranslation(currentPosition, syncAdvanceMs)
             secondLineText = lyricInfo.getSecondLineText(
                 currentPosition,
                 syncAdvanceMs,
@@ -614,6 +638,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             offset = lyricInfo.offset,
             lyricText = currentLyricText,
             secondLineText = secondLineText,
+            lineTranslation = lineTranslation,
             musicPackage = currentMusicPackage(),
             forceResync = force
         )
@@ -622,34 +647,45 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     private fun extractAndSaveAlbumColor(bitmap: Bitmap?, forceNotify: Boolean = false) {
         val monetEnabled = FocusPreferences.isMonetDynamicColorEnabled(this)
         val textExtractionEnabled = FocusPreferences.isTextColorExtractionEnabled(this)
-        if (!monetEnabled && !textExtractionEnabled) {
+        val customAodAlbum = FocusPreferences.isCustomAodLayout(this) &&
+            FocusPreferences.getCustomAodColorMode(this) == FocusPreferences.CUSTOM_AOD_COLOR_ALBUM
+        if (!monetEnabled && !textExtractionEnabled && !customAodAlbum) {
             FocusPreferences.clearExtractedTextColor(this)
             return
         }
         val previous = FocusPreferences.getExtractedTextColor(this)
         val previousBg = FocusPreferences.getExtractedBgColor(this)
+        val previousAccent = FocusPreferences.getExtractedAccentColor(this)
         val art = bitmap ?: AlbumArtLoader.load(this, MusicMonitorService.currentMetadata)
         if (monetEnabled) {
             val scheme = AlbumColorExtractor.extractMonetScheme(art)
             if (scheme == null) {
-                if (previous != null || previousBg != null || forceNotify) {
+                if (previous != null || previousBg != null || previousAccent != null || forceNotify) {
                     FocusPreferences.clearExtractedTextColor(this)
                     publishAlbumColorUpdate()
                 }
                 return
             }
-            if (scheme.primaryText == previous && scheme.background == previousBg && !forceNotify) return
+            if (scheme.primaryText == previous && scheme.background == previousBg &&
+                scheme.accent == previousAccent && !forceNotify
+            ) {
+                return
+            }
             FocusPreferences.setExtractedMonetScheme(this, scheme)
         } else {
             val colors = AlbumColorExtractor.extractLyricColors(art)
             if (colors == null) {
-                if (previous != null || previousBg != null || forceNotify) {
+                if (previous != null || previousBg != null || previousAccent != null || forceNotify) {
                     FocusPreferences.clearExtractedTextColor(this)
                     publishAlbumColorUpdate()
                 }
                 return
             }
-            if (colors.accent == previous && colors.backgroundEstimate == previousBg && !forceNotify) return
+            if (colors.accent == previous && colors.backgroundEstimate == previousBg &&
+                colors.accent == previousAccent && !forceNotify
+            ) {
+                return
+            }
             FocusPreferences.setExtractedColors(this, colors.accent, colors.backgroundEstimate)
         }
         publishAlbumColorUpdate()
@@ -871,7 +907,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             lyricNotificationManager.showLoadingNotification(title, artist)
         }
         val loadingText = "\u52a0\u8f7d\u6b4c\u8bcd\u4e2d..."
-        val loadingJson = """[{"time":0,"text":"$loadingText"}]"""
+        val loadingJson = buildSingleLineLyricJson(loadingText)
         pushPlaceholderFocusToSystemUI(
             lyricText = loadingText,
             secondLine = subtitle,
@@ -887,7 +923,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         }
         val noLyricText = title.ifBlank { "\u6682\u65e0\u6b4c\u8bcd" }
         val noLyricSecond = artist.ifBlank { lyricNotificationManager.buildSongSubtitle(title, artist) }
-        val noLyricJson = """[{"time":0,"text":"$noLyricText"}]"""
+        val noLyricJson = buildSingleLineLyricJson(noLyricText)
         pushPlaceholderFocusToSystemUI(
             lyricText = noLyricText,
             secondLine = noLyricSecond,
@@ -920,12 +956,19 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             artist = artist,
             lyricText = lyricText,
             secondLineText = secondLine,
+            lineTranslation = null,
             musicPackage = currentMusicPackage(),
             forceResync = true
         )
         lastBroadcastLyric = lyricText
         lastBroadcastSecond = secondLine
-        sendLyricBroadcastTo(PACKAGE_SYSTEMUI, lyricText, secondLine, force = true)
+        sendLyricBroadcastTo(PACKAGE_SYSTEMUI, lyricText, secondLine, lineTranslation = null, force = true)
+    }
+
+    private fun buildSingleLineLyricJson(text: String): String {
+        return JSONArray()
+            .put(JSONObject().put("time", 0).put("text", text))
+            .toString()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

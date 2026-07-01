@@ -92,6 +92,9 @@ object HyperFocusLyricStyle {
 
         val secondLineText: String,
 
+        /** 当前行真实翻译；无翻译时为 null，与 secondLineText（可能为下一句预览）区分 */
+        val lineTranslation: String? = null,
+
         val musicPackage: String = ""
 
     )
@@ -148,13 +151,19 @@ object HyperFocusLyricStyle {
 
         val lyric = content.lyricText.ifBlank { "\u266A" }
 
-        val translation = content.secondLineText.takeIf {
+        val secondLine = content.secondLineText.takeIf {
 
             it.isNotBlank() && it != "\u00A0"
 
         }
 
-        val secondKey = translation.orEmpty()
+        val lineTranslation = content.lineTranslation?.takeIf {
+
+            it.isNotBlank() && it != "\u00A0"
+
+        }
+
+        val secondKey = secondLine.orEmpty()
 
         if (!forceRefresh &&
 
@@ -182,14 +191,21 @@ object HyperFocusLyricStyle {
 
 
 
-        val lockViews = buildLyricRemoteViews(moduleContext, R.layout.focus_lyric_lock, lyric, translation)
+        val lockViews = buildLyricRemoteViews(
+            moduleContext,
+            R.layout.focus_lyric_lock,
+            lyric,
+            secondLine,
+            lineTranslation
+        )
 
         val aodViews = buildAodRemoteViews(
             moduleContext,
             content.songTitle,
             content.artist,
             lyric,
-            translation,
+            secondLine,
+            lineTranslation,
             lightIcon
         )
 
@@ -223,7 +239,13 @@ object HyperFocusLyricStyle {
 
         val islandViews = if (showOnIsland) {
 
-            buildLyricRemoteViews(moduleContext, R.layout.focus_lyric_island, lyric, translation)
+            buildLyricRemoteViews(
+                moduleContext,
+                R.layout.focus_lyric_island,
+                lyric,
+                secondLine,
+                lineTranslation
+            )
 
         } else {
 
@@ -283,9 +305,9 @@ object HyperFocusLyricStyle {
 
             .setContentTitle(lyric)
 
-            .setContentText(translation ?: content.artist)
+            .setContentText(secondLine ?: content.artist)
 
-            .setSubText(translation ?: content.artist)
+            .setSubText(secondLine ?: content.artist)
 
             .setTicker(lyric)
 
@@ -472,11 +494,20 @@ object HyperFocusLyricStyle {
         moduleContext: Context,
         layoutId: Int,
         lyric: String,
-        translation: String?
+        secondLine: String?,
+        lineTranslation: String?
     ): RemoteViews {
         val views = RemoteViews(moduleContext.packageName, layoutId)
         val style = resolveLyricStyle(moduleContext, layoutId)
-        applyLyricStyle(views, lyric, translation, style, hideSongTitle = layoutId == R.layout.focus_lyric_lock, layoutId = layoutId)
+        applyLyricStyle(
+            views,
+            lyric,
+            secondLine,
+            lineTranslation,
+            style,
+            hideSongTitle = layoutId == R.layout.focus_lyric_lock,
+            layoutId = layoutId
+        )
         return views
     }
 
@@ -581,23 +612,22 @@ object HyperFocusLyricStyle {
         val textSize = FocusStyleSnapshot.customAodTextSizeSp
         val lyricMaxLines = FocusStyleSnapshot.customAodLyricMaxLines
         val translationMaxLines = FocusStyleSnapshot.customAodTranslationMaxLines
-        val extractedColor = FocusStyleSnapshot.extractedTextColor
-        val extractedBgColor = FocusStyleSnapshot.extractedBgColor
 
         val colorPrimary: Int
         val colorSecondary: Int
         when (FocusStyleSnapshot.customAodColorMode) {
             FocusPreferences.CUSTOM_AOD_COLOR_ALBUM -> {
-                if (extractedColor != null) {
-                    colorPrimary = extractedColor
-                    colorSecondary = AlbumColorExtractor.ensureContrast(
-                        AlbumColorExtractor.blendSecondary(
-                            extractedColor,
-                            extractedBgColor ?: Color.GRAY
-                        ),
-                        extractedBgColor ?: Color.GRAY,
-                        3.0
+                val accent = FocusStyleSnapshot.extractedAccentColor
+                    ?: FocusStyleSnapshot.extractedTextColor
+                if (accent != null) {
+                    // 万象息屏默认全黑背景：用专辑主色按黑底重算对比度，不沿用锁屏 Monet/文字取色结果
+                    val (primary, secondary) = AlbumColorExtractor.resolveTextColors(
+                        accent = accent,
+                        backgroundEstimate = FocusStyleSnapshot.extractedBgColor ?: Color.GRAY,
+                        backgroundMode = FocusPreferences.BACKGROUND_BLACK
                     )
+                    colorPrimary = primary
+                    colorSecondary = secondary
                 } else {
                     colorPrimary = COLOR_LYRIC_PRIMARY
                     colorSecondary = COLOR_LYRIC_SECONDARY
@@ -645,7 +675,8 @@ object HyperFocusLyricStyle {
     private fun applyLyricStyle(
         views: RemoteViews,
         lyric: String,
-        translation: String?,
+        secondLine: String?,
+        lineTranslation: String?,
         style: LyricStyle,
         hideSongTitle: Boolean,
         trackLabel: String? = null,
@@ -656,13 +687,19 @@ object HyperFocusLyricStyle {
         views.setInt(R.id.focus_lyric_content, "setGravity", style.gravityValue)
 
         var primaryText = lyric
-        var secondaryText = translation?.takeIf { it.isNotBlank() }
-        if (FocusStyleSnapshot.swapLyricTranslation && secondaryText != null) {
-            primaryText = secondaryText
+        var secondaryText = secondLine?.takeIf { it.isNotBlank() }
+        val actualTranslation = lineTranslation?.takeIf { it.isNotBlank() }
+        if (FocusStyleSnapshot.swapLyricTranslation && actualTranslation != null) {
+            primaryText = actualTranslation
             secondaryText = lyric
         }
         if (FocusStyleSnapshot.singleLineOnly) {
             secondaryText = null
+        }
+
+        if (layoutId == R.layout.focus_lyric_aod_custom && primaryText.isNotEmpty()) {
+            val metrics = android.content.res.Resources.getSystem().displayMetrics
+            primaryText = ellipsizeForAodLyric(primaryText, style, metrics)
         }
 
         views.setTextViewText(R.id.focuslyric, primaryText)
@@ -840,6 +877,18 @@ object HyperFocusLyricStyle {
         return ellipsized?.toString()?.trimEnd().orEmpty().ifEmpty { text }
     }
 
+    private fun ellipsizeForAodLyric(
+        text: String,
+        style: LyricStyle,
+        metrics: android.util.DisplayMetrics
+    ): String {
+        if (text.isEmpty()) return text
+        val slotWidth = estimateCustomAodContentWidthPx(metrics)
+        val maxLines = style.lyricMaxLines.coerceAtLeast(1)
+        val maxWidthPx = (slotWidth * maxLines).coerceAtLeast(slotWidth)
+        return ellipsizeForAodSong(text, maxWidthPx, style.primarySizeSp, metrics)
+    }
+
     private fun applyCustomAodSongMaxWidths(
         views: RemoteViews,
         titleMax: Int,
@@ -925,7 +974,9 @@ object HyperFocusLyricStyle {
 
         lyric: String,
 
-        translation: String?,
+        secondLine: String?,
+
+        lineTranslation: String?,
 
         icon: Icon
 
@@ -949,7 +1000,8 @@ object HyperFocusLyricStyle {
         applyLyricStyle(
             views,
             lyric,
-            translation,
+            secondLine,
+            lineTranslation,
             style,
             hideSongTitle = !useCustomLayout,
             songTitle = if (useCustomLayout) songTitle else null,

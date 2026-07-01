@@ -34,6 +34,8 @@ object FocusStyleSnapshot {
     const val EXTRA_STYLE_EXTRACTED_COLOR_SET = "style_extracted_color_set"
     const val EXTRA_STYLE_EXTRACTED_BG_COLOR = "style_extracted_bg_color"
     const val EXTRA_STYLE_EXTRACTED_BG_COLOR_SET = "style_extracted_bg_color_set"
+    const val EXTRA_STYLE_EXTRACTED_ACCENT = "style_extracted_accent"
+    const val EXTRA_STYLE_EXTRACTED_ACCENT_SET = "style_extracted_accent_set"
 
     @Volatile
     var textSizeSp: Float = FocusPreferences.DEFAULT_LYRIC_TEXT_SIZE_SP
@@ -121,6 +123,10 @@ object FocusStyleSnapshot {
 
     @Volatile
     var extractedBgColor: Int? = null
+        private set
+
+    @Volatile
+    var extractedAccentColor: Int? = null
         private set
 
     fun reloadFromDisk() {
@@ -222,6 +228,11 @@ object FocusStyleSnapshot {
         } else {
             null
         }
+        extractedAccentColor = if (prefs.contains(FocusPreferences.PREF_EXTRACTED_ACCENT_COLOR)) {
+            prefs.getInt(FocusPreferences.PREF_EXTRACTED_ACCENT_COLOR, Color.WHITE)
+        } else {
+            null
+        }
     }
 
     fun applyFromIntent(intent: Intent) {
@@ -233,7 +244,8 @@ object FocusStyleSnapshot {
         if (!intent.hasExtra(EXTRA_STYLE_MONET_DYNAMIC_COLOR) &&
             !intent.hasExtra(EXTRA_STYLE_COLOR_EXTRACTION) &&
             !intent.hasExtra(EXTRA_STYLE_EXTRACTED_COLOR_SET) &&
-            !intent.hasExtra(EXTRA_STYLE_EXTRACTED_BG_COLOR_SET)
+            !intent.hasExtra(EXTRA_STYLE_EXTRACTED_BG_COLOR_SET) &&
+            !intent.hasExtra(EXTRA_STYLE_EXTRACTED_ACCENT_SET)
         ) {
             return
         }
@@ -347,6 +359,15 @@ object FocusStyleSnapshot {
             }
         } else if (!colorExtractionEnabled || extractedTextColor == null) {
             extractedBgColor = null
+        }
+        if (intent.hasExtra(EXTRA_STYLE_EXTRACTED_ACCENT_SET)) {
+            extractedAccentColor = if (intent.getBooleanExtra(EXTRA_STYLE_EXTRACTED_ACCENT_SET, false)) {
+                intent.getIntExtra(EXTRA_STYLE_EXTRACTED_ACCENT, Color.WHITE)
+            } else {
+                null
+            }
+        } else if (extractedTextColor == null) {
+            extractedAccentColor = null
         }
     }
 

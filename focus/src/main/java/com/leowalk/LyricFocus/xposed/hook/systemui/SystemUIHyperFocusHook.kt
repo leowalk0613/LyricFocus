@@ -48,6 +48,7 @@ class SystemUIHyperFocusHook : BaseHook() {
 
         private const val EXTRA_LYRIC_TEXT = "lyric_text"
         private const val EXTRA_SECOND_LINE = "second_line"
+        private const val EXTRA_LINE_TRANSLATION = "line_translation"
         private const val EXTRA_IS_PLAYING = "is_playing"
         private const val EXTRA_PLAYING = "playing"
         private const val EXTRA_TITLE = "title"
@@ -65,6 +66,7 @@ class SystemUIHyperFocusHook : BaseHook() {
 
         private var currentLyricText = ""
         private var currentSecondLine = ""
+        private var currentLineTranslation: String? = null
         private var currentTitle = ""
         private var currentArtist = ""
         private var isPlaying = false
@@ -551,6 +553,7 @@ class SystemUIHyperFocusHook : BaseHook() {
     private fun resetSessionState() {
         currentLyricText = ""
         currentSecondLine = ""
+        currentLineTranslation = null
         currentTitle = ""
         currentArtist = ""
         isPlaying = false
@@ -792,6 +795,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         val prevEnabled = FocusStyleSnapshot.colorExtractionEnabled
         val prevColor = FocusStyleSnapshot.extractedTextColor
         val prevBgColor = FocusStyleSnapshot.extractedBgColor
+        val prevAccent = FocusStyleSnapshot.extractedAccentColor
         val prevColorSet = prevColor != null
         FocusStyleSnapshot.applyFromLyricIntent(intent)
         val newColorSet = FocusStyleSnapshot.extractedTextColor != null
@@ -800,6 +804,7 @@ class SystemUIHyperFocusHook : BaseHook() {
             prevEnabled != FocusStyleSnapshot.colorExtractionEnabled ||
             prevColor != FocusStyleSnapshot.extractedTextColor ||
             prevBgColor != FocusStyleSnapshot.extractedBgColor ||
+            prevAccent != FocusStyleSnapshot.extractedAccentColor ||
             prevColorSet != newColorSet
     }
 
@@ -882,6 +887,7 @@ class SystemUIHyperFocusHook : BaseHook() {
             val newArtist = intent.getStringExtra(EXTRA_ARTIST) ?: ""
             val lyricText = intent.getStringExtra(EXTRA_LYRIC_TEXT) ?: ""
             val secondLine = intent.getStringExtra(EXTRA_SECOND_LINE) ?: ""
+            val lineTranslation = intent.getStringExtra(EXTRA_LINE_TRANSLATION)?.takeIf { it.isNotBlank() }
             val prevLyric = currentLyricText
             val prevTitle = currentTitle
             val prevArtist = currentArtist
@@ -924,6 +930,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                 if (lyricText.isNotBlank()) {
                     currentLyricText = lyricText
                     currentSecondLine = secondLine
+                    currentLineTranslation = lineTranslation
                     val needsPost = forceResync || songChanged || leavingPlaceholder ||
                         lastNotifiedLyric.isBlank() || styleChanged
                     if (needsPost) {
@@ -958,6 +965,7 @@ class SystemUIHyperFocusHook : BaseHook() {
             val styleChanged = applyIncomingStyleExtras(intent)
             val lyric = intent.getStringExtra(EXTRA_LYRIC_TEXT) ?: ""
             val secondLine = intent.getStringExtra(EXTRA_SECOND_LINE) ?: ""
+            val lineTranslation = intent.getStringExtra(EXTRA_LINE_TRANSLATION)?.takeIf { it.isNotBlank() }
             isPlaying = intent.getBooleanExtra(EXTRA_IS_PLAYING, false)
             val title = intent.getStringExtra(EXTRA_TITLE) ?: ""
             val artist = intent.getStringExtra(EXTRA_ARTIST) ?: ""
@@ -990,6 +998,7 @@ class SystemUIHyperFocusHook : BaseHook() {
             if (lyric.isNotBlank()) {
                 currentLyricText = lyric
                 currentSecondLine = secondLine
+                currentLineTranslation = lineTranslation
             }
 
             val contentChanged = lyric.isNotBlank() && isPlaying &&
@@ -1238,6 +1247,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                     artist = currentArtist,
                     lyricText = currentLyricText,
                     secondLineText = currentSecondLine.ifBlank { currentArtist },
+                    lineTranslation = currentLineTranslation,
                     musicPackage = musicPackage
                 ),
                 showInShade = showInShade,

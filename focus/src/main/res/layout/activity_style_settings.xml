@@ -92,7 +92,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="2dp"
-                                android:text="第一行显示翻译，第二行显示歌词"
+                                android:text="仅当当前行有翻译时生效：第一行显示翻译，第二行显示歌词"
                                 android:textAppearance="?attr/textAppearanceBodySmall"
                                 android:textColor="?attr/colorOnSurfaceVariant" />
 

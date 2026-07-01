@@ -42,6 +42,7 @@ object FocusPreferences {
     const val PREF_MONET_DYNAMIC_COLOR = "monet_dynamic_color"
     const val PREF_EXTRACTED_TEXT_COLOR = "extracted_text_color"
     const val PREF_EXTRACTED_BG_COLOR = "extracted_bg_color"
+    const val PREF_EXTRACTED_ACCENT_COLOR = "extracted_accent_color"
 
     const val TEXT_COLOR_BLACK = "black"
     const val TEXT_COLOR_WHITE = "white"
@@ -700,11 +701,18 @@ object FocusPreferences {
         return prefs.getInt(PREF_EXTRACTED_BG_COLOR, Color.GRAY)
     }
 
+    fun getExtractedAccentColor(context: Context): Int? {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (!prefs.contains(PREF_EXTRACTED_ACCENT_COLOR)) return null
+        return prefs.getInt(PREF_EXTRACTED_ACCENT_COLOR, Color.WHITE)
+    }
+
     fun setExtractedColors(context: Context, accent: Int, backgroundEstimate: Int) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putInt(PREF_EXTRACTED_TEXT_COLOR, accent)
             .putInt(PREF_EXTRACTED_BG_COLOR, backgroundEstimate)
+            .putInt(PREF_EXTRACTED_ACCENT_COLOR, accent)
             .commit()
     }
 
@@ -713,6 +721,7 @@ object FocusPreferences {
             .edit()
             .putInt(PREF_EXTRACTED_TEXT_COLOR, scheme.primaryText)
             .putInt(PREF_EXTRACTED_BG_COLOR, scheme.background)
+            .putInt(PREF_EXTRACTED_ACCENT_COLOR, scheme.accent)
             .commit()
     }
 
@@ -728,6 +737,7 @@ object FocusPreferences {
             .edit()
             .remove(PREF_EXTRACTED_TEXT_COLOR)
             .remove(PREF_EXTRACTED_BG_COLOR)
+            .remove(PREF_EXTRACTED_ACCENT_COLOR)
             .commit()
     }
 
@@ -740,16 +750,25 @@ object FocusPreferences {
         val textExtraction = isTextColorExtractionEnabled(context)
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_MONET_DYNAMIC_COLOR, monet)
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_COLOR_EXTRACTION, textExtraction)
-        if (!monet && !textExtraction) return
+        appendExtractedColorExtras(intent, context)
+    }
+
+    private fun appendExtractedColorExtras(intent: android.content.Intent, context: Context) {
         val color = getExtractedTextColor(context)
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_COLOR_SET, color != null)
-        if (color != null) {
-            intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_COLOR, color)
-            getExtractedBgColor(context)?.let {
-                intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_BG_COLOR_SET, true)
-                intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_BG_COLOR, it)
-            }
+        if (color == null) {
+            intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_ACCENT_SET, false)
+            return
         }
+        intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_COLOR, color)
+        getExtractedBgColor(context)?.let {
+            intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_BG_COLOR_SET, true)
+            intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_BG_COLOR, it)
+        }
+        getExtractedAccentColor(context)?.let { accent ->
+            intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_ACCENT_SET, true)
+            intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_ACCENT, accent)
+        } ?: intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_ACCENT_SET, false)
     }
 
     fun notifySettingsChanged(context: Context) {
@@ -826,15 +845,7 @@ object FocusPreferences {
                     FocusStyleSnapshot.EXTRA_STYLE_COLOR_EXTRACTION,
                     isTextColorExtractionEnabled(context)
                 )
-                val extracted = getExtractedTextColor(context)
-                putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_COLOR_SET, extracted != null)
-                if (extracted != null) {
-                    putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_COLOR, extracted)
-                    getExtractedBgColor(context)?.let { bg ->
-                        putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_BG_COLOR_SET, true)
-                        putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_BG_COLOR, bg)
-                    }
-                }
+                appendExtractedColorExtras(this, context)
             }
             context.sendBroadcast(android.content.Intent(intent).setPackage("com.android.systemui"))
             context.sendBroadcast(android.content.Intent(intent).setPackage(context.packageName))

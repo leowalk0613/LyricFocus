@@ -39,7 +39,29 @@ class NetEaseLyricProvider : LyricProvider {
     )
 
     private suspend fun searchSongs(title: String, artist: String): List<SongCandidate> {
-        val keyword = if (artist.isNotEmpty()) "$title $artist" else title
+        val seenIds = mutableSetOf<Long>()
+        val ranked = mutableListOf<Pair<SongCandidate, Int>>()
+        for (keyword in LyricSearchHelper.buildSearchKeywords(title, artist)) {
+            for ((candidate, score) in searchSongsByKeyword(keyword, title, artist)) {
+                if (seenIds.add(candidate.id)) {
+                    ranked.add(candidate to score)
+                }
+            }
+        }
+        return ranked
+            .filter { it.second > 0 }
+            .sortedByDescending { it.second }
+            .map { it.first }
+            .ifEmpty {
+                ranked.sortedByDescending { it.second }.take(3).map { it.first }
+            }
+    }
+
+    private suspend fun searchSongsByKeyword(
+        keyword: String,
+        title: String,
+        artist: String
+    ): List<Pair<SongCandidate, Int>> {
         val encodedKeyword = URLEncoder.encode(keyword, "UTF-8")
         val url = "https://music.163.com/api/search/get?s=$encodedKeyword&type=1&offset=0&limit=8"
 
@@ -59,10 +81,9 @@ class NetEaseLyricProvider : LyricProvider {
             return (0 until songs.length())
                 .map { index ->
                     val song = songs.getJSONObject(index)
-                    song to scoreSongMatch(song, title, artist)
+                    songToCandidate(song, title) to scoreSongMatch(song, title, artist)
                 }
                 .sortedByDescending { it.second }
-                .map { (song, _) -> songToCandidate(song, title) }
         }
     }
 
@@ -81,10 +102,7 @@ class NetEaseLyricProvider : LyricProvider {
     }
 
     private fun scoreSongMatch(song: JSONObject, title: String, artist: String): Int {
-        var score = 0
-        val name = song.optString("name", "")
-        if (name.equals(title, ignoreCase = true)) score += 12
-        else if (name.contains(title, ignoreCase = true)) score += 6
+        var score = LyricSearchHelper.scoreTitleMatch(song.optString("name", ""), title)
 
         song.optJSONArray("artists")?.let { artists ->
             for (i in 0 until artists.length()) {

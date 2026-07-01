@@ -25,27 +25,39 @@ class QQMusicLyricProvider : LyricProvider {
     }
 
     private suspend fun searchSong(title: String, artist: String): String? {
-        val keyword = if (artist.isNotEmpty()) "$title $artist" else title
-        val encodedKeyword = URLEncoder.encode(keyword, "UTF-8")
-        val url = "https://c.y.qq.com/soso/fcgi-bin/client_search_cp?w=$encodedKeyword&n=5&p=1&format=json"
+        var bestMid: String? = null
+        var bestScore = Int.MIN_VALUE
+        for (keyword in LyricSearchHelper.buildSearchKeywords(title, artist)) {
+            val encodedKeyword = URLEncoder.encode(keyword, "UTF-8")
+            val url = "https://c.y.qq.com/soso/fcgi-bin/client_search_cp?w=$encodedKeyword&n=5&p=1&format=json"
 
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", "Mozilla/5.0")
-            .build()
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0")
+                .build()
 
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return null
-            val body = response.body?.string() ?: return null
-            val json = JSONObject(body)
-            val data = json.optJSONObject("data") ?: return null
-            val song = data.optJSONObject("song") ?: return null
-            val list = song.optJSONArray("list") ?: return null
-            if (list.length() == 0) return null
-
-            val firstSong = list.getJSONObject(0)
-            return firstSong.optString("songmid")
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use
+                val body = response.body?.string() ?: return@use
+                val json = JSONObject(body)
+                val list = json.optJSONObject("data")
+                    ?.optJSONObject("song")
+                    ?.optJSONArray("list")
+                    ?: return@use
+                for (i in 0 until list.length()) {
+                    val song = list.getJSONObject(i)
+                    val score = LyricSearchHelper.scoreTitleMatch(
+                        song.optString("songname", ""),
+                        title
+                    )
+                    if (score > bestScore) {
+                        bestScore = score
+                        bestMid = song.optString("songmid")
+                    }
+                }
+            }
         }
+        return bestMid.takeIf { bestScore > 0 }
     }
 
     private suspend fun getLyric(songMid: String): String? {
