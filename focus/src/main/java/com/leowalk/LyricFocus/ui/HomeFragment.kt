@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
+import android.widget.ImageButton
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
@@ -78,6 +79,9 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         btnGrantNotification = view.findViewById(R.id.btn_grant_notification)
         btnGrantPostNotification = view.findViewById(R.id.btn_grant_post_notification)
         tvRootPermission = view.findViewById(R.id.tv_root_permission_status)
+        view.findViewById<ImageButton>(R.id.btn_usage_help).setOnClickListener {
+            showUsageHelpDialog()
+        }
 
         val ctx = requireContext()
         switchFocusLyric.isChecked = FocusPreferences.isFocusEnabled(ctx)
@@ -306,5 +310,25 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
             } catch (_: Exception) {
             }
         }
+    }
+
+    private fun showUsageHelpDialog() {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("使用说明")
+            .setMessage(
+                "【基础步骤】\n" +
+                    "1. 授予通知访问与发送通知权限\n" +
+                    "2. LSPosed 勾选「系统界面」和「息屏与锁屏编辑(com.miui.aod)」\n" +
+                    "3. 使用 Root 重启系统界面使 Hook 生效\n" +
+                    "4. 播放音乐后锁屏/AOD 显示歌词\n\n" +
+                    "【后台保活】\n" +
+                    "5. 设置 → 应用 → LyricFocus → 省电策略设为「无限制」，避免后台被杀\n" +
+                    "6. 设置 → 通知与状态栏 → 通知管理 → LyricFocus：允许通知，关闭「静默」\n\n" +
+                    "【常见问题】\n" +
+                    "7. 若使用白名单，确认目标音乐 App 未被「应用双开」隔离到不同用户空间\n" +
+                    "8. 焦点通知白名单：系统级焦点通知白名单限制会导致 LyricFocus 无法正常显示歌词，需通过 LSPosed 模块（如 HyperCeiler）移除该限制"
+            )
+            .setPositiveButton("知道了", null)
+            .show()
     }
 }

@@ -48,13 +48,13 @@
 - **实时歌词**：`NotificationListenerService` 绑定 MediaSession，监听播放进度与元数据
 - **多歌词源**：网易云音乐、QQ 音乐（自动链式回退或指定单一源）
 - **焦点通知**：锁屏 / AOD 使用 `miui.focus.rv`、`miui.focus.rvAod` 自定义 RemoteViews，支持 updatable 会话续期
-- **万象息屏（自定义）AOD**：主界面开关；横向 `rvAod` 布局，修复万象/自定义息屏歌词只显示首字的问题
+- **万象息屏（自定义）AOD**：主界面开关；横向 `rvAod` 布局，修复万象/自定义息屏歌词只显示首字的问题；歌名左侧可显示音乐图标（按歌词颜色染色，网易云音乐自动识别预设图标）
 - **超级岛（默认关闭）**：主界面已移除开关，代码层固定关闭
 - **应用白名单**：可选仅对指定音乐 App 的 MediaSession 响应；支持搜索已安装应用、手动添加包名
 - **歌词提前量**：可调同步偏移（默认提前 200 ms）
 - **Root 重启 SystemUI**：主界面右上角一键重启，Hook / 样式变更后快速生效
 - **统一通知渠道**：后台服务通知合并为单一渠道，前台通知显示当前播放状态
-- **关于界面**：软件信息、GitHub / 酷安链接、联系邮箱弹窗、系统要求、致谢与开源许可证
+- **关于界面**：软件信息、项目信息与联系作者、获取日志（自动扫描 / 手动选择）、系统要求弹窗、许可证与致谢
 - **LSPosed 日志查看**：应用内选择日志文件/ZIP 压缩包，自动筛选 LyricFocus 相关日志，支持一键复制
 
 ---
@@ -332,6 +332,8 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 | 万象息屏歌名显示 | `custom_aod_song_info` | `all` | `all` / `hide_title` / `hide_artist` / `hide_all` |
 | 万象息屏颜色模式 | `custom_aod_color_mode` | `white` | `white` / `album` / `preset` |
 | 万象息屏推荐色 | `custom_aod_preset_color` | 默认蓝 | `preset` 模式下生效 |
+| 万象息屏标题图标 | `custom_aod_title_icon_enabled` | 关 | AOD 歌名左侧显示音乐图标 |
+| 万象息屏图标大小 | `custom_aod_title_icon_size` | `150` | 75 ~ 200 %；相对歌名字号 |
 | 歌词字号 | `lyric_text_size` | `18` sp | 12 ~ 32 sp；锁屏样式 AOD |
 | 文字颜色 | `lyric_text_color` | `white` | `white` / `black`；Monet 或文字取色开启时无效 |
 | 歌词行数 | `lyric_max_lines` | `2` | 1 ~ 2 |
@@ -405,6 +407,14 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 ---
 
 ## 版本更新
+
+### v1.5.7
+
+- **歌词匹配算法改进**：新增 `splitArtists` 与 `scoreArtistMatch` 函数，支持按 `/ & 、 ，` 和 `and / x / feat.` 多分隔符拆分歌手名并双向匹配，修复《心眼 (feat. 須田景凪)》等组合艺人歌曲匹配错误的问题；对 `Leo/need` 做特例处理不拆分
+- **万象息屏标题图标**：AOD 歌名左侧显示音乐图标，网易云音乐播放时自动显示预设图标（`ic_app_icon_netease`），图标按歌词颜色整体染色（`PorterDuff.Mode.SRC_IN`）；图标大小可调（75%–200%，默认 150%）
+- **主页使用说明优化**：移除主页使用说明卡片，改为「显示设置」卡片右上角感叹号图标，点击弹出使用说明；内容补充省电策略、通知管理、白名单与焦点通知白名单说明
+- **关于页重构**：日志功能拆分为独立「获取日志」卡片（自动扫描 / 手动选择两个按钮）；「项目地址」改为「项目信息以及联系作者」；系统要求改为右上角小按钮弹窗；致谢与 MIT License 合并至「许可证与致谢」卡片，均改为可点击按钮查看完整内容
+- **版本号**：`1.5.7`（versionCode 13）
 
 ### v1.5.6
 

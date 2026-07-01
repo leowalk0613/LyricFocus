@@ -28,6 +28,9 @@ object FocusPreferences {
     const val PREF_CUSTOM_AOD_PRESET_COLOR = "custom_aod_preset_color"
     const val PREF_CUSTOM_AOD_GRAVITY = "custom_aod_gravity"
     const val PREF_CUSTOM_AOD_SONG_INFO = "custom_aod_song_info"
+    const val PREF_CUSTOM_AOD_TITLE_ICON_ENABLED = "custom_aod_title_icon_enabled"
+    const val PREF_CUSTOM_AOD_TITLE_ICON_PRESET = "custom_aod_title_icon_preset"
+    const val PREF_CUSTOM_AOD_TITLE_ICON_SIZE = "custom_aod_title_icon_size"
     const val PREF_SYNC_ADVANCE_MS = "sync_advance_ms"
     const val PREF_APP_WHITELIST_ENABLED = "app_whitelist_enabled"
     const val PREF_APP_WHITELIST_PACKAGES = "app_whitelist_packages"
@@ -68,6 +71,19 @@ object FocusPreferences {
     const val CUSTOM_AOD_SONG_INFO_HIDE_TITLE = "hide_title"
     const val CUSTOM_AOD_SONG_INFO_HIDE_ARTIST = "hide_artist"
     const val CUSTOM_AOD_SONG_INFO_HIDE_ALL = "hide_all"
+
+    const val CUSTOM_AOD_TITLE_ICON_AUTO = "auto"
+    const val CUSTOM_AOD_TITLE_ICON_MUSIC_NOTE = "music_note"
+    const val CUSTOM_AOD_TITLE_ICON_NETEASE = "netease"
+    const val CUSTOM_AOD_TITLE_ICON_QQ = "qq"
+    const val CUSTOM_AOD_TITLE_ICON_KUGOU = "kugou"
+    const val CUSTOM_AOD_TITLE_ICON_KUWO = "kuwo"
+    const val CUSTOM_AOD_TITLE_ICON_SPOTIFY = "spotify"
+    const val CUSTOM_AOD_TITLE_ICON_APPLE = "apple"
+
+    const val DEFAULT_CUSTOM_AOD_TITLE_ICON_SIZE = 150
+    const val MIN_CUSTOM_AOD_TITLE_ICON_SIZE = 75
+    const val MAX_CUSTOM_AOD_TITLE_ICON_SIZE = 200
 
     const val DEFAULT_CUSTOM_AOD_LYRIC_WIDTH = 100
     const val MIN_CUSTOM_AOD_LYRIC_WIDTH = 50
@@ -521,6 +537,96 @@ object FocusPreferences {
         return readFromModule(context) { getCustomAodSongInfo(it) } ?: CUSTOM_AOD_SONG_INFO_ALL
     }
 
+    fun isCustomAodTitleIconEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_CUSTOM_AOD_TITLE_ICON_ENABLED, false)
+    }
+
+    fun setCustomAodTitleIconEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_CUSTOM_AOD_TITLE_ICON_ENABLED, enabled)
+            .commit()
+    }
+
+    fun readCustomAodTitleIconEnabled(context: Context): Boolean {
+        return readFromModule(context) { isCustomAodTitleIconEnabled(it) } ?: false
+    }
+
+    fun getCustomAodTitleIconPreset(context: Context): String {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(PREF_CUSTOM_AOD_TITLE_ICON_PRESET, CUSTOM_AOD_TITLE_ICON_AUTO)
+            ?: CUSTOM_AOD_TITLE_ICON_AUTO
+    }
+
+    fun setCustomAodTitleIconPreset(context: Context, preset: String) {
+        val normalized = when (preset) {
+            CUSTOM_AOD_TITLE_ICON_MUSIC_NOTE,
+            CUSTOM_AOD_TITLE_ICON_NETEASE,
+            CUSTOM_AOD_TITLE_ICON_QQ,
+            CUSTOM_AOD_TITLE_ICON_KUGOU,
+            CUSTOM_AOD_TITLE_ICON_KUWO,
+            CUSTOM_AOD_TITLE_ICON_SPOTIFY,
+            CUSTOM_AOD_TITLE_ICON_APPLE -> preset
+            else -> CUSTOM_AOD_TITLE_ICON_AUTO
+        }
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(PREF_CUSTOM_AOD_TITLE_ICON_PRESET, normalized)
+            .commit()
+    }
+
+    fun readCustomAodTitleIconPreset(context: Context): String {
+        return readFromModule(context) { getCustomAodTitleIconPreset(it) } ?: CUSTOM_AOD_TITLE_ICON_AUTO
+    }
+
+    fun formatCustomAodTitleIconPresetLabel(preset: String): String = when (preset) {
+        CUSTOM_AOD_TITLE_ICON_AUTO -> "自动"
+        CUSTOM_AOD_TITLE_ICON_MUSIC_NOTE -> "音符"
+        CUSTOM_AOD_TITLE_ICON_NETEASE -> "网易云音乐"
+        CUSTOM_AOD_TITLE_ICON_QQ -> "QQ音乐"
+        CUSTOM_AOD_TITLE_ICON_KUGOU -> "酷狗音乐"
+        CUSTOM_AOD_TITLE_ICON_KUWO -> "酷我音乐"
+        CUSTOM_AOD_TITLE_ICON_SPOTIFY -> "Spotify"
+        CUSTOM_AOD_TITLE_ICON_APPLE -> "Apple Music"
+        else -> "自动"
+    }
+
+    fun getCustomAodTitleIconSize(context: Context): Int {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(PREF_CUSTOM_AOD_TITLE_ICON_SIZE, DEFAULT_CUSTOM_AOD_TITLE_ICON_SIZE)
+            .coerceIn(MIN_CUSTOM_AOD_TITLE_ICON_SIZE, MAX_CUSTOM_AOD_TITLE_ICON_SIZE)
+    }
+
+    fun setCustomAodTitleIconSize(context: Context, sizePercent: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(
+                PREF_CUSTOM_AOD_TITLE_ICON_SIZE,
+                sizePercent.coerceIn(MIN_CUSTOM_AOD_TITLE_ICON_SIZE, MAX_CUSTOM_AOD_TITLE_ICON_SIZE)
+            )
+            .commit()
+    }
+
+    fun readCustomAodTitleIconSize(context: Context): Int {
+        return readFromModule(context) { getCustomAodTitleIconSize(it) } ?: DEFAULT_CUSTOM_AOD_TITLE_ICON_SIZE
+    }
+
+    fun formatCustomAodTitleIconSizeLabel(sizePercent: Int): String = "${sizePercent}%"
+
+    fun resolvePackageToIconPreset(packageName: String?): String {
+        if (packageName == null) return CUSTOM_AOD_TITLE_ICON_MUSIC_NOTE
+        return when {
+            packageName.contains("netease", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_NETEASE
+            packageName.contains("qqmusic", ignoreCase = true) || packageName.contains("tencent", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_QQ
+            packageName.contains("kugou", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_KUGOU
+            packageName.contains("kuwo", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_KUWO
+            packageName.contains("spotify", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_SPOTIFY
+            packageName.contains("apple", ignoreCase = true) || packageName.contains("itunes", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_APPLE
+            else -> CUSTOM_AOD_TITLE_ICON_MUSIC_NOTE
+        }
+    }
+
     fun readAodKeepaliveSec(context: Context): Int {
         return readFromModule(context) { getAodKeepaliveSec(it) } ?: DEFAULT_AOD_KEEPALIVE_SEC
     }
@@ -849,6 +955,18 @@ object FocusPreferences {
                 putExtra(
                     FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_SONG_INFO,
                     getCustomAodSongInfo(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_TITLE_ICON_ENABLED,
+                    isCustomAodTitleIconEnabled(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_TITLE_ICON_PRESET,
+                    getCustomAodTitleIconPreset(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_TITLE_ICON_SIZE,
+                    getCustomAodTitleIconSize(context)
                 )
                 putExtra(
                     FocusStyleSnapshot.EXTRA_STYLE_MONET_DYNAMIC_COLOR,

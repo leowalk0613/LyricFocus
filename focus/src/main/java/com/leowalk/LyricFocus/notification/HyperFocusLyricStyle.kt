@@ -206,7 +206,8 @@ object HyperFocusLyricStyle {
             lyric,
             secondLine,
             lineTranslation,
-            lightIcon
+            lightIcon,
+            content.musicPackage
         )
 
 
@@ -500,6 +501,7 @@ object HyperFocusLyricStyle {
         val views = RemoteViews(moduleContext.packageName, layoutId)
         val style = resolveLyricStyle(moduleContext, layoutId)
         applyLyricStyle(
+            moduleContext,
             views,
             lyric,
             secondLine,
@@ -673,6 +675,7 @@ object HyperFocusLyricStyle {
     }
 
     private fun applyLyricStyle(
+        moduleContext: Context,
         views: RemoteViews,
         lyric: String,
         secondLine: String?,
@@ -682,7 +685,8 @@ object HyperFocusLyricStyle {
         trackLabel: String? = null,
         songTitle: String? = null,
         songArtist: String? = null,
-        layoutId: Int = 0
+        layoutId: Int = 0,
+        musicPackage: String = ""
     ) {
         views.setInt(R.id.focus_lyric_content, "setGravity", style.gravityValue)
 
@@ -732,7 +736,7 @@ object HyperFocusLyricStyle {
                 safeSetViewVisibility(views, R.id.focus_song_title, View.GONE)
             }
             layoutId == R.layout.focus_lyric_aod_custom -> {
-                applyCustomAodSongRow(views, songTitle.orEmpty(), songArtist.orEmpty(), style)
+                applyCustomAodSongRow(moduleContext, views, songTitle.orEmpty(), songArtist.orEmpty(), style, musicPackage)
             }
             !trackLabel.isNullOrBlank() -> {
                 views.setTextViewText(R.id.focus_song_title, trackLabel)
@@ -759,15 +763,18 @@ object HyperFocusLyricStyle {
     }
 
     private fun applyCustomAodSongRow(
+        moduleContext: Context,
         views: RemoteViews,
         title: String,
         artist: String,
-        style: LyricStyle
+        style: LyricStyle,
+        musicPackage: String = ""
     ) {
         val songInfoMode = FocusStyleSnapshot.customAodSongInfo
         if (songInfoMode == FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_ALL) {
             safeSetViewVisibility(views, R.id.focus_song_row, View.GONE)
             safeSetViewVisibility(views, R.id.focus_song_inner, View.GONE)
+            safeSetViewVisibility(views, R.id.focus_song_icon, View.GONE)
             return
         }
 
@@ -785,7 +792,13 @@ object HyperFocusLyricStyle {
             12f,
             metrics
         ).toInt()
-        val textBudget = (slotWidth - dotWidth).coerceAtLeast(60)
+
+        val iconWidth = if (FocusStyleSnapshot.customAodTitleIconEnabled) {
+            (songSize * metrics.scaledDensity).toInt()
+        } else {
+            0
+        }
+        val textBudget = (slotWidth - dotWidth - iconWidth - 16).coerceAtLeast(60)
 
         when {
             t.isNotEmpty() && a.isNotEmpty() -> {
@@ -813,44 +826,107 @@ object HyperFocusLyricStyle {
                 views.setViewVisibility(R.id.focus_song_title, View.VISIBLE)
                 views.setViewVisibility(R.id.focus_song_dot, View.VISIBLE)
                 views.setViewVisibility(R.id.focus_song_artist, View.VISIBLE)
+                applyCustomAodTitleIcon(moduleContext, views, songColor, songSize, metrics, musicPackage)
             }
             t.isNotEmpty() -> {
                 views.setTextViewText(
                     R.id.focus_song_title,
-                    ellipsizeForAodSong(t, slotWidth, songSize, metrics)
+                    ellipsizeForAodSong(t, textBudget, songSize, metrics)
                 )
                 views.setTextColor(R.id.focus_song_title, songColor)
                 views.setTextViewTextSize(R.id.focus_song_title, TypedValue.COMPLEX_UNIT_SP, songSize)
                 views.setInt(R.id.focus_song_row, "setGravity", rowGravity)
                 views.setInt(R.id.focus_song_title, "setGravity", rowGravity)
-                applyCustomAodSongMaxWidths(views, slotWidth, slotWidth)
+                applyCustomAodSongMaxWidths(views, textBudget, textBudget)
                 safeSetViewVisibility(views, R.id.focus_song_row, View.VISIBLE)
                 safeSetViewVisibility(views, R.id.focus_song_inner, View.VISIBLE)
                 views.setViewVisibility(R.id.focus_song_title, View.VISIBLE)
                 safeSetViewVisibility(views, R.id.focus_song_dot, View.GONE)
                 safeSetViewVisibility(views, R.id.focus_song_artist, View.GONE)
+                applyCustomAodTitleIcon(moduleContext, views, songColor, songSize, metrics, musicPackage)
             }
             a.isNotEmpty() -> {
                 views.setTextViewText(
                     R.id.focus_song_title,
-                    ellipsizeForAodSong(a, slotWidth, songSize, metrics)
+                    ellipsizeForAodSong(a, textBudget, songSize, metrics)
                 )
                 views.setTextColor(R.id.focus_song_title, songColor)
                 views.setTextViewTextSize(R.id.focus_song_title, TypedValue.COMPLEX_UNIT_SP, songSize)
                 views.setInt(R.id.focus_song_row, "setGravity", rowGravity)
                 views.setInt(R.id.focus_song_title, "setGravity", rowGravity)
-                applyCustomAodSongMaxWidths(views, slotWidth, slotWidth)
+                applyCustomAodSongMaxWidths(views, textBudget, textBudget)
                 safeSetViewVisibility(views, R.id.focus_song_row, View.VISIBLE)
                 safeSetViewVisibility(views, R.id.focus_song_inner, View.VISIBLE)
                 views.setViewVisibility(R.id.focus_song_title, View.VISIBLE)
                 safeSetViewVisibility(views, R.id.focus_song_dot, View.GONE)
                 safeSetViewVisibility(views, R.id.focus_song_artist, View.GONE)
+                applyCustomAodTitleIcon(moduleContext, views, songColor, songSize, metrics, musicPackage)
             }
             else -> {
                 safeSetViewVisibility(views, R.id.focus_song_row, View.GONE)
                 safeSetViewVisibility(views, R.id.focus_song_inner, View.GONE)
+                safeSetViewVisibility(views, R.id.focus_song_icon, View.GONE)
             }
         }
+    }
+
+    private fun applyCustomAodTitleIcon(
+        moduleContext: Context,
+        views: RemoteViews,
+        color: Int,
+        sizeSp: Float,
+        metrics: android.util.DisplayMetrics,
+        musicPackage: String
+    ) {
+        if (!FocusStyleSnapshot.customAodTitleIconEnabled) {
+            safeSetViewVisibility(views, R.id.focus_song_icon, View.GONE)
+            return
+        }
+
+        val iconSizePercent = FocusStyleSnapshot.customAodTitleIconSize / 100f
+        val iconSizeSp = sizeSp * iconSizePercent
+
+        val iconResId = resolveTitleIconResId(musicPackage)
+        val iconBitmap = drawableToBitmap(moduleContext, iconResId, color, iconSizeSp, metrics)
+
+        if (iconBitmap != null) {
+            safeSetImageViewBitmap(views, R.id.focus_song_icon, iconBitmap)
+            safeSetViewVisibility(views, R.id.focus_song_icon, View.VISIBLE)
+        } else {
+            safeSetViewVisibility(views, R.id.focus_song_icon, View.GONE)
+        }
+    }
+
+    private fun resolveTitleIconResId(musicPackage: String): Int {
+        val preset = FocusPreferences.resolvePackageToIconPreset(musicPackage)
+        return iconPresetToResId(preset)
+    }
+
+    private fun iconPresetToResId(preset: String): Int {
+        return when (preset) {
+            FocusPreferences.CUSTOM_AOD_TITLE_ICON_NETEASE -> R.drawable.ic_app_icon_netease
+            else -> R.drawable.ic_music_note
+        }
+    }
+
+    private fun drawableToBitmap(
+        moduleContext: Context,
+        resId: Int,
+        tintColor: Int,
+        sizeSp: Float,
+        metrics: android.util.DisplayMetrics
+    ): Bitmap {
+        val sizePx = (sizeSp * metrics.scaledDensity).toInt()
+        val drawable = moduleContext.resources.getDrawable(resId, null)
+            ?: return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+
+        drawable.mutate().setColorFilter(tintColor, PorterDuff.Mode.SRC_IN)
+
+        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawable.setBounds(0, 0, sizePx, sizePx)
+        drawable.draw(canvas)
+        return bitmap
     }
 
     private fun ellipsizeForAodSong(
@@ -978,7 +1054,9 @@ object HyperFocusLyricStyle {
 
         lineTranslation: String?,
 
-        icon: Icon
+        icon: Icon,
+
+        musicPackage: String
 
     ): RemoteViews {
 
@@ -998,6 +1076,7 @@ object HyperFocusLyricStyle {
         val style = resolveLyricStyle(moduleContext, layoutId)
 
         applyLyricStyle(
+            moduleContext,
             views,
             lyric,
             secondLine,
@@ -1006,7 +1085,8 @@ object HyperFocusLyricStyle {
             hideSongTitle = !useCustomLayout,
             songTitle = if (useCustomLayout) songTitle else null,
             songArtist = if (useCustomLayout) artist else null,
-            layoutId = layoutId
+            layoutId = layoutId,
+            musicPackage = musicPackage
         )
 
         return views

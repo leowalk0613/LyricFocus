@@ -37,12 +37,32 @@
                     android:orientation="vertical"
                     android:padding="16dp">
 
-                    <TextView
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="16dp"
-                        android:text="显示设置"
-                        android:textAppearance="?attr/textAppearanceTitleMedium" />
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="显示设置"
+                            android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+                        <ImageButton
+                            android:id="@+id/btn_usage_help"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="使用说明"
+                            android:padding="6dp"
+                            android:scaleType="centerInside"
+                            android:src="@drawable/ic_info"
+                            app:tint="?attr/colorOnSurfaceVariant" />
+
+                    </LinearLayout>
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -77,7 +97,8 @@
                             android:id="@+id/switch_focus_lyric"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:checked="true" />
+                            android:checked="true"
+                            android:layout_marginStart="16dp" />
 
                     </LinearLayout>
 
@@ -114,7 +135,8 @@
                             android:id="@+id/switch_custom_aod_layout"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:checked="false" />
+                            android:checked="false"
+                            android:layout_marginStart="16dp" />
 
                     </LinearLayout>
 
@@ -150,7 +172,8 @@
                         <com.google.android.material.materialswitch.MaterialSwitch
                             android:id="@+id/switch_app_whitelist"
                             android:layout_width="wrap_content"
-                            android:layout_height="wrap_content" />
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="16dp" />
 
                     </LinearLayout>
 
@@ -410,39 +433,7 @@
 
             </com.google.android.material.card.MaterialCardView>
 
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="0dp">
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="12dp"
-                        android:text="使用说明"
-                        android:textAppearance="?attr/textAppearanceTitleMedium" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:lineSpacingExtra="4dp"
-                        android:text="1. 授予通知访问与发送通知权限\n2. LSPosed 勾选「系统界面」和「息屏与锁屏编辑(com.miui.aod)」\n3. 使用 Root 重启系统界面使 Hook 生效\n4. 播放音乐后锁屏/AOD 显示歌词"
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        android:textColor="?attr/colorOnSurfaceVariant" />
-
-                </LinearLayout>
-
-            </com.google.android.material.card.MaterialCardView>
 
         </LinearLayout>
 

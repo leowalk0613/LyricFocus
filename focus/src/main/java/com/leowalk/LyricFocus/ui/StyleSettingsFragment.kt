@@ -1,12 +1,19 @@
 package com.leowalk.LyricFocus.ui
 
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Bundle
+import android.view.LayoutInflater
+import android.view.ViewGroup
 import android.view.View
 import android.widget.GridLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
@@ -70,6 +77,10 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     private lateinit var customAodLyricLinesGroup: MaterialButtonToggleGroup
     private lateinit var customAodTranslationLinesGroup: MaterialButtonToggleGroup
     private lateinit var customAodGravityGroup: MaterialButtonToggleGroup
+    private lateinit var customAodTitleIconSwitch: MaterialSwitch
+    private lateinit var customAodTitleIconPresetSection: LinearLayout
+    private lateinit var sliderCustomAodTitleIconSize: Slider
+    private lateinit var tvCustomAodTitleIconSizeLabel: TextView
 
     private val lockScreenControls = mutableListOf<View>()
     private val customAodControls = mutableListOf<View>()
@@ -148,6 +159,10 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         customAodLyricLinesGroup = view.findViewById(R.id.custom_aod_lyric_lines_group)
         customAodTranslationLinesGroup = view.findViewById(R.id.custom_aod_translation_lines_group)
         customAodGravityGroup = view.findViewById(R.id.custom_aod_gravity_group)
+        customAodTitleIconSwitch = view.findViewById(R.id.custom_aod_title_icon_switch)
+        customAodTitleIconPresetSection = view.findViewById(R.id.custom_aod_title_icon_preset_section)
+        sliderCustomAodTitleIconSize = view.findViewById(R.id.slider_custom_aod_title_icon_size)
+        tvCustomAodTitleIconSizeLabel = view.findViewById(R.id.custom_aod_title_icon_size_label)
 
         lockScreenControls += listOf(
             sliderTextSize,
@@ -170,6 +185,9 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             customAodLyricLinesGroup,
             customAodTranslationLinesGroup,
             customAodGravityGroup,
+            customAodTitleIconSwitch,
+            customAodTitleIconPresetSection,
+            sliderCustomAodTitleIconSize,
             customAodColorModeGroup,
             btnCustomAodPickColor
         )
@@ -302,6 +320,8 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                 else -> R.id.custom_aod_gravity_center
             }
         )
+        bindCustomAodTitleIcon(FocusPreferences.isCustomAodTitleIconEnabled(requireContext()))
+        bindCustomAodTitleIconSize(FocusPreferences.getCustomAodTitleIconSize(requireContext()))
         bindCustomAodSongInfo(FocusPreferences.getCustomAodSongInfo(requireContext()))
 
         val colorMode = FocusPreferences.getCustomAodColorMode(requireContext())
@@ -404,6 +424,16 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                 customAodSongInfoGroupRow2.check(R.id.custom_aod_song_info_hide_all)
             else -> customAodSongInfoGroup.check(R.id.custom_aod_song_info_all)
         }
+    }
+
+    private fun bindCustomAodTitleIcon(enabled: Boolean) {
+        customAodTitleIconSwitch.isChecked = enabled
+        customAodTitleIconPresetSection.visibility = if (enabled) View.VISIBLE else View.GONE
+    }
+
+    private fun bindCustomAodTitleIconSize(sizePercent: Int) {
+        sliderCustomAodTitleIconSize.value = sizePercent.toFloat()
+        tvCustomAodTitleIconSizeLabel.text = FocusPreferences.formatCustomAodTitleIconSizeLabel(sizePercent)
     }
 
     private fun songInfoModeFromCheckedId(checkedId: Int): String {
@@ -645,6 +675,23 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                 else -> FocusPreferences.GRAVITY_CENTER
             }
             FocusPreferences.setCustomAodGravity(requireContext(), gravity)
+            notifyStyleChanged()
+        }
+
+        customAodTitleIconSwitch.setOnCheckedChangeListener { _, isChecked ->
+            if (isBindingUi) return@setOnCheckedChangeListener
+            FocusPreferences.setCustomAodTitleIconEnabled(requireContext(), isChecked)
+            isBindingUi = true
+            customAodTitleIconPresetSection.visibility = if (isChecked) View.VISIBLE else View.GONE
+            isBindingUi = false
+            notifyStyleChanged()
+        }
+
+        sliderCustomAodTitleIconSize.addOnChangeListener { _, value, _ ->
+            if (isBindingUi) return@addOnChangeListener
+            val sizePercent = value.toInt()
+            tvCustomAodTitleIconSizeLabel.text = FocusPreferences.formatCustomAodTitleIconSizeLabel(sizePercent)
+            FocusPreferences.setCustomAodTitleIconSize(requireContext(), sizePercent)
             notifyStyleChanged()
         }
 

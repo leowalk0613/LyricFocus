@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -45,6 +46,17 @@ class AboutFragment : Fragment(R.layout.activity_about) {
         setupVersionLabel(view)
         setupLinks(view)
         setupLogViewer(view)
+        setupSystemRequirementsButton()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        activity?.findViewById<ImageButton>(R.id.btn_system_requirements)?.visibility = View.VISIBLE
+    }
+
+    override fun onPause() {
+        super.onPause()
+        activity?.findViewById<ImageButton>(R.id.btn_system_requirements)?.visibility = View.GONE
     }
 
     private fun setupVersionLabel(view: View) {
@@ -73,16 +85,12 @@ class AboutFragment : Fragment(R.layout.activity_about) {
             openUrl("https://www.coolapk.com/u/551303")
         }
 
-        view.findViewById<MaterialButton>(R.id.btn_hyperfocus_api).setOnClickListener {
-            openUrl("https://github.com/ghhccghk/HyperFocusApi")
+        view.findViewById<MaterialButton>(R.id.btn_acknowledgments).setOnClickListener {
+            showAcknowledgmentsDialog()
         }
 
-        view.findViewById<MaterialButton>(R.id.btn_hyperceiler).setOnClickListener {
-            openUrl("https://github.com/ReChronoRain/HyperCeiler")
-        }
-
-        view.findViewById<MaterialButton>(R.id.btn_lsposed).setOnClickListener {
-            openUrl("https://github.com/LSPosed/LSPosed")
+        view.findViewById<MaterialButton>(R.id.btn_mit_license).setOnClickListener {
+            showMitLicenseDialog()
         }
     }
 
@@ -92,6 +100,57 @@ class AboutFragment : Fragment(R.layout.activity_about) {
             .setMessage(contactEmail)
             .setPositiveButton("发邮件") { _, _ -> sendContactEmail() }
             .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showAcknowledgmentsDialog() {
+        val message = buildString {
+            append("感谢下列项目提供框架、依赖与实现参考。\n\n")
+            append("▎焦点通知\n")
+            append("• HyperCeiler — 焦点歌词、MusicBaseHook / FocusNotifLyric 思路；渠道 ID、插件 ClassLoader bypass、防闪烁等\n")
+            append("• FocusNotifLyric — 焦点歌词上游原型\n")
+            append("• HyperFocusApi — miui.focus 参数封装\n\n")
+            append("▎框架与库\n")
+            append("• LSPosed · XposedBridge\n")
+            append("• AndroidX · OkHttp · Kotlin\n\n")
+            append("▎同生态\n")
+            append("• Lyric-Getter / Lyric-Getter-Api\n")
+            append("• HookTool · Cemiuiler\n\n")
+            append("歌词 Web API 版权归网易云、QQ 音乐各自平台所有。")
+        }
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("致谢")
+            .setMessage(message)
+            .setPositiveButton("知道了", null)
+            .show()
+    }
+
+    private fun showMitLicenseDialog() {
+        val message = """MIT License
+
+Copyright (c) 2026 leowalk0613
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE."""
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("MIT License")
+            .setMessage(message)
+            .setPositiveButton("知道了", null)
             .show()
     }
 
@@ -110,22 +169,45 @@ class AboutFragment : Fragment(R.layout.activity_about) {
     }
 
     private fun setupLogViewer(view: View) {
-        view.findViewById<MaterialButton>(R.id.btn_view_logs).setOnClickListener {
-            showLogSourceSelection()
+        view.findViewById<MaterialButton>(R.id.btn_scan_logs).setOnClickListener {
+            scanLspLogs()
+        }
+        view.findViewById<MaterialButton>(R.id.btn_pick_log_file).setOnClickListener {
+            openDocumentLauncher.launch(arrayOf("*/*"))
+        }
+        view.findViewById<ImageButton>(R.id.btn_log_help).setOnClickListener {
+            showLogHelpDialog()
         }
     }
 
-    private fun showLogSourceSelection() {
-        val options = arrayOf("自动扫描 LSPosed 日志", "手动选择日志文件")
+    private fun setupSystemRequirementsButton() {
+        activity?.findViewById<ImageButton>(R.id.btn_system_requirements)?.setOnClickListener {
+            showSystemRequirementsDialog()
+        }
+    }
 
+    private fun showSystemRequirementsDialog() {
         MaterialAlertDialogBuilder(requireContext())
-            .setTitle("选择日志来源")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> scanLspLogs()
-                    1 -> openDocumentLauncher.launch(arrayOf("*/*"))
-                }
-            }
+            .setTitle("系统要求")
+            .setMessage(getString(R.string.system_requirements))
+            .setPositiveButton("知道了", null)
+            .show()
+    }
+
+    private fun showLogHelpDialog() {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("日志查看指南")
+            .setMessage(
+                "LSPosed 日志路径：\n" +
+                    "• /data/adb/lspd/log/modules_*.log\n" +
+                    "• /data/adb/lspd/log.old/（旧日志）\n" +
+                    "• LSPosed 导出的 zip 压缩包\n\n" +
+                    "使用方法：\n" +
+                    "• 自动扫描（需 Root）：点击按钮 → 选择「自动扫描 LSPosed 日志」\n" +
+                    "• 手动选择（无需 Root）：先在 LSPosed 中保存日志并解压，或复制 modules_*.log 文件到手机存储，再点击按钮 → 选择「手动选择日志文件」\n" +
+                    "• 应用会自动筛选 LyricFocus 相关日志，支持一键复制"
+            )
+            .setPositiveButton("知道了", null)
             .show()
     }
 

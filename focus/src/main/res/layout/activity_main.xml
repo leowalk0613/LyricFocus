@@ -24,6 +24,20 @@
                 app:titleTextColor="?attr/colorOnSurface" />
 
             <ImageButton
+                android:id="@+id/btn_system_requirements"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="end|center_vertical"
+                android:layout_marginEnd="52dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="系统要求"
+                android:padding="12dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_info"
+                android:visibility="gone"
+                app:tint="?attr/colorOnSurfaceVariant" />
+
+            <ImageButton
                 android:id="@+id/btn_restart_systemui"
                 android:layout_width="48dp"
                 android:layout_height="48dp"

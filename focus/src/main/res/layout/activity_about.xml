@@ -106,7 +106,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="12dp"
-                        android:text="项目地址"
+                        android:text="项目信息以及联系作者"
                         android:textAppearance="?attr/textAppearanceTitleMedium" />
 
                     <com.google.android.material.button.MaterialButton
@@ -138,16 +138,8 @@
                         style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="8dp"
                         android:text="酷安作者" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_view_logs"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="选择日志文件筛选" />
-
                 </LinearLayout>
 
             </com.google.android.material.card.MaterialCardView>
@@ -166,209 +158,97 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="8dp"
-                        android:text="日志查看指南"
-                        android:textAppearance="?attr/textAppearanceTitleMedium" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="8dp"
-                        android:lineSpacingExtra="4dp"
-                        android:text="LSPosed 日志路径："
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        android:textColor="?attr/colorOnSurfaceVariant" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:layout_marginBottom="8dp"
-                        android:orientation="vertical">
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
 
                         <TextView
-                            android:layout_width="match_parent"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="4dp"
-                            android:text="• /data/adb/lspd/log/modules_*.log"
-                            android:textAppearance="?attr/textAppearanceBodyMedium"
-                            android:textColor="?attr/colorOnSurfaceVariant" />
+                            android:layout_weight="1"
+                            android:text="获取日志"
+                            android:textAppearance="?attr/textAppearanceTitleMedium" />
 
-                        <TextView
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginBottom="4dp"
-                            android:text="• /data/adb/lspd/log.old/（旧日志）"
-                            android:textAppearance="?attr/textAppearanceBodyMedium"
-                            android:textColor="?attr/colorOnSurfaceVariant" />
-
-                        <TextView
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="• LSPosed 导出的 zip 压缩包"
-                            android:textAppearance="?attr/textAppearanceBodyMedium"
-                            android:textColor="?attr/colorOnSurfaceVariant" />
+                        <ImageButton
+                            android:id="@+id/btn_log_help"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="日志查看指南"
+                            android:padding="6dp"
+                            android:scaleType="centerInside"
+                            android:src="@drawable/ic_info"
+                            app:tint="?attr/colorOnSurfaceVariant" />
 
                     </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_scan_logs"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:layout_marginBottom="8dp"
+                        android:text="自动扫描 LSPosed 日志" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_pick_log_file"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="手动选择日志文件" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="4dp"
-                        android:text="使用方法："
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        android:textColor="?attr/colorOnSurface" />
+                        android:layout_marginBottom="8dp"
+                        android:text="许可证与致谢"
+                        android:textAppearance="?attr/textAppearanceTitleMedium" />
 
                     <LinearLayout
-                        android:layout_width="match_parent"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:orientation="vertical">
+                        android:orientation="horizontal">
 
-                        <TextView
-                            android:layout_width="match_parent"
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_mit_license"
+                            style="@style/Widget.Material3.Button.TextButton"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="2dp"
-                            android:text="• 自动扫描（需 Root）：点击下方按钮 → 选择「自动扫描 LSPosed 日志」"
-                            android:textAppearance="?attr/textAppearanceBodyMedium"
-                            android:textColor="?attr/colorOnSurfaceVariant" />
+                            android:paddingHorizontal="0dp"
+                            android:text="MIT License" />
 
-                        <TextView
-                            android:layout_width="match_parent"
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_acknowledgments"
+                            style="@style/Widget.Material3.Button.TextButton"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="2dp"
-                            android:text="• 手动选择（无需 Root）：先在 LSPosed 中保存日志并解压，或复制 modules_*.log 文件到手机存储，再点击下方按钮 → 选择「手动选择日志文件」"
-                            android:textAppearance="?attr/textAppearanceBodyMedium"
-                            android:textColor="?attr/colorOnSurfaceVariant" />
-
-                        <TextView
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="• 应用会自动筛选 LyricFocus 相关日志，支持一键复制"
-                            android:textAppearance="?attr/textAppearanceBodyMedium"
-                            android:textColor="?attr/colorOnSurfaceVariant" />
+                            android:layout_marginStart="8dp"
+                            android:paddingHorizontal="0dp"
+                            android:text="致谢" />
 
                     </LinearLayout>
-
-                </LinearLayout>
-
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="0dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="12dp"
-                        android:text="系统要求"
-                        android:textAppearance="?attr/textAppearanceTitleMedium" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:lineSpacingExtra="4dp"
-                        android:text="@string/system_requirements"
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        android:textColor="?attr/colorOnSurfaceVariant" />
-
-                </LinearLayout>
-
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="0dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="12dp"
-                        android:text="致谢"
-                        android:textAppearance="?attr/textAppearanceTitleMedium" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_hyperfocus_api"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="HyperFocusApi"
-                        android:textAlignment="textStart" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_hyperceiler"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="HyperCeiler"
-                        android:textAlignment="textStart" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_lsposed"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="LSPosed"
-                        android:textAlignment="textStart" />
-
-                </LinearLayout>
-
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="0dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="8dp"
-                        android:text="开源许可证"
-                        android:textAppearance="?attr/textAppearanceTitleMedium" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="MIT License"
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        android:textColor="?attr/colorOnSurfaceVariant" />
 
                     <TextView
                         android:layout_width="match_parent"

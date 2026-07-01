@@ -28,6 +28,9 @@ object FocusStyleSnapshot {
     const val EXTRA_STYLE_CUSTOM_AOD_PRESET_COLOR = "style_custom_aod_preset_color"
     const val EXTRA_STYLE_CUSTOM_AOD_GRAVITY = "style_custom_aod_gravity"
     const val EXTRA_STYLE_CUSTOM_AOD_SONG_INFO = "style_custom_aod_song_info"
+    const val EXTRA_STYLE_CUSTOM_AOD_TITLE_ICON_ENABLED = "style_custom_aod_title_icon_enabled"
+    const val EXTRA_STYLE_CUSTOM_AOD_TITLE_ICON_PRESET = "style_custom_aod_title_icon_preset"
+    const val EXTRA_STYLE_CUSTOM_AOD_TITLE_ICON_SIZE = "style_custom_aod_title_icon_size"
     const val EXTRA_STYLE_MONET_DYNAMIC_COLOR = "style_monet_dynamic_color"
     const val EXTRA_STYLE_COLOR_EXTRACTION = "style_color_extraction"
     const val EXTRA_STYLE_EXTRACTED_COLOR = "style_extracted_color"
@@ -103,6 +106,18 @@ object FocusStyleSnapshot {
 
     @Volatile
     var customAodSongInfo: String = FocusPreferences.CUSTOM_AOD_SONG_INFO_ALL
+        private set
+
+    @Volatile
+    var customAodTitleIconEnabled: Boolean = false
+        private set
+
+    @Volatile
+    var customAodTitleIconPreset: String = FocusPreferences.CUSTOM_AOD_TITLE_ICON_AUTO
+        private set
+
+    @Volatile
+    var customAodTitleIconSize: Int = FocusPreferences.DEFAULT_CUSTOM_AOD_TITLE_ICON_SIZE
         private set
 
     @Volatile
@@ -209,6 +224,21 @@ object FocusStyleSnapshot {
             FocusPreferences.PREF_CUSTOM_AOD_SONG_INFO,
             FocusPreferences.CUSTOM_AOD_SONG_INFO_ALL
         ) ?: FocusPreferences.CUSTOM_AOD_SONG_INFO_ALL
+        customAodTitleIconEnabled = prefs.getBoolean(
+            FocusPreferences.PREF_CUSTOM_AOD_TITLE_ICON_ENABLED,
+            false
+        )
+        customAodTitleIconPreset = prefs.getString(
+            FocusPreferences.PREF_CUSTOM_AOD_TITLE_ICON_PRESET,
+            FocusPreferences.CUSTOM_AOD_TITLE_ICON_AUTO
+        ) ?: FocusPreferences.CUSTOM_AOD_TITLE_ICON_AUTO
+        customAodTitleIconSize = prefs.getInt(
+            FocusPreferences.PREF_CUSTOM_AOD_TITLE_ICON_SIZE,
+            FocusPreferences.DEFAULT_CUSTOM_AOD_TITLE_ICON_SIZE
+        ).coerceIn(
+            FocusPreferences.MIN_CUSTOM_AOD_TITLE_ICON_SIZE,
+            FocusPreferences.MAX_CUSTOM_AOD_TITLE_ICON_SIZE
+        )
         monetDynamicColorEnabled = prefs.getBoolean(
             FocusPreferences.PREF_MONET_DYNAMIC_COLOR,
             false
@@ -334,6 +364,20 @@ object FocusStyleSnapshot {
         if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_SONG_INFO)) {
             customAodSongInfo = intent.getStringExtra(EXTRA_STYLE_CUSTOM_AOD_SONG_INFO)
                 ?: customAodSongInfo
+        }
+        if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_TITLE_ICON_ENABLED)) {
+            customAodTitleIconEnabled = intent.getBooleanExtra(EXTRA_STYLE_CUSTOM_AOD_TITLE_ICON_ENABLED, false)
+        }
+        if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_TITLE_ICON_PRESET)) {
+            customAodTitleIconPreset = intent.getStringExtra(EXTRA_STYLE_CUSTOM_AOD_TITLE_ICON_PRESET)
+                ?: customAodTitleIconPreset
+        }
+        if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_TITLE_ICON_SIZE)) {
+            customAodTitleIconSize = intent.getIntExtra(EXTRA_STYLE_CUSTOM_AOD_TITLE_ICON_SIZE, customAodTitleIconSize)
+                .coerceIn(
+                    FocusPreferences.MIN_CUSTOM_AOD_TITLE_ICON_SIZE,
+                    FocusPreferences.MAX_CUSTOM_AOD_TITLE_ICON_SIZE
+                )
         }
         if (intent.hasExtra(EXTRA_STYLE_MONET_DYNAMIC_COLOR)) {
             monetDynamicColorEnabled = intent.getBooleanExtra(EXTRA_STYLE_MONET_DYNAMIC_COLOR, false)

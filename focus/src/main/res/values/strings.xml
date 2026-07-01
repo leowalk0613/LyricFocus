@@ -2,5 +2,5 @@
 <resources>
     <string name="app_name">LyricFocus</string>
     <string name="app_version">v1.5.0</string>
-    <string name="system_requirements">• 小米 HyperOS（建议 HyperOS 2/3）\n• Android 12 及以上\n• LSPosed 框架\n• Root 权限（可选，用于重启 SystemUI）\n• 通知访问权限</string>
+    <string name="system_requirements">• 系统：小米 HyperOS 3.0+（验证环境：HyperOS 3.0.x，如 3.0.302.0.WNCCNXM）\n• Android：API 31+（Android 12 及以上），targetSdk 34\n• 框架：LSPosed（或兼容 Xposed 实现），API 82+\n• LSPosed 作用域：系统界面（com.android.systemui）、息屏与锁屏编辑（com.miui.aod）\n• 权限：通知访问、发送通知、网络、前台服务\n• 可选：Root（Magisk / KernelSU）— 应用内重启 SystemUI、查看 LSPosed 日志\n• 可选：读取应用列表（白名单选应用，Android 11+）\n\n注：需移除系统级焦点通知白名单限制，否则 LyricFocus 无法正常显示歌词。可通过 HyperIsland、HyperCeiler 等 LSPosed 模块实现。</string>
 </resources>

@@ -101,7 +101,8 @@
                         <com.google.android.material.materialswitch.MaterialSwitch
                             android:id="@+id/switch_swap_lyric_translation"
                             android:layout_width="wrap_content"
-                            android:layout_height="wrap_content" />
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="16dp" />
 
                     </LinearLayout>
 
@@ -136,7 +137,8 @@
                         <com.google.android.material.materialswitch.MaterialSwitch
                             android:id="@+id/switch_single_line_only"
                             android:layout_width="wrap_content"
-                            android:layout_height="wrap_content" />
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="16dp" />
 
                     </LinearLayout>
 
@@ -173,7 +175,8 @@
                         <com.google.android.material.materialswitch.MaterialSwitch
                             android:id="@+id/monet_dynamic_switch"
                             android:layout_width="wrap_content"
-                            android:layout_height="wrap_content" />
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="16dp" />
 
                     </LinearLayout>
 
@@ -212,7 +215,8 @@
                         <com.google.android.material.materialswitch.MaterialSwitch
                             android:id="@+id/color_extraction_switch"
                             android:layout_width="wrap_content"
-                            android:layout_height="wrap_content" />
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="16dp" />
 
                     </LinearLayout>
 
@@ -377,8 +381,8 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="8dp"
-                            android:text="歌词"
+                            android:layout_marginBottom="12dp"
+                            android:text="第一行"
                             android:textAppearance="?attr/textAppearanceBodyMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -411,8 +415,8 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="8dp"
-                            android:text="翻译"
+                            android:layout_marginBottom="12dp"
+                            android:text="第二行"
                             android:textAppearance="?attr/textAppearanceBodyMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -776,8 +780,8 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="8dp"
-                            android:text="歌词"
+                            android:layout_marginBottom="12dp"
+                            android:text="第一行"
                             android:textAppearance="?attr/textAppearanceBodyMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -810,8 +814,8 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="8dp"
-                            android:text="翻译"
+                            android:layout_marginBottom="12dp"
+                            android:text="第二行"
                             android:textAppearance="?attr/textAppearanceBodyMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -839,6 +843,107 @@
                                 android:text="2 行" />
 
                         </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/custom_aod_title_icon_section"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="12dp"
+                            android:text="标题图标"
+                            android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="显示标题图标"
+                                    android:textAppearance="?attr/textAppearanceBodyLarge" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="2dp"
+                                    android:text="在歌名左侧显示音乐应用图标，支持自动识别或手动选择"
+                                    android:textAppearance="?attr/textAppearanceBodySmall"
+                                    android:textColor="?attr/colorOnSurfaceVariant" />
+
+                            </LinearLayout>
+
+                            <com.google.android.material.materialswitch.MaterialSwitch
+                                android:id="@+id/custom_aod_title_icon_switch"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="16dp" />
+
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/custom_aod_title_icon_preset_section"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:orientation="vertical">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="12dp"
+                                android:orientation="vertical">
+
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:gravity="center_vertical"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:text="图标大小"
+                                        android:textAppearance="?attr/textAppearanceBodyMedium"
+                                        android:textColor="?attr/colorOnSurfaceVariant" />
+
+                                    <TextView
+                                        android:id="@+id/custom_aod_title_icon_size_label"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:textAppearance="?attr/textAppearanceBodyMedium"
+                                        android:textColor="?attr/colorPrimary" />
+
+                                </LinearLayout>
+
+                                <com.google.android.material.slider.Slider
+                                    android:id="@+id/slider_custom_aod_title_icon_size"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:stepSize="5"
+                                    android:value="150"
+                                    android:valueFrom="75"
+                                    android:valueTo="200" />
+
+                            </LinearLayout>
+
+                        </LinearLayout>
 
                     </LinearLayout>
 

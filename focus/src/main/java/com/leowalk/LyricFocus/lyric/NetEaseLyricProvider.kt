@@ -104,13 +104,11 @@ class NetEaseLyricProvider : LyricProvider {
     private fun scoreSongMatch(song: JSONObject, title: String, artist: String): Int {
         var score = LyricSearchHelper.scoreTitleMatch(song.optString("name", ""), title)
 
-        song.optJSONArray("artists")?.let { artists ->
-            for (i in 0 until artists.length()) {
-                val artistName = artists.getJSONObject(i).optString("name", "")
-                if (artist.isBlank()) continue
-                if (artistName.equals(artist, ignoreCase = true)) score += 24
-                else if (artistName.contains(artist, ignoreCase = true)) score += 12
-            }
+        val artists = song.optJSONArray("artists")
+        if (artists != null && artist.isNotBlank()) {
+            val candidateArtists = (0 until artists.length())
+                .map { artists.getJSONObject(it).optString("name", "") }
+            score += LyricSearchHelper.scoreArtistMatch(candidateArtists, artist)
         }
         return score
     }
