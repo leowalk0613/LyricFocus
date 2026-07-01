@@ -58,6 +58,8 @@ class StyleSettingsActivity : AppCompatActivity() {
     private lateinit var sliderCustomAodWidth: Slider
     private lateinit var tvCustomAodWidthLabel: TextView
     private lateinit var customAodColorModeGroup: MaterialButtonToggleGroup
+    private lateinit var customAodSongInfoGroup: MaterialButtonToggleGroup
+    private lateinit var customAodSongInfoGroupRow2: MaterialButtonToggleGroup
     private lateinit var customAodColorPaletteSection: LinearLayout
     private lateinit var customAodColorPalette: GridLayout
     private lateinit var btnCustomAodPickColor: MaterialButton
@@ -130,6 +132,8 @@ class StyleSettingsActivity : AppCompatActivity() {
         sliderCustomAodWidth = findViewById(R.id.slider_custom_aod_width)
         tvCustomAodWidthLabel = findViewById(R.id.custom_aod_width_label)
         customAodColorModeGroup = findViewById(R.id.custom_aod_color_mode_group)
+        customAodSongInfoGroup = findViewById(R.id.custom_aod_song_info_group)
+        customAodSongInfoGroupRow2 = findViewById(R.id.custom_aod_song_info_group_row2)
         customAodColorPaletteSection = findViewById(R.id.custom_aod_color_palette_section)
         customAodColorPalette = findViewById(R.id.custom_aod_color_palette)
         btnCustomAodPickColor = findViewById(R.id.btn_custom_aod_pick_color)
@@ -152,7 +156,8 @@ class StyleSettingsActivity : AppCompatActivity() {
         customAodControls += listOf(
             sliderCustomAodTextSize,
             sliderCustomAodWidth,
-            findViewById(R.id.custom_aod_song_info_group),
+            customAodSongInfoGroup,
+            customAodSongInfoGroupRow2,
             findViewById(R.id.custom_aod_lyric_lines_group),
             findViewById(R.id.custom_aod_translation_lines_group),
             findViewById(R.id.custom_aod_gravity_group),
@@ -299,14 +304,7 @@ class StyleSettingsActivity : AppCompatActivity() {
                 else -> R.id.custom_aod_gravity_center
             }
         )
-        findViewById<MaterialButtonToggleGroup>(R.id.custom_aod_song_info_group).check(
-            when (FocusPreferences.getCustomAodSongInfo(this)) {
-                FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_TITLE -> R.id.custom_aod_song_info_hide_title
-                FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_ARTIST -> R.id.custom_aod_song_info_hide_artist
-                FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_ALL -> R.id.custom_aod_song_info_hide_all
-                else -> R.id.custom_aod_song_info_all
-            }
-        )
+        bindCustomAodSongInfo(FocusPreferences.getCustomAodSongInfo(this))
 
         val colorMode = FocusPreferences.getCustomAodColorMode(this)
         customAodColorModeGroup.check(
@@ -398,6 +396,32 @@ class StyleSettingsActivity : AppCompatActivity() {
             enabled = lockEnabled && !monetEnabled,
             controls = listOf(colorExtractionSwitch)
         )
+    }
+
+    private fun bindCustomAodSongInfo(mode: String) {
+        customAodSongInfoGroup.clearChecked()
+        customAodSongInfoGroupRow2.clearChecked()
+        when (mode) {
+            FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_TITLE ->
+                customAodSongInfoGroup.check(R.id.custom_aod_song_info_hide_title)
+            FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_ARTIST ->
+                customAodSongInfoGroupRow2.check(R.id.custom_aod_song_info_hide_artist)
+            FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_ALL ->
+                customAodSongInfoGroupRow2.check(R.id.custom_aod_song_info_hide_all)
+            else -> customAodSongInfoGroup.check(R.id.custom_aod_song_info_all)
+        }
+    }
+
+    private fun songInfoModeFromCheckedId(checkedId: Int): String {
+        return when (checkedId) {
+            R.id.custom_aod_song_info_hide_title ->
+                FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_TITLE
+            R.id.custom_aod_song_info_hide_artist ->
+                FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_ARTIST
+            R.id.custom_aod_song_info_hide_all ->
+                FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_ALL
+            else -> FocusPreferences.CUSTOM_AOD_SONG_INFO_ALL
+        }
     }
 
     private fun updateCustomAodColorUi() {
@@ -636,21 +660,20 @@ class StyleSettingsActivity : AppCompatActivity() {
                 notifyStyleChanged()
             }
 
-        findViewById<MaterialButtonToggleGroup>(R.id.custom_aod_song_info_group)
-            .addOnButtonCheckedListener { _, checkedId, isChecked ->
-                if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
-                val mode = when (checkedId) {
-                    R.id.custom_aod_song_info_hide_title ->
-                        FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_TITLE
-                    R.id.custom_aod_song_info_hide_artist ->
-                        FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_ARTIST
-                    R.id.custom_aod_song_info_hide_all ->
-                        FocusPreferences.CUSTOM_AOD_SONG_INFO_HIDE_ALL
-                    else -> FocusPreferences.CUSTOM_AOD_SONG_INFO_ALL
-                }
-                FocusPreferences.setCustomAodSongInfo(this, mode)
-                notifyStyleChanged()
+        val songInfoListener = MaterialButtonToggleGroup.OnButtonCheckedListener { group, checkedId, isChecked ->
+            if (isBindingUi || !isChecked) return@OnButtonCheckedListener
+            isBindingUi = true
+            if (group == customAodSongInfoGroup) {
+                customAodSongInfoGroupRow2.clearChecked()
+            } else {
+                customAodSongInfoGroup.clearChecked()
             }
+            isBindingUi = false
+            FocusPreferences.setCustomAodSongInfo(this, songInfoModeFromCheckedId(checkedId))
+            notifyStyleChanged()
+        }
+        customAodSongInfoGroup.addOnButtonCheckedListener(songInfoListener)
+        customAodSongInfoGroupRow2.addOnButtonCheckedListener(songInfoListener)
 
         customAodColorModeGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (isBindingUi || !isChecked) return@addOnButtonCheckedListener

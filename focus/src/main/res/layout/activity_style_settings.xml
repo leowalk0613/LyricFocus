@@ -709,6 +709,7 @@
                             android:id="@+id/custom_aod_song_info_group"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
+                            android:layout_marginBottom="8dp"
                             app:selectionRequired="true"
                             app:singleSelection="true">
 
@@ -718,7 +719,7 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="全部" />
+                                android:text="全部显示" />
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/custom_aod_song_info_hide_title"
@@ -726,7 +727,16 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="无歌名" />
+                                android:text="隐藏歌名" />
+
+                        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                        <com.google.android.material.button.MaterialButtonToggleGroup
+                            android:id="@+id/custom_aod_song_info_group_row2"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            app:selectionRequired="true"
+                            app:singleSelection="true">
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/custom_aod_song_info_hide_artist"
@@ -734,7 +744,7 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="无歌手" />
+                                android:text="隐藏歌手" />
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/custom_aod_song_info_hide_all"
@@ -742,7 +752,7 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="全隐藏" />
+                                android:text="全部隐藏" />
 
                         </com.google.android.material.button.MaterialButtonToggleGroup>
 

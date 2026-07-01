@@ -42,7 +42,8 @@
 - **样式设置（v1.5）**：分 **通用**、**锁屏样式 AOD**、**万象息屏 AOD** 三类；开启万象息屏时锁屏样式项置灰，关闭时万象息屏专用项置灰
 - **通用样式**：歌词与翻译位置互换、仅显示第一行（全局作用于全部布局）
 - **锁屏样式 AOD**：字号、文字颜色、行数、排版、焦点通知背景；**Monet 动态取色** 与 **通知文字取色**
-- **万象息屏 AOD 专用样式**：字号、歌词宽度（50–100%）、歌词/翻译行数、排版（靠左/居中/靠右）、颜色（白/专辑取色/24 色推荐色 + RGB 自定义）；歌名 · 歌手 3:2 居中块，长标题代码 ellipsize
+- **万象息屏 AOD 专用样式**：字号、歌词宽度（50–100%）、歌名显示（全部/隐藏歌名/隐藏歌手/全部隐藏）、歌词/翻译行数、排版、颜色（白/专辑取色/24 色推荐色 + RGB 自定义）；歌名 · 歌手 3:2 居中块，长标题代码 ellipsize
+- **样式设置 UI（v1.5.1+）**：锁屏样式 AOD 合并为单卡片统一置灰；万象息屏字体排版区块与锁屏样式层级一致
 - **Monet 动态取色**：从当前播放专辑封面实时提取背景与文字色（Material You 风格），自动增强对比度以保证歌词可读性；开启后手动背景/文字/文字取色选项置灰
 - **实时歌词**：`NotificationListenerService` 绑定 MediaSession，监听播放进度与元数据
 - **多歌词源**：网易云音乐、QQ 音乐（自动链式回退或指定单一源）
@@ -307,6 +308,7 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 | 万象息屏歌词行数 | `custom_aod_lyric_max_lines` | `2` | 1 ~ 2 |
 | 万象息屏翻译行数 | `custom_aod_translation_max_lines` | `1` | 1 ~ 2 |
 | 万象息屏排版 | `custom_aod_gravity` | `center` | `left` / `center` / `right`；歌名与歌词 |
+| 万象息屏歌名显示 | `custom_aod_song_info` | `all` | `all` / `hide_title` / `hide_artist` / `hide_all` |
 | 万象息屏颜色模式 | `custom_aod_color_mode` | `white` | `white` / `album` / `preset` |
 | 万象息屏推荐色 | `custom_aod_preset_color` | 默认蓝 | `preset` 模式下生效 |
 | 歌词字号 | `lyric_text_size` | `18` sp | 12 ~ 32 sp；锁屏样式 AOD |
@@ -382,6 +384,18 @@ adb install -r focus/build/outputs/apk/debug/focus-debug.apk
 ---
 
 ## 版本更新
+
+### v1.5.2
+
+- **歌名显示选项布局**：万象息屏「歌名显示」改为两行（全部显示 / 隐藏歌名 · 隐藏歌手 / 全部隐藏），避免四字挤在一行
+- **版本号**：`1.5.2`（versionCode 8）
+
+### v1.5.1
+
+- **锁屏样式 AOD 单卡片**：不可用项合并为一张卡片统一置灰，与万象息屏区块表现一致
+- **万象息屏歌名显示**：新增全部显示 / 隐藏歌名 / 隐藏歌手 / 全部隐藏
+- **万象息屏样式层级**：文字大小、固定行数、排版等区块与锁屏样式 AOD 对齐
+- **版本号**：`1.5.1`（versionCode 7）
 
 ### v1.5.0
 
