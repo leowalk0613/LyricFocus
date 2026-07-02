@@ -11,8 +11,8 @@
 
 包名：`com.leowalk.LyricFocus`
 
-123网盘更新地址：https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3  
-GitHub Releases：https://github.com/leowalk0613/LyricFocus/releases
+[123网盘更新地址](https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3)  
+[GitHub Releases](https://github.com/leowalk0613/LyricFocus/releases)
 </div>
 
 ---
