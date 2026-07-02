@@ -11,7 +11,8 @@
 
 包名：`com.leowalk.LyricFocus`
 
-123网盘更新地址：https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3
+123网盘更新地址：https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3  
+GitHub Releases：https://github.com/leowalk0613/LyricFocus/releases
 </div>
 
 ---
@@ -407,6 +408,13 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 ---
 
 ## 版本更新
+
+### v1.5.8
+
+- **万象息屏标题图标扩展**：新增 QQ 音乐、酷狗音乐、酷我音乐、汽水音乐、波点音乐、Spotify、Apple Music 共 7 个应用的图标支持，网易云音乐图标已在 v1.5.7 支持；`com.miui.player` 绑定 QQ 音乐图标；`com.kugou.android.lite` 绑定酷狗音乐图标
+- **默认图标变更**：未识别的音乐应用默认显示 Apple Music 图标（原默认 `ic_music_note`）
+- **README 更新**：添加 GitHub Releases 下载地址
+- **版本号**：`1.5.8`（versionCode 14）
 
 ### v1.5.7
 

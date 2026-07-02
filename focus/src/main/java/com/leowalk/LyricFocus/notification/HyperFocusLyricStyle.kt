@@ -905,7 +905,14 @@ object HyperFocusLyricStyle {
     private fun iconPresetToResId(preset: String): Int {
         return when (preset) {
             FocusPreferences.CUSTOM_AOD_TITLE_ICON_NETEASE -> R.drawable.ic_app_icon_netease
-            else -> R.drawable.ic_music_note
+            FocusPreferences.CUSTOM_AOD_TITLE_ICON_QQ -> R.drawable.ic_app_icon_qq
+            FocusPreferences.CUSTOM_AOD_TITLE_ICON_KUGOU -> R.drawable.ic_app_icon_kugou
+            FocusPreferences.CUSTOM_AOD_TITLE_ICON_KUWO -> R.drawable.ic_app_icon_kuwo
+            FocusPreferences.CUSTOM_AOD_TITLE_ICON_QISHUI -> R.drawable.ic_app_icon_qishui
+            FocusPreferences.CUSTOM_AOD_TITLE_ICON_BODIAN -> R.drawable.ic_app_icon_bodian
+            FocusPreferences.CUSTOM_AOD_TITLE_ICON_SPOTIFY -> R.drawable.ic_app_icon_spotify
+            FocusPreferences.CUSTOM_AOD_TITLE_ICON_APPLE -> R.drawable.ic_app_icon_apple
+            else -> R.drawable.ic_app_icon_apple
         }
     }
 

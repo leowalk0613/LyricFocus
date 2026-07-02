@@ -78,6 +78,8 @@ object FocusPreferences {
     const val CUSTOM_AOD_TITLE_ICON_QQ = "qq"
     const val CUSTOM_AOD_TITLE_ICON_KUGOU = "kugou"
     const val CUSTOM_AOD_TITLE_ICON_KUWO = "kuwo"
+    const val CUSTOM_AOD_TITLE_ICON_QISHUI = "qishui"
+    const val CUSTOM_AOD_TITLE_ICON_BODIAN = "bodian"
     const val CUSTOM_AOD_TITLE_ICON_SPOTIFY = "spotify"
     const val CUSTOM_AOD_TITLE_ICON_APPLE = "apple"
 
@@ -566,6 +568,8 @@ object FocusPreferences {
             CUSTOM_AOD_TITLE_ICON_QQ,
             CUSTOM_AOD_TITLE_ICON_KUGOU,
             CUSTOM_AOD_TITLE_ICON_KUWO,
+            CUSTOM_AOD_TITLE_ICON_QISHUI,
+            CUSTOM_AOD_TITLE_ICON_BODIAN,
             CUSTOM_AOD_TITLE_ICON_SPOTIFY,
             CUSTOM_AOD_TITLE_ICON_APPLE -> preset
             else -> CUSTOM_AOD_TITLE_ICON_AUTO
@@ -615,15 +619,17 @@ object FocusPreferences {
     fun formatCustomAodTitleIconSizeLabel(sizePercent: Int): String = "${sizePercent}%"
 
     fun resolvePackageToIconPreset(packageName: String?): String {
-        if (packageName == null) return CUSTOM_AOD_TITLE_ICON_MUSIC_NOTE
+        if (packageName == null) return CUSTOM_AOD_TITLE_ICON_APPLE
         return when {
             packageName.contains("netease", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_NETEASE
-            packageName.contains("qqmusic", ignoreCase = true) || packageName.contains("tencent", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_QQ
-            packageName.contains("kugou", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_KUGOU
+            packageName.contains("qqmusic", ignoreCase = true) || packageName.contains("tencent", ignoreCase = true) || packageName.contains("miui.player", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_QQ
+            packageName.contains("kugou", ignoreCase = true) || packageName.contains("kugou.android", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_KUGOU
             packageName.contains("kuwo", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_KUWO
+            packageName.contains("luna.music", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_QISHUI
+            packageName.contains("wenyu.bodian", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_BODIAN
             packageName.contains("spotify", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_SPOTIFY
             packageName.contains("apple", ignoreCase = true) || packageName.contains("itunes", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_APPLE
-            else -> CUSTOM_AOD_TITLE_ICON_MUSIC_NOTE
+            else -> CUSTOM_AOD_TITLE_ICON_APPLE
         }
     }
 
