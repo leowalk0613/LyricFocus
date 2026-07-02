@@ -7,6 +7,11 @@ object LyricSearchHelper {
         RegexOption.IGNORE_CASE
     )
 
+    private val VERSION_TAG = Regex(
+        """[\s(\[（【]+(?:live|现场版?|acoustic|remix|demo|instrumental|cover|studio|edit|mix|version|ver)\b[\s\S]*?[\)\]）】]\s*""",
+        RegexOption.IGNORE_CASE
+    )
+
     private val TRAILING_PAREN = Regex("""[\(\[（【][^)\]）】]*[\)\]）】]\s*$""")
 
     /** 多艺术家分隔符：/ & 、 以及 " and " / " x " */
@@ -18,11 +23,24 @@ object LyricSearchHelper {
     /** 名字本身含分隔符的艺人/组合特例（小写比较），不做拆分。例如 Leo/need */
     private val ARTIST_NAME_EXCEPTIONS = hashSetOf("leo/need")
 
-    /** 去掉 (feat. …) 等后缀，便于搜索「透明なパレット (feat. …)」这类长标题 */
-    fun normalizeTitleForSearch(title: String): String {
+    /** 艺术家黑名单（小写比较），匹配到这些艺术家的结果会被排除 */
+    private val ARTIST_BLACKLIST = hashSetOf("sazablue")
+
+    fun isArtistBlacklisted(artist: String): Boolean {
+        return artist.trim().lowercase() in ARTIST_BLACKLIST
+    }
+
+    /** 去掉 (feat. …)、(Live)、(现场版) 等后缀，以及尾部的 -ArtistName，便于搜索「透明なパレット (feat. …)」「倒数 (Live)-G.E.M. 邓紫棋」这类长标题 */
+    fun normalizeTitleForSearch(title: String, artist: String = ""): String {
         var t = title.trim()
         if (t.isEmpty()) return t
         t = FEAT_SUFFIX.replace(t, "").trim()
+        repeat(3) {
+            val next = VERSION_TAG.replace(t, "").trim()
+            if (next == t) return@repeat
+            t = next
+        }
+        t = stripTrailingArtist(t, artist)
         repeat(3) {
             val next = TRAILING_PAREN.replace(t, "").trim()
             if (next == t) return@repeat
@@ -43,7 +61,7 @@ object LyricSearchHelper {
     }
 
     fun buildSearchKeywords(title: String, artist: String): List<String> {
-        val normalized = normalizeTitleForSearch(title)
+        val normalized = normalizeTitleForSearch(title, artist)
         val keys = linkedSetOf<String>()
         if (normalized.isNotBlank() && artist.isNotBlank()) keys.add("$normalized $artist")
         if (title.isNotBlank() && artist.isNotBlank() && title != normalized) {
@@ -54,9 +72,26 @@ object LyricSearchHelper {
         return keys.toList()
     }
 
-    fun scoreTitleMatch(songName: String, title: String): Int {
+    private fun stripTrailingArtist(title: String, artist: String): String {
+        if (title.isBlank() || artist.isBlank()) return title
+        val lowerTitle = title.lowercase()
+        val lowerArtist = artist.lowercase()
+        val separators = listOf(" - ", " – ", "—", "-")
+        for (sep in separators) {
+            val sepIndex = lowerTitle.lastIndexOf(sep)
+            if (sepIndex > 0) {
+                val afterSep = lowerTitle.substring(sepIndex + sep.length).trim()
+                if (afterSep.contains(lowerArtist) || lowerArtist.contains(afterSep)) {
+                    return title.substring(0, sepIndex).trim()
+                }
+            }
+        }
+        return title
+    }
+
+    fun scoreTitleMatch(songName: String, title: String, artist: String = ""): Int {
         if (songName.isBlank() || title.isBlank()) return 0
-        val normalized = normalizeTitleForSearch(title)
+        val normalized = normalizeTitleForSearch(title, artist)
         return when {
             songName.equals(title, ignoreCase = true) -> 12
             songName.equals(normalized, ignoreCase = true) -> 11

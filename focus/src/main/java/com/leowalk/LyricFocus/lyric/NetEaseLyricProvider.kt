@@ -102,12 +102,23 @@ class NetEaseLyricProvider : LyricProvider {
     }
 
     private fun scoreSongMatch(song: JSONObject, title: String, artist: String): Int {
-        var score = LyricSearchHelper.scoreTitleMatch(song.optString("name", ""), title)
-
         val artists = song.optJSONArray("artists")
-        if (artists != null && artist.isNotBlank()) {
-            val candidateArtists = (0 until artists.length())
+        val candidateArtists = if (artists != null) {
+            (0 until artists.length())
                 .map { artists.getJSONObject(it).optString("name", "") }
+        } else {
+            emptyList()
+        }
+
+        for (candidateArtist in candidateArtists) {
+            if (LyricSearchHelper.isArtistBlacklisted(candidateArtist)) {
+                return Int.MIN_VALUE
+            }
+        }
+
+        var score = LyricSearchHelper.scoreTitleMatch(song.optString("name", ""), title, artist)
+
+        if (artist.isNotBlank()) {
             score += LyricSearchHelper.scoreArtistMatch(candidateArtists, artist)
         }
         return score

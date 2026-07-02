@@ -44,19 +44,30 @@ class QQMusicLyricProvider : LyricProvider {
                     ?.optJSONObject("song")
                     ?.optJSONArray("list")
                     ?: return@use
-                for (i in 0 until list.length()) {
+                songLoop@ for (i in 0 until list.length()) {
                     val song = list.getJSONObject(i)
+                    val singers = song.optJSONArray("singer")
+                    val candidateArtists = if (singers != null) {
+                        (0 until singers.length())
+                            .map { singers.getJSONObject(it).optString("name", "") }
+                    } else {
+                        emptyList()
+                    }
+
+                    for (candidateArtist in candidateArtists) {
+                        if (LyricSearchHelper.isArtistBlacklisted(candidateArtist)) {
+                            continue@songLoop
+                        }
+                    }
+
                     val titleScore = LyricSearchHelper.scoreTitleMatch(
                         song.optString("songname", ""),
-                        title
+                        title,
+                        artist
                     )
-                    // 标题需至少弱匹配，避免仅靠艺术家命中拿到无关歌词
                     if (titleScore <= 0) continue
                     var score = titleScore
-                    val singers = song.optJSONArray("singer")
-                    if (singers != null && artist.isNotBlank()) {
-                        val candidateArtists = (0 until singers.length())
-                            .map { singers.getJSONObject(it).optString("name", "") }
+                    if (artist.isNotBlank()) {
                         score += LyricSearchHelper.scoreArtistMatch(candidateArtists, artist)
                     }
                     if (score > bestScore) {

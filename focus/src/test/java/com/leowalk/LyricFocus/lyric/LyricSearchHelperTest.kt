@@ -87,4 +87,74 @@ class LyricSearchHelperTest {
         )
         assertEquals(24, score)
     }
+
+    @Test
+    fun normalizeTitleForSearch_stripsLiveTag() {
+        assertEquals("倒数", LyricSearchHelper.normalizeTitleForSearch("倒数 (Live)"))
+        assertEquals("倒数", LyricSearchHelper.normalizeTitleForSearch("倒数 (live)"))
+        assertEquals("倒数", LyricSearchHelper.normalizeTitleForSearch("倒数 (现场版)"))
+        assertEquals("倒数", LyricSearchHelper.normalizeTitleForSearch("倒数 (现场)"))
+    }
+
+    @Test
+    fun normalizeTitleForSearch_stripsOtherVersionTags() {
+        assertEquals("告白气球", LyricSearchHelper.normalizeTitleForSearch("告白气球 (Acoustic)"))
+        assertEquals("告白气球", LyricSearchHelper.normalizeTitleForSearch("告白气球 (Remix)"))
+        assertEquals("告白气球", LyricSearchHelper.normalizeTitleForSearch("告白气球 (Demo)"))
+        assertEquals("告白气球", LyricSearchHelper.normalizeTitleForSearch("告白气球 (Instrumental)"))
+        assertEquals("告白气球", LyricSearchHelper.normalizeTitleForSearch("告白气球 (Cover)"))
+    }
+
+    @Test
+    fun stripTrailingArtist_removesArtistFromTitle() {
+        assertEquals("倒数 (Live)", LyricSearchHelper.stripTrailingArtist("倒数 (Live)-G.E.M. 邓紫棋", "邓紫棋"))
+        assertEquals("倒数 (Live)", LyricSearchHelper.stripTrailingArtist("倒数 (Live) - G.E.M. 邓紫棋", "邓紫棋"))
+        assertEquals("告白气球", LyricSearchHelper.stripTrailingArtist("告白气球 - 周杰伦", "周杰伦"))
+        assertEquals("稻香", LyricSearchHelper.stripTrailingArtist("稻香 – 周杰伦", "周杰伦"))
+    }
+
+    @Test
+    fun buildSearchKeywords_generatesStrippedVariants() {
+        val title = "倒数 (Live)-G.E.M. 邓紫棋"
+        val artist = "邓紫棋"
+        val keys = LyricSearchHelper.buildSearchKeywords(title, artist)
+        assertTrue(keys.contains("倒数 邓紫棋"))
+        assertTrue(keys.contains("倒数"))
+        assertTrue(keys.contains("倒数 (Live) 邓紫棋"))
+        assertTrue(keys.contains("倒数 (Live)"))
+    }
+
+    @Test
+    fun scoreTitleMatch_matchesStrippedTitle() {
+        val title = "倒数 (Live)-G.E.M. 邓紫棋"
+        val score = LyricSearchHelper.scoreTitleMatch("倒数", title)
+        assertTrue(score >= 11)
+    }
+
+    @Test
+    fun normalizeTitleForSearch_liveTagNotAtEnd() {
+        assertEquals("倒数-G.E.M. 邓紫棋", LyricSearchHelper.normalizeTitleForSearch("倒数 (Live)-G.E.M. 邓紫棋"))
+    }
+
+    @Test
+    fun normalizeTitleForSearch_stripsTrailingArtist() {
+        assertEquals("倒数", LyricSearchHelper.normalizeTitleForSearch("倒数 (Live)-G.E.M. 邓紫棋", "邓紫棋"))
+        assertEquals("倒数", LyricSearchHelper.normalizeTitleForSearch("倒数-G.E.M. 邓紫棋", "邓紫棋"))
+    }
+
+    @Test
+    fun isArtistBlacklisted_sazablue() {
+        assertTrue(LyricSearchHelper.isArtistBlacklisted("Sazablue"))
+        assertTrue(LyricSearchHelper.isArtistBlacklisted("sazablue"))
+        assertTrue(LyricSearchHelper.isArtistBlacklisted("  Sazablue  "))
+        assertFalse(LyricSearchHelper.isArtistBlacklisted("邓紫棋"))
+        assertFalse(LyricSearchHelper.isArtistBlacklisted("G.E.M. 邓紫棋"))
+    }
+
+    @Test
+    fun scoreTitleMatch_withArtistParameter() {
+        val title = "倒数-G.E.M. 邓紫棋"
+        val artist = "邓紫棋"
+        assertEquals(11, LyricSearchHelper.scoreTitleMatch("倒数", title, artist))
+    }
 }

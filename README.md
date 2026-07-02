@@ -411,9 +411,10 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 
 ### v1.5.8
 
+- **歌词匹配算法优化**：`normalizeTitleForSearch` 新增 `artist` 参数，支持自动剥离标题尾部的 `-ArtistName` 后缀（如 `"倒数 (Live)-G.E.M. 邓紫棋"` + `"邓紫棋"` → `"倒数"`）；新增 `VERSION_TAG` 正则匹配 `(Live)`、`(现场版)`、`(Acoustic)`、`(Remix)`、`(Demo)`、`(Instrumental)`、`(Cover)` 等版本标签；修复不同音乐应用（如酷狗、酷我）返回的标题格式不一致导致匹配到错误歌词的问题
+- **艺术家黑名单**：新增艺术家黑名单机制，匹配到黑名单艺术家的歌曲会被直接排除；默认拉黑 `Sazablue`，防止翻唱版本干扰原版歌词匹配
 - **万象息屏标题图标扩展**：新增 QQ 音乐、酷狗音乐、酷我音乐、汽水音乐、波点音乐、Spotify、Apple Music 共 7 个应用的图标支持，网易云音乐图标已在 v1.5.7 支持；`com.miui.player` 绑定 QQ 音乐图标；`com.kugou.android.lite` 绑定酷狗音乐图标
 - **默认图标变更**：未识别的音乐应用默认显示 Apple Music 图标（原默认 `ic_music_note`）
-- **README 更新**：添加 GitHub Releases 下载地址
 - **版本号**：`1.5.8`（versionCode 14）
 
 ### v1.5.7
@@ -662,14 +663,25 @@ MIT License
 
 ### 主设置界面
 
-<img width="600" height="1335" alt="Screenshot_2026-06-28-14-48-57-708_com leowalk LyricFocus" src="https://github.com/user-attachments/assets/c0bfa278-05a8-4c40-9df2-6e976fba5ac7" />
+<img width="600" height="1646" alt="Screenshot_2026-07-02-14-32-29-559_com leowalk LyricFocus" src="https://github.com/user-attachments/assets/dbc57162-bc35-490a-9a7a-a58365c9c8ce" />
 
-### 锁屏歌词（桌面状态）
+### 样式设置界面
 
-<img width="600" height="1335" alt="Screenshot_2026-06-28-14-49-07-693_com miui home" src="https://github.com/user-attachments/assets/cdb04b77-c0f3-407d-8a69-b15e32045b8f" />
+<img width="1200" height="7601" alt="Screenshot_2026-07-02-14-32-42-862_com leowalk LyricFocus (1)" src="https://github.com/user-attachments/assets/55dc4479-85f2-46ee-b513-cc64903a645f" />
 
-### 锁屏歌词（AOD 息屏）
+### 关于界面
 
-<img width="600" height="1335" alt="Screenshot_2026-06-28-14-49-32-311_lockscreen" src="https://github.com/user-attachments/assets/cb6881be-789d-48a6-acf7-60ad6e5ee669" />
+<img width="360" height="998" alt="Screenshot_2026-07-02-14-33-12-698_com leowalk LyricFocus" src="https://github.com/user-attachments/assets/de47c03a-5537-47a2-8498-4c23013c0738" />
 
----
+### 焦点通知歌词（桌面状态）
+
+<img width="360" height="801" alt="Screenshot_2026-07-02-14-33-35-703_com netease cloudmusic" src="https://github.com/user-attachments/assets/90f64745-185b-42f4-8f70-a0f7742b9c8a" />
+
+### 锁屏歌词（锁屏样式 AOD 息屏）
+
+<img width="360" height="801" alt="Screenshot_2026-07-02-14-35-22-141_com miui gallery" src="https://github.com/user-attachments/assets/144c1c34-2589-4d60-80e4-b550a8681bd0" />
+
+### 锁屏歌词（锁屏样式 AOD 息屏）
+
+<img width="360" height="801" alt="Screenshot_2026-07-02-14-34-10-149_com miui gallery" src="https://github.com/user-attachments/assets/ebaf3dc6-bfb9-47ea-8b90-637d43300e08" />
+
