@@ -662,14 +662,25 @@ MIT License
 
 ### 主设置界面
 
-<img width="600" height="1335" alt="Screenshot_2026-06-28-14-48-57-708_com leowalk LyricFocus" src="https://github.com/user-attachments/assets/c0bfa278-05a8-4c40-9df2-6e976fba5ac7" />
+<img width="600" height="1646" alt="Screenshot_2026-07-02-14-32-29-559_com leowalk LyricFocus" src="https://github.com/user-attachments/assets/dbc57162-bc35-490a-9a7a-a58365c9c8ce" />
 
-### 锁屏歌词（桌面状态）
+### 样式设置界面
 
-<img width="600" height="1335" alt="Screenshot_2026-06-28-14-49-07-693_com miui home" src="https://github.com/user-attachments/assets/cdb04b77-c0f3-407d-8a69-b15e32045b8f" />
+<img width="50" height="317" alt="Screenshot_2026-07-02-14-32-42-862_com leowalk LyricFocus" src="https://github.com/user-attachments/assets/f750511f-4738-40c5-b082-37c73dd17ecd" />
 
-### 锁屏歌词（AOD 息屏）
+### 关于界面
 
-<img width="600" height="1335" alt="Screenshot_2026-06-28-14-49-32-311_lockscreen" src="https://github.com/user-attachments/assets/cb6881be-789d-48a6-acf7-60ad6e5ee669" />
+<img width="360" height="998" alt="Screenshot_2026-07-02-14-33-12-698_com leowalk LyricFocus" src="https://github.com/user-attachments/assets/de47c03a-5537-47a2-8498-4c23013c0738" />
 
----
+### 焦点通知歌词（桌面状态）
+
+<img width="360" height="801" alt="Screenshot_2026-07-02-14-33-35-703_com netease cloudmusic" src="https://github.com/user-attachments/assets/90f64745-185b-42f4-8f70-a0f7742b9c8a" />
+
+### 锁屏歌词（锁屏样式 AOD 息屏）
+
+<img width="360" height="801" alt="Screenshot_2026-07-02-14-35-22-141_com miui gallery" src="https://github.com/user-attachments/assets/144c1c34-2589-4d60-80e4-b550a8681bd0" />
+
+### 锁屏歌词（锁屏样式 AOD 息屏）
+
+<img width="360" height="801" alt="Screenshot_2026-07-02-14-34-10-149_com miui gallery" src="https://github.com/user-attachments/assets/ebaf3dc6-bfb9-47ea-8b90-637d43300e08" />
+
