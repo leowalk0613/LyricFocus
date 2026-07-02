@@ -666,7 +666,7 @@ MIT License
 
 ### 样式设置界面
 
-<img width="50" height="317" alt="Screenshot_2026-07-02-14-32-42-862_com leowalk LyricFocus" src="https://github.com/user-attachments/assets/f750511f-4738-40c5-b082-37c73dd17ecd" />
+<img width="1200" height="7601" alt="Screenshot_2026-07-02-14-32-42-862_com leowalk LyricFocus (1)" src="https://github.com/user-attachments/assets/55dc4479-85f2-46ee-b513-cc64903a645f" />
 
 ### 关于界面
 
