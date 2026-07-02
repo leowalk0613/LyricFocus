@@ -30,3 +30,14 @@ keystore.properties
 module_data.json
 app/release/
 app/debug/
+
+# Build logs
+build_log.txt
+build_output*.txt
+build_test_log.txt
+gradle_*.txt
+gradle-*.txt
+ps_err.txt
+ps_out.txt
+stderr.txt
+stdout.txt
