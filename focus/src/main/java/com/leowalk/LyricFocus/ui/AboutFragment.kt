@@ -46,17 +46,7 @@ class AboutFragment : Fragment(R.layout.activity_about) {
         setupVersionLabel(view)
         setupLinks(view)
         setupLogViewer(view)
-        setupSystemRequirementsButton()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        activity?.findViewById<ImageButton>(R.id.btn_system_requirements)?.visibility = View.VISIBLE
-    }
-
-    override fun onPause() {
-        super.onPause()
-        activity?.findViewById<ImageButton>(R.id.btn_system_requirements)?.visibility = View.GONE
+        setupSystemRequirementsButton(view)
     }
 
     private fun setupVersionLabel(view: View) {
@@ -71,6 +61,10 @@ class AboutFragment : Fragment(R.layout.activity_about) {
     private fun setupLinks(view: View) {
         view.findViewById<MaterialButton>(R.id.btn_github_repo).setOnClickListener {
             openUrl("https://github.com/leowalk0613/LyricFocus")
+        }
+
+        view.findViewById<MaterialButton>(R.id.btn_gitee_repo).setOnClickListener {
+            openUrl("https://gitee.com/leowalk0613/LyricFocus")
         }
 
         view.findViewById<MaterialButton>(R.id.btn_github_issue).setOnClickListener {
@@ -180,8 +174,8 @@ SOFTWARE."""
         }
     }
 
-    private fun setupSystemRequirementsButton() {
-        activity?.findViewById<ImageButton>(R.id.btn_system_requirements)?.setOnClickListener {
+    private fun setupSystemRequirementsButton(view: View) {
+        view.findViewById<ImageButton>(R.id.btn_system_requirements).setOnClickListener {
             showSystemRequirementsDialog()
         }
     }

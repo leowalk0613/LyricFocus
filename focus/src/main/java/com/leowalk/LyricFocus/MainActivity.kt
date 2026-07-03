@@ -12,18 +12,22 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.commit
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.leowalk.LyricFocus.ui.AboutFragment
 import com.leowalk.LyricFocus.ui.HomeFragment
 import com.leowalk.LyricFocus.ui.StyleSettingsFragment
 import com.leowalk.LyricFocus.util.RootHelper
+import com.leowalk.LyricFocus.util.UpdateChecker
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
 
     private lateinit var toolbar: MaterialToolbar
     private lateinit var bottomNav: BottomNavigationView
     private lateinit var btnRestartSystemUi: ImageButton
+    private lateinit var btnUpdateAvailable: ImageButton
     private var isCheckingRoot = false
+    private var pendingUpdateInfo: UpdateChecker.UpdateInfo? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,10 +41,14 @@ class MainActivity : AppCompatActivity() {
         toolbar = findViewById(R.id.toolbar)
         bottomNav = findViewById(R.id.bottom_navigation)
         btnRestartSystemUi = findViewById(R.id.btn_restart_systemui)
+        btnUpdateAvailable = findViewById(R.id.btn_update_available)
         setSupportActionBar(toolbar)
         setupWindowInsets()
 
         btnRestartSystemUi.setOnClickListener { confirmRestartSystemUi() }
+        btnUpdateAvailable.setOnClickListener {
+            pendingUpdateInfo?.let { showUpdateDialog(it) }
+        }
 
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
@@ -131,6 +139,69 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this, message ?: "重启失败", Toast.LENGTH_LONG).show()
                 }
             }
+        }
+    }
+
+    override fun onUpdateChecked(info: UpdateChecker.UpdateInfo) {
+        pendingUpdateInfo = info
+        if (info.hasUpdate) {
+            btnUpdateAvailable.setColorFilter(getColor(R.color.red))
+        } else {
+            btnUpdateAvailable.clearColorFilter()
+        }
+    }
+
+    private fun showUpdateDialog(info: UpdateChecker.UpdateInfo) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_update, null)
+
+        val btnGithub = dialogView.findViewById<MaterialButton>(R.id.btn_update_github)
+        val btnGitee = dialogView.findViewById<MaterialButton>(R.id.btn_update_gitee)
+        val btn123Pan = dialogView.findViewById<MaterialButton>(R.id.btn_update_123pan)
+        val tvReleaseNotes = dialogView.findViewById<android.widget.TextView>(R.id.tv_release_notes)
+        val tvVersionInfo = dialogView.findViewById<android.widget.TextView>(R.id.tv_version_info)
+
+        val currentVersion = UpdateChecker(this).getCurrentVersion(this)
+        if (info.hasUpdate) {
+            tvVersionInfo.text = "当前版本：$currentVersion\n最新版本：${info.latestVersion}"
+            tvReleaseNotes.text = info.releaseNotes ?: "暂无更新日志"
+            btnGithub.setOnClickListener {
+                info.githubUrl?.let { openUrl(it) }
+            }
+            btnGitee.setOnClickListener {
+                info.giteeUrl?.let { openUrl(it) } ?: openUrl("https://gitee.com/leowalk0613/LyricFocus/releases")
+            }
+            btn123Pan.setOnClickListener {
+                openUrl("https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3")
+            }
+            MaterialAlertDialogBuilder(this)
+                .setTitle("发现新版本")
+                .setView(dialogView)
+                .setNegativeButton("关闭", null)
+                .show()
+        } else {
+            tvVersionInfo.text = "当前版本：$currentVersion"
+            tvReleaseNotes.text = info.releaseNotes ?: "暂无更新日志"
+            btnGithub.setOnClickListener {
+                openUrl("https://github.com/leowalk0613/LyricFocus/releases")
+            }
+            btnGitee.setOnClickListener {
+                openUrl("https://gitee.com/leowalk0613/LyricFocus/releases")
+            }
+            btn123Pan.setOnClickListener {
+                openUrl("https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3")
+            }
+            MaterialAlertDialogBuilder(this)
+                .setTitle("当前版本")
+                .setView(dialogView)
+                .setNegativeButton("关闭", null)
+                .show()
+        }
+    }
+
+    private fun openUrl(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+        } catch (_: Exception) {
         }
     }
 }

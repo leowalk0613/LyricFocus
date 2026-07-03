@@ -1,6 +1,8 @@
 package com.leowalk.LyricFocus.service
 
+import android.app.AlarmManager
 import android.app.Notification
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -13,9 +15,11 @@ import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.util.Log
 import com.leowalk.LyricFocus.FocusPreferences
+import com.leowalk.LyricFocus.receiver.ServiceRestartReceiver
 
 class MusicMonitorService : NotificationListenerService() {
 
@@ -31,6 +35,7 @@ class MusicMonitorService : NotificationListenerService() {
         private const val CHANNEL_ID = LyricNotificationManager.CHANNEL_ID
         private const val CHANNEL_NAME = "歌词服务"
         private const val REFRESH_INTERVAL_MS = 5000L
+        private const val ALARM_INTERVAL_MS = 30000L
 
         var isServiceRunning = false
             private set
@@ -307,11 +312,55 @@ class MusicMonitorService : NotificationListenerService() {
         handler.removeCallbacks(periodicRefreshRunnable)
         handler.post(periodicRefreshRunnable)
         Log.d(TAG, "Periodic refresh started")
+        scheduleRestartAlarm()
     }
 
     private fun stopPeriodicRefresh() {
         handler.removeCallbacks(periodicRefreshRunnable)
         Log.d(TAG, "Periodic refresh stopped")
+        cancelRestartAlarm()
+    }
+
+    private fun scheduleRestartAlarm() {
+        try {
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val intent = Intent(this, ServiceRestartReceiver::class.java)
+            intent.action = ServiceRestartReceiver.ACTION_RESTART_SERVICE
+            val pendingIntent = PendingIntent.getBroadcast(
+                this,
+                0,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_IMMUTABLE else 0)
+            )
+
+            alarmManager.setInexactRepeating(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + ALARM_INTERVAL_MS,
+                ALARM_INTERVAL_MS,
+                pendingIntent
+            )
+            Log.d(TAG, "Restart alarm scheduled")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to schedule restart alarm", e)
+        }
+    }
+
+    private fun cancelRestartAlarm() {
+        try {
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val intent = Intent(this, ServiceRestartReceiver::class.java)
+            intent.action = ServiceRestartReceiver.ACTION_RESTART_SERVICE
+            val pendingIntent = PendingIntent.getBroadcast(
+                this,
+                0,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_IMMUTABLE else 0)
+            )
+            alarmManager.cancel(pendingIntent)
+            Log.d(TAG, "Restart alarm cancelled")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to cancel restart alarm", e)
+        }
     }
 
     private fun checkSessionHealth() {

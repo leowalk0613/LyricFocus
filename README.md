@@ -6,7 +6,7 @@
 ![Kotlin](https://img.shields.io/badge/Kotlin-0095D5?&style=for-the-badge&logo=kotlin&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)
 
-在小米 HyperOS 上于**锁屏、AOD（息屏显示）、通知栏**展示同步歌词。  
+在小米 HyperOS 上于**锁屏、AOD（息屏显示）、通知中心**展示同步歌词。  
 通过 LSPosed 注入 SystemUI，使用 HyperOS **焦点通知**（`miui.focus.*`）渲染歌词；主界面副标题：**实现 HyperOS 锁屏息屏焦点歌词的 LSP 模块**。
 
 包名：`com.leowalk.LyricFocus`
@@ -39,7 +39,8 @@
 
 ## 功能概览
 
-- **Material 3 界面**：主界面、样式设置、关于页统一 Tonal 风格；工具栏 **重启 SystemUI** 图标（需 Root）
+- **Material 3 界面**：主界面、样式设置、关于页统一 Tonal 风格；工具栏常驻 **版本信息** 按钮（有更新时变红，无更新时白色可查看当前版本日志）与 **重启 SystemUI** 图标（需 Root）
+- **版本更新检测**：应用启动后同时检测 GitHub 与 Gitee Release，并行请求取最新版本；有更新时工具栏按钮变红并显示更新日志与下载链接，无更新时点击按钮可查看当前版本更新日志；检测完全在后台线程，不阻塞界面
 - **样式设置（v1.5）**：分 **通用**、**锁屏样式 AOD**、**万象息屏 AOD** 三类；开启万象息屏时锁屏样式项置灰，关闭时万象息屏专用项置灰
 - **通用样式**：歌词与翻译位置互换、仅显示第一行（全局作用于全部布局）
 - **锁屏样式 AOD**：字号、文字颜色、行数、排版、焦点通知背景；**Monet 动态取色** 与 **通知文字取色**
@@ -55,7 +56,8 @@
 - **歌词提前量**：可调同步偏移（默认提前 200 ms）
 - **Root 重启 SystemUI**：主界面右上角一键重启，Hook / 样式变更后快速生效
 - **统一通知渠道**：后台服务通知合并为单一渠道，前台通知显示当前播放状态
-- **关于界面**：软件信息、项目信息与联系作者、获取日志（自动扫描 / 手动选择）、系统要求弹窗、许可证与致谢
+- **服务自启动**：开机完成、用户解锁后自动拉起歌词服务；AlarmManager 周期性保活
+- **关于界面**：软件信息、项目信息与联系作者、获取日志（自动扫描 / 手动选择）、系统要求按钮（位于第一个卡片右上角）、许可证与致谢
 - **LSPosed 日志查看**：应用内选择日志文件/ZIP 压缩包，自动筛选 LyricFocus 相关日志，支持一键复制
 
 ---
@@ -143,8 +145,8 @@ LyricFocus/
         │   ├── lyric/                    # 网易云 / QQ、LRC 解析
         │   ├── service/                  # MediaSession、歌词服务、通知管理
         │   ├── notification/             # HyperFocusLyricStyle
-        │   ├── receiver/                 # FocusResyncReceiver
-        │   ├── util/                     # RootHelper、AlbumColorExtractor、InstalledAppsHelper
+        │   ├── receiver/                 # FocusResyncReceiver、ServiceRestartReceiver
+        │   ├── util/                     # RootHelper、AlbumColorExtractor、InstalledAppsHelper、UpdateChecker
         │   └── xposed/                   # SystemUI / AOD Hook
         └── res/layout/                   # focus_lyric_* / activity_style_settings / about
 ```
@@ -376,6 +378,7 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 | Action | 说明 |
 |--------|------|
 | `com.leowalk.LyricFocus.action.REQUEST_RESYNC` | SystemUI 就绪，请求重推 |
+| `com.leowalk.LyricFocus.action.RESTART_SERVICE` | 服务自启动/保活 |
 
 ---
 
@@ -401,13 +404,22 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 |------|------|------|
 | [HyperFocusApi](https://github.com/ghhccghk/HyperFocusApi) | 2.0 | `miui.focus` 参数封装 |
 | [Xposed API](https://api.xposed.info/) | 82 | LSPosed Hook 接口 |
-| OkHttp | 4.12.0 | 歌词 HTTP |
+| OkHttp | 4.12.0 | 歌词 HTTP、版本更新检测 |
 | AndroidX Palette | 1.0.0 | 专辑封面取色 |
 | AndroidX / Material / Coroutines | 见 `focus/build.gradle` | UI、MediaSession |
 
 ---
 
 ## 版本更新
+
+### v1.5.9
+
+- **版本更新检测优化**：GitHub 与 Gitee Release 同步并行检测，取版本号更新的结果；检测完全在后台线程，不阻塞界面
+- **更新按钮常驻显示**：工具栏版本信息按钮始终可见；有更新时图标变红并显示新版本日志与下载链接，无更新时为默认白色，点击可查看当前版本更新日志
+- **关于页面系统要求按钮**：系统要求按钮从顶部工具栏移至关于页面第一个卡片的右上角，不再随页面切换显隐
+- **服务自启动保活**：新增 `ServiceRestartReceiver`，监听 `BOOT_COMPLETED` 和 `USER_PRESENT` 广播自动拉起歌词服务；`MusicMonitorService` 使用 `AlarmManager` 周期性保活（30 秒间隔）
+- **万象息屏歌名行对齐修复**：`focus_song_inner` 宽度改为 `match_parent`，`HyperFocusLyricStyle` 中 `setGravity` 作用对象从 `focus_song_row` 修正为 `focus_song_inner`，修复歌名行居左/居右对齐不生效的问题
+- **版本号**：`1.5.9`（versionCode 15）
 
 ### v1.5.8
 

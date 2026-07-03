@@ -84,6 +84,16 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".receiver.ServiceRestartReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.leowalk.LyricFocus.action.RESTART_SERVICE" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.USER_PRESENT" />
+            </intent-filter>
+        </receiver>
+
         <meta-data android:name="xposedmodule" android:value="true" />
         <meta-data android:name="xposeddescription" android:value="LyricFocus - HyperOS 焦点通知歌词" />
         <meta-data android:name="xposedminversion" android:value="82" />

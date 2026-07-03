@@ -3,11 +3,13 @@ package com.leowalk.LyricFocus.ui
 import android.Manifest
 import android.content.ComponentName
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
 import android.widget.ImageButton
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
@@ -20,6 +22,7 @@ import com.leowalk.LyricFocus.NotificationPermissionHelper
 import com.leowalk.LyricFocus.R
 import com.leowalk.LyricFocus.service.LyricService
 import com.leowalk.LyricFocus.service.MusicMonitorService
+import com.leowalk.LyricFocus.util.UpdateChecker
 
 class HomeFragment : Fragment(R.layout.fragment_home) {
 
@@ -39,6 +42,26 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
     private lateinit var btnGrantPostNotification: MaterialButton
     private lateinit var tvRootPermission: TextView
     private var isSyncAdvanceSliderUpdating = false
+    private var pendingUpdateInfo: UpdateChecker.UpdateInfo? = null
+    private var hasCheckedForUpdates = false
+
+    interface UpdateCallback {
+        fun onUpdateChecked(info: UpdateChecker.UpdateInfo)
+    }
+
+    private var updateCallback: UpdateCallback? = null
+
+    override fun onAttach(context: android.content.Context) {
+        super.onAttach(context)
+        if (context is UpdateCallback) {
+            updateCallback = context
+        }
+    }
+
+    override fun onDetach() {
+        super.onDetach()
+        updateCallback = null
+    }
 
     private val requestPostNotifications = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -61,6 +84,10 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         updateWhitelistUi()
         updateLyricSourceUi()
         updateStatus()
+        if (!hasCheckedForUpdates) {
+            hasCheckedForUpdates = true
+            checkForUpdates()
+        }
     }
 
     private fun initViews(view: View) {
@@ -330,5 +357,60 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
             )
             .setPositiveButton("知道了", null)
             .show()
+    }
+
+    private fun checkForUpdates() {
+        Thread {
+            val info = try {
+                UpdateChecker(requireContext()).checkForUpdates()
+            } catch (_: Exception) {
+                null
+            }
+            activity?.runOnUiThread {
+                info?.let {
+                    pendingUpdateInfo = it
+                    updateCallback?.onUpdateChecked(it)
+                }
+            }
+        }.start()
+    }
+
+    private fun showUpdateDialog(info: UpdateChecker.UpdateInfo) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_update, null)
+
+        val btnGithub = dialogView.findViewById<MaterialButton>(R.id.btn_update_github)
+        val btnGitee = dialogView.findViewById<MaterialButton>(R.id.btn_update_gitee)
+        val btn123Pan = dialogView.findViewById<MaterialButton>(R.id.btn_update_123pan)
+        val tvReleaseNotes = dialogView.findViewById<TextView>(R.id.tv_release_notes)
+        val tvVersionInfo = dialogView.findViewById<TextView>(R.id.tv_version_info)
+
+        val currentVersion = UpdateChecker(requireContext()).getCurrentVersion(requireContext())
+        tvVersionInfo.text = "当前版本：$currentVersion\n最新版本：${info.latestVersion}"
+        tvReleaseNotes.text = info.releaseNotes ?: "暂无更新日志"
+
+        btnGithub.setOnClickListener {
+            info.githubUrl?.let { openUrl(it) }
+        }
+        btnGitee.setOnClickListener {
+            info.giteeUrl?.let { openUrl(it) } ?: run {
+                openUrl("https://gitee.com/leowalk0613/LyricFocus/releases")
+            }
+        }
+        btn123Pan.setOnClickListener {
+            openUrl("https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3")
+        }
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("发现新版本")
+            .setView(dialogView)
+            .setNegativeButton("关闭", null)
+            .show()
+    }
+
+    private fun openUrl(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (_: Exception) {
+        }
     }
 }
