@@ -393,6 +393,7 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 | 作用域 | 主要类 | 职责 |
 |--------|--------|------|
 | `com.android.systemui` | `SystemUIHyperFocusHook` | 广播、焦点通知、权限 bypass |
+| | `FocusPinAboveHook` | 焦点通知数据层/视图层置顶歌词卡片 |
 | | `SystemUIPluginHook` | 焦点/AOD 插件 ClassLoader bypass |
 | | `FocusIslandSuppressHook` | 关闭超级岛兜底 |
 | | `FocusAntiFlickerHook` | 换行防闪烁 |
@@ -420,23 +421,23 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 
 #### 新功能
 
-- **歌词焦点通知永久置顶**：新增 `FocusPinAboveHook`，在焦点通知数据层与视图层将歌词卡片置顶，覆盖 HyperIsland 转换通知、倒计时焦点通知等；`pinAboveMedia` 默认始终开启
-- **本地 LRC 歌词源**：新增「本地 LRC 文件」模式；应用内 SAF 选择文件夹；智能文件名匹配；三语 LRC（原文 / 翻译 / 读音）合并显示
-- **AI 翻译歌词源**：新增「AI 翻译（在线 + 翻译）」模式，兼容 OpenAI Chat Completions API
+- **歌词焦点通知永久置顶**：新增 `FocusPinAboveHook`，在焦点通知数据层与视图层将歌词卡片置顶，覆盖 HyperIsland 转换通知、倒计时焦点通知等场景；`pinAboveMedia` 默认始终开启
+- **本地 LRC 歌词源**：新增「本地 LRC 文件」模式；应用内通过系统文件夹选择器（SAF）授权读取 `.lrc`；支持「歌名 - 歌手」/「歌手 - 歌名」文件名智能匹配；支持三语 LRC（同时间戳或续行的原文 / 翻译 / 读音合并为一条，第二行显示翻译与读音）
+- **AI 翻译歌词源**：新增「AI 翻译（在线 + 翻译）」模式，兼容 OpenAI Chat Completions API；先拉取在线歌词，再为无译文歌曲生成翻译（需配置 API Key）
 
 #### 修复
 
-- **QQ 音乐歌词源失效**：搜索迁移至 `musicu.fcg`，歌词改用 `i.y.qq.com` 明文接口
-- **网易云极短标题误匹配**：修复 `p.h.` 误匹配；艺术家优先搜索、标题零分排除、已知 ID 兜底
-- **歌词通知排序无效**：修复锁屏焦点卡片无法通过通知栈重排置顶的问题
+- **QQ 音乐歌词源失效**：搜索迁移至 `u.y.qq.com/cgi-bin/musicu.fcg`（旧 `client_search_cp` 已失效）；歌词接口改用 `i.y.qq.com` 明文拉取，保留 base64 回退；支持双搜索 payload 回退
+- **网易云极短标题误匹配**：修复 `p.h.` 等带点短标题误匹配为同艺人其他歌曲（如「針」）；增加艺术家优先搜索词、标题零分排除、已知单曲 ID 兜底（1449599572）
+- **歌词通知被其他焦点通知压在下方**：修复仅调整通知栈子 View 无法影响锁屏焦点卡片排序的问题；针对 `FocusedNotifPromptController` 及插件进程补 hook
 
 #### 优化
 
-- 焦点置顶 hook 稳定性（防重入、缩小 hook 范围）
-- 三语 LRC 解析增强
-- 应用内内置 v1.6.0 更新说明
-- 万象息屏标题图标文案修正
-- 歌词搜索关键词策略增强
+- **焦点置顶 hook 稳定性**：缩小 `FocusedNotifPromptController` hook 范围，防重入，安全处理不可变列表，移除 hook 内 refresh 避免异常刷屏
+- **三语 LRC 解析**：`LrcParser` 合并同时间戳多行，支持无时间戳续行与 `|` / `/` 行内分隔；按假名 / 汉字 / 罗马音自动分类
+- **内置更新日志**：应用内点击版本按钮可查看当前版本说明，无需等待远程 Release
+- **万象息屏标题图标文案**：「显示标题图标」说明去掉「或手动选择」，改为「支持自动识别」
+- **歌词搜索关键词**：`LyricSearchHelper` 增加艺术家优先、拆分组合艺人、尾点变体等搜索词策略
 
 - **版本号**：`1.6.0`（versionCode 16）
 
