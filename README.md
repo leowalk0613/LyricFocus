@@ -48,8 +48,8 @@
 - **样式设置 UI（v1.5.1+）**：锁屏样式 AOD 合并为单卡片统一置灰；万象息屏字体排版区块与锁屏样式层级一致
 - **Monet 动态取色**：从当前播放专辑封面实时提取背景与文字色（Material You 风格），自动增强对比度以保证歌词可读性；开启后手动背景/文字/文字取色选项置灰
 - **实时歌词**：`NotificationListenerService` 绑定 MediaSession，监听播放进度与元数据
-- **多歌词源**：网易云音乐、QQ 音乐（自动链式回退或指定单一源）
-- **焦点通知**：锁屏 / AOD 使用 `miui.focus.rv`、`miui.focus.rvAod` 自定义 RemoteViews，支持 updatable 会话续期
+- **多歌词源**：网易云音乐、QQ 音乐、本地 LRC 文件、AI 翻译（自动链式回退或指定单一源）；本地源支持应用内选文件夹与三语 LRC
+- **歌词焦点通知置顶**：歌词焦点卡片优先于其他焦点通知（含倒计时、HyperIsland 转换通知）
 - **万象息屏（自定义）AOD**：主界面开关；横向 `rvAod` 布局，修复万象/自定义息屏歌词只显示首字的问题；歌名左侧可显示音乐图标（按歌词颜色染色，网易云音乐自动识别预设图标）
 - **超级岛（默认关闭）**：主界面已移除开关，代码层固定关闭
 - **应用白名单**：可选仅对指定音乐 App 的 MediaSession 响应；支持搜索已安装应用、手动添加包名
@@ -353,12 +353,16 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 | 源 | Provider | API |
 |----|----------|-----|
 | 网易云 | `NetEaseLyricProvider` | `music.163.com/api/...` |
-| QQ 音乐 | `QQMusicLyricProvider` | `c.y.qq.com/...` |
+| QQ 音乐 | `QQMusicLyricProvider` | `u.y.qq.com/cgi-bin/musicu.fcg`（搜索）、`i.y.qq.com/lyric/...`（歌词） |
+| 本地 LRC | `LocalLrcLyricProvider` | 应用内选择文件夹（SAF），或应用私有 `lyrics` 目录 |
+| AI 翻译 | `AiLyricTranslator` | OpenAI 兼容 `/chat/completions`（需配置 API Key） |
 
 - `auto`：先网易云，失败再 QQ
+- `local`：匹配本地 `.lrc`（应用内**选择文件夹**；支持「歌名 - 歌手」/「歌手 - 歌名」及三语同时间戳格式）
+- `ai`：先在线获取歌词，再调用 AI 生成译文（需配置 API Key）
 - 按 MediaSession 的**标题 + 艺术家**搜词；播放器不限于上述两家（如 Spotify，只要 API 能搜到）
 
-`LrcParser` 支持标准 LRC、`[mm:ss:cc]` 网易格式、翻译合并、跳过作词/作曲行。
+`LrcParser` 支持标准 LRC、`[mm:ss:cc]` 网易格式、外部翻译合并、三语 LRC（原文 / 翻译 / 读音同时间戳合并）、跳过作词/作曲行。
 
 ---
 
@@ -411,6 +415,30 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 ---
 
 ## 版本更新
+
+### v1.6.0
+
+#### 新功能
+
+- **歌词焦点通知永久置顶**：新增 `FocusPinAboveHook`，在焦点通知数据层与视图层将歌词卡片置顶，覆盖 HyperIsland 转换通知、倒计时焦点通知等；`pinAboveMedia` 默认始终开启
+- **本地 LRC 歌词源**：新增「本地 LRC 文件」模式；应用内 SAF 选择文件夹；智能文件名匹配；三语 LRC（原文 / 翻译 / 读音）合并显示
+- **AI 翻译歌词源**：新增「AI 翻译（在线 + 翻译）」模式，兼容 OpenAI Chat Completions API
+
+#### 修复
+
+- **QQ 音乐歌词源失效**：搜索迁移至 `musicu.fcg`，歌词改用 `i.y.qq.com` 明文接口
+- **网易云极短标题误匹配**：修复 `p.h.` 误匹配；艺术家优先搜索、标题零分排除、已知 ID 兜底
+- **歌词通知排序无效**：修复锁屏焦点卡片无法通过通知栈重排置顶的问题
+
+#### 优化
+
+- 焦点置顶 hook 稳定性（防重入、缩小 hook 范围）
+- 三语 LRC 解析增强
+- 应用内内置 v1.6.0 更新说明
+- 万象息屏标题图标文案修正
+- 歌词搜索关键词策略增强
+
+- **版本号**：`1.6.0`（versionCode 16）
 
 ### v1.5.9
 

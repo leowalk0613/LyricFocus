@@ -161,9 +161,10 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
         val tvVersionInfo = dialogView.findViewById<android.widget.TextView>(R.id.tv_version_info)
 
         val currentVersion = UpdateChecker(this).getCurrentVersion(this)
+        val checker = UpdateChecker(this)
         if (info.hasUpdate) {
             tvVersionInfo.text = "当前版本：$currentVersion\n最新版本：${info.latestVersion}"
-            tvReleaseNotes.text = info.releaseNotes ?: "暂无更新日志"
+            tvReleaseNotes.text = checker.resolveReleaseNotes(this, info.releaseNotes, true)
             btnGithub.setOnClickListener {
                 info.githubUrl?.let { openUrl(it) }
             }
@@ -180,7 +181,7 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
                 .show()
         } else {
             tvVersionInfo.text = "当前版本：$currentVersion"
-            tvReleaseNotes.text = info.releaseNotes ?: "暂无更新日志"
+            tvReleaseNotes.text = checker.resolveReleaseNotes(this, info.releaseNotes, false)
             btnGithub.setOnClickListener {
                 openUrl("https://github.com/leowalk0613/LyricFocus/releases")
             }

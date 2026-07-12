@@ -17,9 +17,11 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
+import com.google.android.material.textfield.TextInputEditText
 import com.leowalk.LyricFocus.FocusPreferences
 import com.leowalk.LyricFocus.NotificationPermissionHelper
 import com.leowalk.LyricFocus.R
+import com.leowalk.LyricFocus.lyric.LocalLrcBootstrap
 import com.leowalk.LyricFocus.service.LyricService
 import com.leowalk.LyricFocus.service.MusicMonitorService
 import com.leowalk.LyricFocus.util.UpdateChecker
@@ -31,6 +33,7 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
     private lateinit var switchAppWhitelist: MaterialSwitch
     private lateinit var btnManageWhitelist: MaterialButton
     private lateinit var btnSwitchLyricSource: MaterialButton
+    private lateinit var btnConfigureLyricSource: MaterialButton
     private lateinit var sliderSyncAdvance: Slider
     private lateinit var tvSyncAdvanceValue: TextView
     private lateinit var tvLyricSourceMode: TextView
@@ -70,6 +73,25 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         if (!granted) maybeShowPostNotificationSettingsDialog()
     }
 
+    private val pickLocalLrcFolder = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri == null) return@registerForActivityResult
+        val ctx = requireContext().applicationContext
+        try {
+            requireContext().contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            FocusPreferences.setLocalLrcTreeUri(ctx, uri.toString())
+            FocusPreferences.setLocalLrcBootstrapped(ctx, false)
+            LocalLrcBootstrap.ensureReady(ctx)
+            updateLyricSourceUi()
+            broadcastSettingsChanged(includeLyricSource = true)
+        } catch (_: Exception) {
+        }
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         initViews(view)
@@ -96,6 +118,7 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         switchAppWhitelist = view.findViewById(R.id.switch_app_whitelist)
         btnManageWhitelist = view.findViewById(R.id.btn_manage_whitelist)
         btnSwitchLyricSource = view.findViewById(R.id.btn_switch_lyric_source)
+        btnConfigureLyricSource = view.findViewById(R.id.btn_configure_lyric_source)
         sliderSyncAdvance = view.findViewById(R.id.slider_sync_advance)
         tvSyncAdvanceValue = view.findViewById(R.id.tv_sync_advance_value)
         tvLyricSourceMode = view.findViewById(R.id.tv_lyric_source_mode)
@@ -150,6 +173,9 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         btnSwitchLyricSource.setOnClickListener {
             showLyricSourcePicker()
         }
+        btnConfigureLyricSource.setOnClickListener {
+            showLyricSourceSettingsDialog()
+        }
         btnGrantNotification.setOnClickListener {
             openNotificationAccessSettings()
         }
@@ -185,9 +211,13 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
 
     private fun updateLyricSourceUi() {
         val ctx = requireContext()
-        tvLyricSourceMode.text = FocusPreferences.formatLyricSourceLabel(
-            FocusPreferences.getLyricSource(ctx)
-        )
+        val source = FocusPreferences.getLyricSource(ctx)
+        tvLyricSourceMode.text = FocusPreferences.formatLyricSourceLabel(source)
+        btnConfigureLyricSource.visibility = when (source) {
+            FocusPreferences.LYRIC_SOURCE_LOCAL,
+            FocusPreferences.LYRIC_SOURCE_AI -> View.VISIBLE
+            else -> View.GONE
+        }
         val hit = LyricService.currentLyricSourceHit
         val song = LyricService.currentLyricSongLabel
         tvLyricSourceHit.text = when {
@@ -215,6 +245,79 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
                     broadcastSettingsChanged(includeLyricSource = true)
                 }
                 dialog.dismiss()
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun showLyricSourceSettingsDialog() {
+        when (FocusPreferences.getLyricSource(requireContext())) {
+            FocusPreferences.LYRIC_SOURCE_LOCAL -> showLocalLrcSettingsDialog()
+            FocusPreferences.LYRIC_SOURCE_AI -> showAiLyricSettingsDialog()
+            else -> {
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("歌词源配置")
+                    .setMessage("当前歌词源无需额外配置。如需使用本地 LRC 或 AI 翻译，请先点击「切换」。")
+                    .setPositiveButton("知道了", null)
+                    .show()
+            }
+        }
+    }
+
+    private fun showLocalLrcSettingsDialog() {
+        val ctx = requireContext()
+        val dialogView = layoutInflater.inflate(R.layout.dialog_local_lrc_settings, null)
+        val tvLocation = dialogView.findViewById<TextView>(R.id.tv_local_lrc_location)
+        val btnPickFolder = dialogView.findViewById<MaterialButton>(R.id.btn_pick_local_lrc_folder)
+        val btnResetFolder = dialogView.findViewById<MaterialButton>(R.id.btn_reset_local_lrc_folder)
+
+        fun refreshLocationLabel() {
+            tvLocation.text = FocusPreferences.getLocalLrcLocationLabel(ctx)
+        }
+        refreshLocationLabel()
+
+        btnPickFolder.setOnClickListener {
+            pickLocalLrcFolder.launch(null)
+        }
+        btnResetFolder.setOnClickListener {
+            FocusPreferences.clearLocalLrcTreeUri(ctx)
+            FocusPreferences.setLocalLrcBootstrapped(ctx, false)
+            LocalLrcBootstrap.ensureReady(ctx)
+            refreshLocationLabel()
+            updateLyricSourceUi()
+            broadcastSettingsChanged(includeLyricSource = true)
+        }
+
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("本地 LRC 配置")
+            .setView(dialogView)
+            .setPositiveButton("完成", null)
+            .show()
+    }
+
+    private fun showAiLyricSettingsDialog() {
+        val ctx = requireContext()
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ai_lyric_settings, null)
+        val inputBaseUrl = dialogView.findViewById<TextInputEditText>(R.id.input_ai_base_url)
+        val inputApiKey = dialogView.findViewById<TextInputEditText>(R.id.input_ai_api_key)
+        val inputModel = dialogView.findViewById<TextInputEditText>(R.id.input_ai_model)
+        val inputTargetLanguage = dialogView.findViewById<TextInputEditText>(R.id.input_ai_target_language)
+
+        inputBaseUrl.setText(FocusPreferences.getAiApiBaseUrl(ctx))
+        inputApiKey.setText(FocusPreferences.getAiApiKey(ctx))
+        inputModel.setText(FocusPreferences.getAiApiModel(ctx))
+        inputTargetLanguage.setText(FocusPreferences.getAiTargetLanguage(ctx))
+
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("AI 翻译配置")
+            .setView(dialogView)
+            .setPositiveButton("保存") { _, _ ->
+                FocusPreferences.setAiApiBaseUrl(ctx, inputBaseUrl.text?.toString().orEmpty())
+                FocusPreferences.setAiApiKey(ctx, inputApiKey.text?.toString().orEmpty())
+                FocusPreferences.setAiApiModel(ctx, inputModel.text?.toString().orEmpty())
+                FocusPreferences.setAiTargetLanguage(ctx, inputTargetLanguage.text?.toString().orEmpty())
+                updateLyricSourceUi()
+                broadcastSettingsChanged(includeLyricSource = true)
             }
             .setNegativeButton("取消", null)
             .show()
@@ -386,7 +489,8 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
 
         val currentVersion = UpdateChecker(requireContext()).getCurrentVersion(requireContext())
         tvVersionInfo.text = "当前版本：$currentVersion\n最新版本：${info.latestVersion}"
-        tvReleaseNotes.text = info.releaseNotes ?: "暂无更新日志"
+        tvReleaseNotes.text = UpdateChecker(requireContext())
+            .resolveReleaseNotes(requireContext(), info.releaseNotes, true)
 
         btnGithub.setOnClickListener {
             info.githubUrl?.let { openUrl(it) }

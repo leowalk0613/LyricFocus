@@ -131,25 +131,17 @@ data class LyricInfo(
 
 
     fun getCurrentTranslation(position: Long, syncAdvanceMs: Long): String? {
-        return getCurrentLine(position, syncAdvanceMs)?.translation?.takeIf { it.isNotBlank() }
+        return getCurrentLine(position, syncAdvanceMs)?.secondaryText()
     }
 
     fun getSecondLineText(
-
         position: Long,
-
         syncAdvanceMs: Long,
-
         fallback: String = ""
-
     ): String {
-
-        val translation = getCurrentTranslation(position, syncAdvanceMs)
-
-        if (translation != null) return translation
-
+        val secondary = getCurrentTranslation(position, syncAdvanceMs)
+        if (secondary != null) return secondary
         return getNextLine(position, syncAdvanceMs)?.text ?: fallback
-
     }
 
 
@@ -195,6 +187,7 @@ data class LyricInfo(
             obj.put("text", line.text)
 
             line.translation?.let { obj.put("translation", it) }
+            line.reading?.let { obj.put("reading", it) }
 
             array.put(obj)
 

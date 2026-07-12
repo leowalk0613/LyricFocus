@@ -62,6 +62,21 @@ object FocusPreferences {
     const val LYRIC_SOURCE_AUTO = "auto"
     const val LYRIC_SOURCE_NETEASE = "netease"
     const val LYRIC_SOURCE_QQ = "qq"
+    const val LYRIC_SOURCE_LOCAL = "local"
+    const val LYRIC_SOURCE_AI = "ai"
+
+    const val PREF_LOCAL_LRC_DIR = "local_lrc_dir"
+    const val PREF_LOCAL_LRC_TREE_URI = "local_lrc_tree_uri"
+    const val PREF_AI_API_BASE_URL = "ai_api_base_url"
+    const val PREF_AI_API_KEY = "ai_api_key"
+    const val PREF_AI_API_MODEL = "ai_api_model"
+    const val PREF_AI_TARGET_LANGUAGE = "ai_target_language"
+    const val PREF_LOCAL_LRC_BOOTSTRAPPED = "local_lrc_bootstrapped"
+
+    const val DEFAULT_LOCAL_LRC_DIR = "/sdcard/LyricFocus/lyrics"
+    const val DEFAULT_AI_API_BASE_URL = "https://api.openai.com/v1"
+    const val DEFAULT_AI_API_MODEL = "gpt-4o-mini"
+    const val DEFAULT_AI_TARGET_LANGUAGE = "简体中文"
 
     const val CUSTOM_AOD_COLOR_WHITE = "white"
     const val CUSTOM_AOD_COLOR_ALBUM = "album"
@@ -167,7 +182,10 @@ object FocusPreferences {
 
     fun setLyricSource(context: Context, source: String) {
         val normalized = when (source) {
-            LYRIC_SOURCE_NETEASE, LYRIC_SOURCE_QQ -> source
+            LYRIC_SOURCE_NETEASE,
+            LYRIC_SOURCE_QQ,
+            LYRIC_SOURCE_LOCAL,
+            LYRIC_SOURCE_AI -> source
             else -> LYRIC_SOURCE_AUTO
         }
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -180,6 +198,8 @@ object FocusPreferences {
         return when (source) {
             LYRIC_SOURCE_NETEASE -> "网易云音乐"
             LYRIC_SOURCE_QQ -> "QQ音乐"
+            LYRIC_SOURCE_LOCAL -> "本地 LRC 文件"
+            LYRIC_SOURCE_AI -> "AI 翻译（在线 + 翻译）"
             else -> "自动（网易云 → QQ音乐）"
         }
     }
@@ -187,8 +207,125 @@ object FocusPreferences {
     fun lyricSourceOptions(): List<Pair<String, String>> = listOf(
         LYRIC_SOURCE_AUTO to formatLyricSourceLabel(LYRIC_SOURCE_AUTO),
         LYRIC_SOURCE_NETEASE to formatLyricSourceLabel(LYRIC_SOURCE_NETEASE),
-        LYRIC_SOURCE_QQ to formatLyricSourceLabel(LYRIC_SOURCE_QQ)
+        LYRIC_SOURCE_QQ to formatLyricSourceLabel(LYRIC_SOURCE_QQ),
+        LYRIC_SOURCE_LOCAL to formatLyricSourceLabel(LYRIC_SOURCE_LOCAL),
+        LYRIC_SOURCE_AI to formatLyricSourceLabel(LYRIC_SOURCE_AI)
     )
+
+    fun getLocalLrcDirectory(context: Context): String {
+        return getDefaultLocalLrcDirectoryFile(context).absolutePath
+    }
+
+    fun getDefaultLocalLrcDirectoryFile(context: Context): java.io.File {
+        return java.io.File(context.getExternalFilesDir(null), "lyrics")
+    }
+
+    fun getLocalLrcTreeUri(context: Context): String? {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(PREF_LOCAL_LRC_TREE_URI, null)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+    }
+
+    fun setLocalLrcTreeUri(context: Context, uri: String?) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .apply {
+                if (uri.isNullOrBlank()) {
+                    remove(PREF_LOCAL_LRC_TREE_URI)
+                } else {
+                    putString(PREF_LOCAL_LRC_TREE_URI, uri.trim())
+                }
+            }
+            .apply()
+    }
+
+    fun clearLocalLrcTreeUri(context: Context) {
+        setLocalLrcTreeUri(context, null)
+    }
+
+    fun getLocalLrcLocationLabel(context: Context): String {
+        return com.leowalk.LyricFocus.lyric.LocalLrcStore.getLocationLabel(context)
+    }
+
+    @Deprecated("Use folder picker + LocalLrcStore", ReplaceWith("setLocalLrcTreeUri(context, null)"))
+    fun setLocalLrcDirectory(context: Context, path: String) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(PREF_LOCAL_LRC_DIR, path.trim())
+            .apply()
+    }
+
+    fun getAiApiBaseUrl(context: Context): String {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(PREF_AI_API_BASE_URL, DEFAULT_AI_API_BASE_URL)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_AI_API_BASE_URL
+    }
+
+    fun setAiApiBaseUrl(context: Context, value: String) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(PREF_AI_API_BASE_URL, value.trim())
+            .apply()
+    }
+
+    fun getAiApiKey(context: Context): String {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(PREF_AI_API_KEY, "")
+            ?.trim()
+            .orEmpty()
+    }
+
+    fun setAiApiKey(context: Context, value: String) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(PREF_AI_API_KEY, value.trim())
+            .apply()
+    }
+
+    fun getAiApiModel(context: Context): String {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(PREF_AI_API_MODEL, DEFAULT_AI_API_MODEL)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_AI_API_MODEL
+    }
+
+    fun setAiApiModel(context: Context, value: String) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(PREF_AI_API_MODEL, value.trim())
+            .apply()
+    }
+
+    fun getAiTargetLanguage(context: Context): String {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(PREF_AI_TARGET_LANGUAGE, DEFAULT_AI_TARGET_LANGUAGE)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_AI_TARGET_LANGUAGE
+    }
+
+    fun setAiTargetLanguage(context: Context, value: String) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(PREF_AI_TARGET_LANGUAGE, value.trim())
+            .apply()
+    }
+
+    fun isLocalLrcBootstrapped(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_LOCAL_LRC_BOOTSTRAPPED, false)
+    }
+
+    fun setLocalLrcBootstrapped(context: Context, bootstrapped: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_LOCAL_LRC_BOOTSTRAPPED, bootstrapped)
+            .apply()
+    }
 
     fun isPackageAllowed(context: Context, packageName: String): Boolean {
         if (!isAppWhitelistEnabled(context)) {
@@ -233,10 +370,7 @@ object FocusPreferences {
             .apply()
     }
 
-    fun isPinAboveMedia(context: Context): Boolean {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean(PREF_PIN_ABOVE_MEDIA, false)
-    }
+    fun isPinAboveMedia(context: Context): Boolean = true
 
     fun setPinAboveMedia(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -317,9 +451,7 @@ object FocusPreferences {
 
     fun readShowInShade(context: Context): Boolean = false
 
-    fun readPinAboveMedia(context: Context): Boolean {
-        return readFromModule(context) { isPinAboveMedia(it) } ?: false
-    }
+    fun readPinAboveMedia(context: Context): Boolean = true
 
     fun readShowOnIsland(context: Context): Boolean = false
 

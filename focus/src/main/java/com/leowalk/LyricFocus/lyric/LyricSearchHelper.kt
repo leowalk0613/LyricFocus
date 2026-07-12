@@ -63,12 +63,36 @@ object LyricSearchHelper {
     fun buildSearchKeywords(title: String, artist: String): List<String> {
         val normalized = normalizeTitleForSearch(title, artist)
         val keys = linkedSetOf<String>()
-        if (normalized.isNotBlank() && artist.isNotBlank()) keys.add("$normalized $artist")
+        val artistParts = splitArtists(artist)
+        if (normalized.isNotBlank() && artist.isNotBlank()) {
+            keys.add("$normalized $artist")
+            keys.add("$artist $normalized")
+            for (part in artistParts) {
+                if (part.isNotBlank()) {
+                    keys.add("$part $normalized")
+                    keys.add("$normalized $part")
+                }
+            }
+            if (artistParts.size >= 2) {
+                val joined = artistParts.joinToString(" ")
+                keys.add("$joined $normalized")
+                keys.add("$normalized $joined")
+            }
+        }
         if (title.isNotBlank() && artist.isNotBlank() && title != normalized) {
             keys.add("$title $artist")
+            keys.add("$artist $title")
         }
         if (normalized.isNotBlank()) keys.add(normalized)
         if (title.isNotBlank() && title != normalized) keys.add(title)
+        if (normalized.endsWith('.') && normalized.length > 1) {
+            val withoutDot = normalized.dropLast(1)
+            if (artist.isNotBlank()) {
+                keys.add("$withoutDot $artist")
+                keys.add("$artist $withoutDot")
+            }
+            keys.add(withoutDot)
+        }
         return keys.toList()
     }
 

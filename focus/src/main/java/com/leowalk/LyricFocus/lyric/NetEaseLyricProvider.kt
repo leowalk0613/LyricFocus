@@ -13,6 +13,9 @@ class NetEaseLyricProvider : LyricProvider {
 
     override suspend fun searchLyric(title: String, artist: String, album: String): LyricInfo? {
         return try {
+            findKnownSongId(title, artist)?.let { knownId ->
+                fetchLyricBySongId(knownId)?.let { return it }
+            }
             val candidates = searchSongs(title, artist)
             for (candidate in candidates) {
                 val (lyricText, tlyricText) = getLyricWithTranslation(candidate.id)
@@ -30,6 +33,44 @@ class NetEaseLyricProvider : LyricProvider {
             e.printStackTrace()
             null
         }
+    }
+
+    private data class KnownSongEntry(
+        val id: Long,
+        val titlePattern: Regex,
+        val artistMatcher: (String) -> Boolean
+    )
+
+    /** 网易云搜索对极短/特殊标题不可靠时的已知单曲 ID 兜底 */
+    private val knownSongs = listOf(
+        KnownSongEntry(
+            id = 1449599572L,
+            titlePattern = Regex("""^p\.h\.?$""", RegexOption.IGNORE_CASE),
+            artistMatcher = { artist ->
+                val lower = artist.lowercase()
+                lower.contains("seventhlinks") && lower.contains("v flower")
+            }
+        )
+    )
+
+    private fun findKnownSongId(title: String, artist: String): Long? {
+        val normalized = LyricSearchHelper.normalizeTitleForSearch(title, artist)
+        for (entry in knownSongs) {
+            val titleMatches = entry.titlePattern.matches(title.trim()) ||
+                (normalized.isNotBlank() && entry.titlePattern.matches(normalized))
+            if (titleMatches && entry.artistMatcher(artist)) {
+                return entry.id
+            }
+        }
+        return null
+    }
+
+    private suspend fun fetchLyricBySongId(songId: Long): LyricInfo? {
+        val (lyricText, tlyricText) = getLyricWithTranslation(songId)
+        if (lyricText.isNullOrBlank()) return null
+        val lyricInfo = LrcParser.parseWithTranslation(lyricText, tlyricText)
+        if (lyricInfo.lines.size < 3) return null
+        return lyricInfo.copy(source = name)
     }
 
     private data class SongCandidate(
@@ -117,6 +158,9 @@ class NetEaseLyricProvider : LyricProvider {
         }
 
         var score = LyricSearchHelper.scoreTitleMatch(song.optString("name", ""), title, artist)
+        if (title.isNotBlank() && score == 0) {
+            return Int.MIN_VALUE
+        }
 
         if (artist.isNotBlank()) {
             score += LyricSearchHelper.scoreArtistMatch(candidateArtists, artist)

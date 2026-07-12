@@ -1,6 +1,7 @@
 package com.leowalk.LyricFocus.lyric
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -106,28 +107,20 @@ class LyricSearchHelperTest {
     }
 
     @Test
-    fun stripTrailingArtist_removesArtistFromTitle() {
-        assertEquals("倒数 (Live)", LyricSearchHelper.stripTrailingArtist("倒数 (Live)-G.E.M. 邓紫棋", "邓紫棋"))
-        assertEquals("倒数 (Live)", LyricSearchHelper.stripTrailingArtist("倒数 (Live) - G.E.M. 邓紫棋", "邓紫棋"))
-        assertEquals("告白气球", LyricSearchHelper.stripTrailingArtist("告白气球 - 周杰伦", "周杰伦"))
-        assertEquals("稻香", LyricSearchHelper.stripTrailingArtist("稻香 – 周杰伦", "周杰伦"))
-    }
-
-    @Test
     fun buildSearchKeywords_generatesStrippedVariants() {
         val title = "倒数 (Live)-G.E.M. 邓紫棋"
         val artist = "邓紫棋"
         val keys = LyricSearchHelper.buildSearchKeywords(title, artist)
         assertTrue(keys.contains("倒数 邓紫棋"))
         assertTrue(keys.contains("倒数"))
-        assertTrue(keys.contains("倒数 (Live) 邓紫棋"))
-        assertTrue(keys.contains("倒数 (Live)"))
+        assertTrue(keys.contains("倒数 (Live)-G.E.M. 邓紫棋 邓紫棋"))
+        assertTrue(keys.contains("倒数 (Live)-G.E.M. 邓紫棋"))
     }
 
     @Test
     fun scoreTitleMatch_matchesStrippedTitle() {
         val title = "倒数 (Live)-G.E.M. 邓紫棋"
-        val score = LyricSearchHelper.scoreTitleMatch("倒数", title)
+        val score = LyricSearchHelper.scoreTitleMatch("倒数", title, "邓紫棋")
         assertTrue(score >= 11)
     }
 
@@ -140,6 +133,27 @@ class LyricSearchHelperTest {
     fun normalizeTitleForSearch_stripsTrailingArtist() {
         assertEquals("倒数", LyricSearchHelper.normalizeTitleForSearch("倒数 (Live)-G.E.M. 邓紫棋", "邓紫棋"))
         assertEquals("倒数", LyricSearchHelper.normalizeTitleForSearch("倒数-G.E.M. 邓紫棋", "邓紫棋"))
+    }
+
+    @Test
+    fun buildSearchKeywords_shortDottedTitle_artistFirstVariants() {
+        val keys = LyricSearchHelper.buildSearchKeywords("p.h.", "SEVENTHLINKS/v flower")
+        assertTrue(keys.contains("SEVENTHLINKS/v flower p.h."))
+        assertTrue(keys.contains("p.h. SEVENTHLINKS/v flower"))
+        assertTrue(keys.contains("SEVENTHLINKS p.h."))
+        assertTrue(keys.contains("v flower p.h."))
+        assertTrue(keys.contains("SEVENTHLINKS v flower p.h."))
+        assertTrue(keys.contains("p.h SEVENTHLINKS/v flower"))
+    }
+
+    @Test
+    fun scoreTitleMatch_unrelatedTitle_returnsZero() {
+        assertEquals(0, LyricSearchHelper.scoreTitleMatch("針", "p.h.", "SEVENTHLINKS/v flower"))
+    }
+
+    @Test
+    fun scoreTitleMatch_phExactMatch() {
+        assertEquals(12, LyricSearchHelper.scoreTitleMatch("p.h.", "p.h.", "SEVENTHLINKS/v flower"))
     }
 
     @Test

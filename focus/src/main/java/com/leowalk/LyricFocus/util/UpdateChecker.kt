@@ -201,7 +201,24 @@ class UpdateChecker(private val context: Context) {
             val info = context.packageManager.getPackageInfo(context.packageName, 0)
             info.versionName
         } catch (e: Exception) {
-            "1.5.9"
+            "1.6.0"
         }
+    }
+
+    fun getBundledReleaseNotes(context: Context): String? {
+        val assetName = "release_notes_${getCurrentVersion(context).replace('.', '_')}.md"
+        return try {
+            context.assets.open(assetName).bufferedReader().use { it.readText().trim() }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun resolveReleaseNotes(context: Context, remoteNotes: String?, hasUpdate: Boolean): String {
+        if (hasUpdate && !remoteNotes.isNullOrBlank()) {
+            return remoteNotes
+        }
+        getBundledReleaseNotes(context)?.let { return it }
+        return remoteNotes?.takeIf { it.isNotBlank() } ?: "暂无更新日志"
     }
 }

@@ -78,7 +78,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         private var preferAppLyric = false
         private var focusEnabled = true
         private var showInShade = false
-        private var pinAboveMedia = false
+        private var pinAboveMedia = true
         private var showOnIsland = false
         private var aodKeepaliveSec = FocusPreferences.DEFAULT_AOD_KEEPALIVE_SEC
         private var lastFocusNotifyTime = 0L
@@ -127,8 +127,16 @@ class SystemUIHyperFocusHook : BaseHook() {
         private data class LyricLineData(
             val time: Long,
             val text: String,
-            val translation: String? = null
-        )
+            val translation: String? = null,
+            val reading: String? = null
+        ) {
+            fun secondaryText(): String? {
+                return listOfNotNull(
+                    translation?.takeIf { it.isNotBlank() },
+                    reading?.takeIf { it.isNotBlank() }
+                ).joinToString("\n").takeIf { it.isNotBlank() }
+            }
+        }
     }
 
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
@@ -138,6 +146,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         hookAntiFlicker(lpparam.classLoader)
         hookHideFromShadeIfNeeded(lpparam.classLoader)
         hookPinAboveMediaCompat(lpparam.classLoader)
+        FocusPinAboveHook.install(lpparam.classLoader, tag)
         hookSuppressIslandIfNeeded(lpparam.classLoader)
         hookKeyguardRepost(lpparam.classLoader)
     }
@@ -320,7 +329,6 @@ class SystemUIHyperFocusHook : BaseHook() {
         hookSuppressFocusRowHeightReflow(classLoader)
         hookStabilizeKeyguardSinking(classLoader)
         hookDebouncePanelReflow(classLoader)
-        hookMoveMediaBelowFocus(classLoader)
     }
 
     private fun hookSuppressFocusRowHeightReflow(classLoader: ClassLoader) {
@@ -425,112 +433,15 @@ class SystemUIHyperFocusHook : BaseHook() {
         }
     }
 
-    private fun hookMoveMediaBelowFocus(classLoader: ClassLoader) {
-        try {
-            val stackClass = XposedHelpers.findClass(
-                "com.android.systemui.statusbar.stack.NotificationStackScrollLayout",
-                classLoader
-            )
-
-            val reorderRunnable = Runnable {
-                reorderFocusAboveMedia(stackClass)
-            }
-
-            XposedBridge.hookAllMethods(stackClass, "addView", object : XC_MethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    if (!pinAboveMedia || !isPlaying || currentLyricText.isBlank()) return
-                    val stack = param.thisObject as? ViewGroup ?: return
-                    stack.postDelayed(reorderRunnable, 100)
-                }
-            })
-
-            XposedBridge.hookAllMethods(stackClass, "removeView", object : XC_MethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    if (!pinAboveMedia || !isPlaying || currentLyricText.isBlank()) return
-                    val stack = param.thisObject as? ViewGroup ?: return
-                    stack.postDelayed(reorderRunnable, 100)
-                }
-            })
-
-            XposedBridge.hookAllMethods(stackClass, "updateNotificationStack", object : XC_MethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    if (!pinAboveMedia || !isPlaying || currentLyricText.isBlank()) return
-                    val stack = param.thisObject as? ViewGroup ?: return
-                    stack.postDelayed(reorderRunnable, 200)
-                }
-            })
-
-            log("Media below focus hook ready with enhanced reordering")
-        } catch (e: Throwable) {
-            log("Media reorder hook skipped: ${e.message}")
-        }
+    private fun syncFocusPinState() {
+        FocusPinState.pinAboveMedia = pinAboveMedia
+        FocusPinState.isPlaying = isPlaying
+        FocusPinState.lyricActive = currentLyricText.isNotBlank()
     }
 
-    private fun reorderFocusAboveMedia(stackClass: Class<*>) {
-        try {
-            val stackField = stackClass.getDeclaredField("mStackChildren")
-            stackField.isAccessible = true
-            val stackChildren = stackField.get(null) as? List<*> ?: return
-
-            var focusRow: View? = null
-            var mediaRows = mutableListOf<View>()
-
-            for (child in stackChildren) {
-                val childView = child as? View ?: continue
-                val rowClass = "com.android.systemui.statusbar.notification.row.ExpandableNotificationRow"
-                if (!childView.javaClass.name.contains(rowClass)) continue
-
-                val entry = XposedHelpers.callMethod(childView, "getEntry") ?: continue
-                val sbn = XposedHelpers.getObjectField(entry, "mSbn") as? StatusBarNotification ?: continue
-                val channelId = sbn.notification?.channelId
-
-                if (channelId == HyperFocusLyricStyle.CHANNEL_ID) {
-                    focusRow = childView
-                } else if (isMediaNotification(sbn)) {
-                    mediaRows.add(childView)
-                }
-            }
-
-            if (focusRow == null || mediaRows.isEmpty()) return
-
-            val stack = focusRow.parent as? ViewGroup ?: return
-            val focusIndex = stack.indexOfChild(focusRow)
-
-            for (mediaRow in mediaRows) {
-                val mediaIndex = stack.indexOfChild(mediaRow)
-                if (mediaIndex >= 0 && mediaIndex < focusIndex) {
-                    stack.removeView(mediaRow)
-                    stack.addView(mediaRow, focusIndex)
-                }
-            }
-
-            log("Reordered ${mediaRows.size} media notifications below focus")
-        } catch (e: Throwable) {
-            log("Reorder focus above media failed: ${e.message}")
-        }
-    }
-
-    private fun isMediaNotification(sbn: StatusBarNotification): Boolean {
-        try {
-            val notification = sbn.notification
-            val category = notification?.category
-            if (category != null && category == Notification.CATEGORY_TRANSPORT) {
-                return true
-            }
-            val packageName = sbn.packageName
-            val mediaPackages = listOf(
-                "com.miui.player",
-                "com.android.music",
-                "com.tencent.qqmusic",
-                "com.kugou.android",
-                "com.netease.cloudmusic",
-                "com.spotify.music",
-                "com.apple.android.music"
-            )
-            return mediaPackages.contains(packageName)
-        } catch (_: Throwable) {
-            return false
-        }
+    private fun scheduleLyricFocusReorder() {
+        syncFocusPinState()
+        FocusPinAboveHook.scheduleViewReorder(cachedFocusRow)
     }
 
     private fun invalidateLayoutCache() {
@@ -571,6 +482,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         needsAodRebind = false
         invalidateLayoutCache()
         HyperFocusLyricStyle.resetPostedCache()
+        syncFocusPinState()
     }
 
     private fun scheduleResyncRequests() {
@@ -783,6 +695,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         focusEnabled = FocusPreferences.readFocusEnabled(context)
         showInShade = FocusPreferences.readShowInShade(context)
         pinAboveMedia = FocusPreferences.readPinAboveMedia(context)
+        syncFocusPinState()
         showOnIsland = FocusPreferences.readShowOnIsland(context)
         aodKeepaliveSec = FocusPreferences.readAodKeepaliveSec(context)
         syncAdvanceMs = FocusPreferences.readSyncAdvanceMs(context)
@@ -826,14 +739,8 @@ class SystemUIHyperFocusHook : BaseHook() {
         if (intent.hasExtra(FocusPreferences.EXTRA_SHOW_IN_SHADE)) {
             showInShade = intent.getBooleanExtra(FocusPreferences.EXTRA_SHOW_IN_SHADE, false)
         }
-        if (intent.hasExtra(FocusPreferences.EXTRA_PIN_ABOVE_MEDIA)) {
-            pinAboveMedia = intent.getBooleanExtra(FocusPreferences.EXTRA_PIN_ABOVE_MEDIA, false)
-            if (!pinAboveMedia) {
-                invalidateLayoutCache()
-            }
-        } else {
-            systemUIContext?.let { pinAboveMedia = FocusPreferences.readPinAboveMedia(it) }
-        }
+        pinAboveMedia = true
+        syncFocusPinState()
         if (intent.hasExtra(FocusPreferences.EXTRA_SHOW_ON_ISLAND)) {
             val newShowOnIsland = intent.getBooleanExtra(FocusPreferences.EXTRA_SHOW_ON_ISLAND, false)
             if (newShowOnIsland != showOnIsland) {
@@ -951,6 +858,8 @@ class SystemUIHyperFocusHook : BaseHook() {
                 preferAppLyric = false
                 cancelAlarmOnly()
             }
+            syncFocusPinState()
+            scheduleLyricFocusReorder()
         } catch (e: Throwable) {
             logE("Failed to handle lyric data", e)
         }
@@ -1021,6 +930,8 @@ class SystemUIHyperFocusHook : BaseHook() {
                 cancelFocusNotification()
             }
             scheduleNextUpdate()
+            syncFocusPinState()
+            scheduleLyricFocusReorder()
         } catch (e: Throwable) {
             logE("Failed to handle simple update", e)
         }
@@ -1028,6 +939,7 @@ class SystemUIHyperFocusHook : BaseHook() {
 
     private fun handlePlaybackState(intent: Intent) {
         isPlaying = intent.getBooleanExtra(EXTRA_PLAYING, false)
+        syncFocusPinState()
         if (isPlaying) {
             lastUpdateTime = System.currentTimeMillis()
             if (currentLyricText.isNotBlank() && lastNotifiedLyric.isBlank()) {
@@ -1125,8 +1037,8 @@ class SystemUIHyperFocusHook : BaseHook() {
     private fun getAdjustedPosition(position: Long): Long = position + lyricOffset + syncAdvanceMs
 
     private fun resolveSecondLine(current: LyricLineData?, next: LyricLineData?): String {
-        val translation = current?.translation
-        if (!translation.isNullOrBlank()) return translation
+        val secondary = current?.secondaryText()
+        if (!secondary.isNullOrBlank()) return secondary
         return next?.text ?: ""
     }
 
@@ -1264,6 +1176,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                 markLayoutReflowAllowed(true)
             }
             lastFocusNotifyTime = System.currentTimeMillis()
+            scheduleLyricFocusReorder()
         } catch (e: Throwable) {
             logE("Failed to send focus notification", e)
         }
@@ -1291,7 +1204,8 @@ class SystemUIHyperFocusHook : BaseHook() {
             for (i in 0 until array.length()) {
                 val obj = array.getJSONObject(i)
                 val translation = if (obj.has("translation")) obj.getString("translation") else null
-                lines.add(LyricLineData(obj.getLong("time"), obj.getString("text"), translation))
+                val reading = if (obj.has("reading")) obj.getString("reading") else null
+                lines.add(LyricLineData(obj.getLong("time"), obj.getString("text"), translation, reading))
             }
             lines.sortBy { it.time }
             lines

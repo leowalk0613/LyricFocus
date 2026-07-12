@@ -42,10 +42,12 @@ class SystemUIPluginHook : BaseHook() {
                             FocusIslandSuppressHook.install(result.classLoader, tag) {
                                 result.applicationContext
                             }
+                            FocusPinAboveHook.install(result.classLoader, tag)
                         }
                         if (className.contains("DozeServicePluginImpl")) {
                             bypassFocusPluginClassLoader(result.classLoader, "DozeServicePluginImpl")
                             FocusAntiFlickerHook.install(result.classLoader, tag)
+                            FocusPinAboveHook.install(result.classLoader, tag)
                         }
                     }
                 }

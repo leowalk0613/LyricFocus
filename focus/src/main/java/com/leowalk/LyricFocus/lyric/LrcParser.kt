@@ -10,6 +10,28 @@ object LrcParser {
         """^(作[词詞]|作曲|編曲|编曲|词/曲|詞/曲|监修|監修)\s*[:：]?""",
         RegexOption.IGNORE_CASE
     )
+    private val INLINE_TRILINGUAL_SEP = Regex("""\s*(?:\||/|//)\s*""")
+    private val KANA_PATTERN = Regex("""[\u3040-\u309F\u30A0-\u30FF]""")
+    private val HAN_PATTERN = Regex("""[\u4E00-\u9FFF]""")
+    private val LATIN_LETTER_PATTERN = Regex("""[A-Za-z\u00C0-\u024F]""")
+
+    private enum class LineKind {
+        ORIGINAL,
+        TRANSLATION,
+        READING,
+        UNKNOWN
+    }
+
+    private data class RawEntry(
+        val time: Long,
+        val text: String
+    )
+
+    private data class TrilingualParts(
+        val original: String,
+        val translation: String? = null,
+        val reading: String? = null
+    )
 
     /** 将 [MM:SS:CC] 转为 [MM:SS.CC]，统一走标准解析。 */
     fun normalizeLrcTimestamps(lrcText: String): String {
@@ -44,16 +66,19 @@ object LrcParser {
         val translationLines = parseLyricLinesOnly(tlyricText)
         if (translationLines.isEmpty()) return lyricInfo
 
-        val mergedLines = mergeTranslations(lyricInfo.lines, translationLines)
+        val mergedLines = mergeExternalTranslations(lyricInfo.lines, translationLines)
         return lyricInfo.copy(lines = mergedLines)
     }
 
-    private fun mergeTranslations(
+    private fun mergeExternalTranslations(
         lyrics: List<LyricLine>,
         translations: List<LyricLine>
     ): List<LyricLine> {
         val useIndexMatch = shouldMatchTranslationByIndex(lyrics, translations)
         return lyrics.mapIndexed { index, line ->
+            if (!line.translation.isNullOrBlank()) {
+                return@mapIndexed line
+            }
             val translation = if (useIndexMatch) {
                 translations.getOrNull(index)?.text
             } else {
@@ -128,12 +153,16 @@ object LrcParser {
     )
 
     private fun buildLyricLines(lrcText: String, parseMeta: Boolean): Pair<List<LyricLine>, LrcMeta> {
-        val lyricLines = mutableListOf<LyricLine>()
+        val rawEntries = mutableListOf<RawEntry>()
         var meta = LrcMeta()
+        var pendingTime: Long? = null
 
         for (line in lrcText.lines()) {
             val trimmedLine = line.trim()
-            if (trimmedLine.isEmpty()) continue
+            if (trimmedLine.isEmpty()) {
+                pendingTime = null
+                continue
+            }
 
             if (parseMeta) {
                 val metaMatch = META_PATTERN.find(trimmedLine)
@@ -153,13 +182,109 @@ object LrcParser {
             val text = stripTimeTags(trimmedLine)
             if (text.isEmpty() || isSkippableLine(text)) continue
 
-            for (time in parseTimeTags(trimmedLine)) {
-                lyricLines.add(LyricLine(time, text))
+            val times = parseTimeTags(trimmedLine)
+            if (times.isNotEmpty()) {
+                for (time in times) {
+                    rawEntries.add(RawEntry(time, text))
+                }
+                pendingTime = times.last()
+            } else if (pendingTime != null) {
+                rawEntries.add(RawEntry(pendingTime, text))
             }
         }
 
-        lyricLines.sortBy { it.time }
-        return lyricLines to meta
+        val lines = mergeMultilingualGroups(rawEntries)
+        return lines to meta
+    }
+
+    private fun mergeMultilingualGroups(entries: List<RawEntry>): List<LyricLine> {
+        if (entries.isEmpty()) return emptyList()
+
+        val result = mutableListOf<LyricLine>()
+        var index = 0
+        while (index < entries.size) {
+            val time = entries[index].time
+            val groupTexts = mutableListOf<String>()
+            while (index < entries.size && entries[index].time == time) {
+                groupTexts.add(entries[index].text)
+                index++
+            }
+
+            val parts = when (groupTexts.size) {
+                1 -> splitInlineTrilingual(groupTexts[0]) ?: TrilingualParts(groupTexts[0])
+                else -> classifyTrilingualLines(groupTexts)
+            }
+            result.add(
+                LyricLine(
+                    time = time,
+                    text = parts.original,
+                    translation = parts.translation,
+                    reading = parts.reading
+                )
+            )
+        }
+        return result.sortedBy { it.time }
+    }
+
+    private fun splitInlineTrilingual(text: String): TrilingualParts? {
+        val parts = INLINE_TRILINGUAL_SEP.split(text)
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+        if (parts.size < 2) return null
+        return classifyTrilingualLines(parts)
+    }
+
+    private fun classifyTrilingualLines(texts: List<String>): TrilingualParts {
+        if (texts.isEmpty()) return TrilingualParts("")
+        if (texts.size == 1) return TrilingualParts(texts[0])
+
+        val tagged = texts.map { text -> text to detectLineKind(text) }
+
+        if (texts.size >= 3) {
+            val byKind = tagged.groupBy { it.second }
+            val original = byKind[LineKind.ORIGINAL]?.firstOrNull()?.first ?: texts[0]
+            val translation = byKind[LineKind.TRANSLATION]?.firstOrNull()?.first ?: texts[1]
+            val reading = byKind[LineKind.READING]?.firstOrNull()?.first ?: texts[2]
+            return TrilingualParts(original, translation, reading)
+        }
+
+        val firstKind = tagged[0].second
+        val secondKind = tagged[1].second
+        return when {
+            firstKind == LineKind.ORIGINAL && secondKind == LineKind.TRANSLATION ->
+                TrilingualParts(texts[0], texts[1])
+            firstKind == LineKind.ORIGINAL && secondKind == LineKind.READING ->
+                TrilingualParts(texts[0], reading = texts[1])
+            firstKind == LineKind.TRANSLATION && secondKind == LineKind.ORIGINAL ->
+                TrilingualParts(texts[1], texts[0])
+            firstKind == LineKind.READING && secondKind == LineKind.ORIGINAL ->
+                TrilingualParts(texts[1], reading = texts[0])
+            detectLineKind(texts[0]) != LineKind.READING && detectLineKind(texts[1]) == LineKind.READING ->
+                TrilingualParts(texts[0], reading = texts[1])
+            detectLineKind(texts[1]) != LineKind.READING && detectLineKind(texts[0]) == LineKind.READING ->
+                TrilingualParts(texts[1], reading = texts[0])
+            else -> TrilingualParts(texts[0], texts[1])
+        }
+    }
+
+    private fun detectLineKind(text: String): LineKind {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return LineKind.UNKNOWN
+
+        val latinCount = LATIN_LETTER_PATTERN.findAll(trimmed).count()
+        val meaningfulCount = trimmed.count { !it.isWhitespace() && !it.isISOControl() }
+        val latinRatio = if (meaningfulCount == 0) 0.0 else latinCount.toDouble() / meaningfulCount
+
+        val hasKana = KANA_PATTERN.containsMatchIn(trimmed)
+        val hasHan = HAN_PATTERN.containsMatchIn(trimmed)
+
+        return when {
+            latinRatio >= 0.45 -> LineKind.READING
+            hasKana -> LineKind.ORIGINAL
+            hasHan -> LineKind.TRANSLATION
+            latinCount >= 3 -> LineKind.READING
+            else -> LineKind.UNKNOWN
+        }
     }
 
     private fun parseDotTime(match: MatchResult): Long {

@@ -77,8 +77,12 @@ object HyperFocusLyricStyle {
     private var lastPostedLyric = ""
 
     @Volatile
-
     private var lastPostedSecond = ""
+
+    @Volatile
+    private var focusUpdateSequence = 0L
+
+    private const val FOCUS_ORDER_ID = "lyricfocus_pin_top"
 
 
 
@@ -291,6 +295,7 @@ object HyperFocusLyricStyle {
         )
 
         patchFocusTimeout(focusExtras, TIMEOUT_SEC)
+        patchFocusOrdering(focusExtras)
 
         if (!showOnIsland) {
 
@@ -320,10 +325,7 @@ object HyperFocusLyricStyle {
 
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
 
-            .setPriority(
-                if (pinAboveMedia) NotificationCompat.PRIORITY_MAX
-                else NotificationCompat.PRIORITY_HIGH
-            )
+            .setPriority(NotificationCompat.PRIORITY_MAX)
 
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
 
@@ -338,13 +340,8 @@ object HyperFocusLyricStyle {
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
 
 
-        if (pinAboveMedia) {
-            builder.setSortKey("\u0000")
-            builder.setWhen(Long.MIN_VALUE)
-        } else {
-            builder.setSortKey("\u0001")
-            builder.setWhen(Long.MIN_VALUE)
-        }
+        builder.setSortKey("0")
+        builder.setWhen(Long.MAX_VALUE)
 
 
 
@@ -470,6 +467,8 @@ object HyperFocusLyricStyle {
             highlightColor = colorToIslandHex(islandStyle.colorPrimary),
 
             islandTimeout = TIMEOUT_SEC,
+
+            islandOrder = true,
 
             bigIslandArea = IslandApi.bigIslandArea(
 
@@ -1206,6 +1205,54 @@ object HyperFocusLyricStyle {
 
         }
 
+    }
+
+
+
+    private fun patchFocusOrdering(extras: Bundle) {
+        try {
+            focusUpdateSequence++
+            val sequence = focusUpdateSequence
+            val paramKeys = listOf(
+                "miui.focus.param",
+                "miui.focus.param.custom",
+                "miui.focus.params"
+            )
+            for (key in paramKeys) {
+                val raw = extras.getString(key) ?: continue
+                var updated = raw
+                if (updated.contains("\"sequence\"")) {
+                    updated = updated.replace(
+                        Regex("\"sequence\"\\s*:\\s*\\d+"),
+                        "\"sequence\":$sequence"
+                    )
+                } else if (updated.contains("\"param_v2\"")) {
+                    updated = updated.replace(
+                        Regex("\"param_v2\"\\s*:\\s*\\{"),
+                        "\"param_v2\":{\"sequence\":$sequence,\"orderId\":\"$FOCUS_ORDER_ID\","
+                    )
+                }
+                if (updated.contains("\"orderId\"")) {
+                    updated = updated.replace(
+                        Regex("\"orderId\"\\s*:\\s*\"[^\"]*\""),
+                        "\"orderId\":\"$FOCUS_ORDER_ID\""
+                    )
+                } else if (updated.contains("\"param_v2\"")) {
+                    updated = updated.replace(
+                        Regex("\"param_v2\"\\s*:\\s*\\{"),
+                        "\"param_v2\":{\"orderId\":\"$FOCUS_ORDER_ID\","
+                    )
+                }
+                if (!updated.contains("\"business\"") && updated.contains("\"param_v2\"")) {
+                    updated = updated.replace(
+                        Regex("\"param_v2\"\\s*:\\s*\\{"),
+                        "\"param_v2\":{\"business\":\"lyricfocus\","
+                    )
+                }
+                extras.putString(key, updated)
+            }
+        } catch (_: Throwable) {
+        }
     }
 
 

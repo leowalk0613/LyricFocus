@@ -8,36 +8,81 @@ import kotlinx.coroutines.withContext
 class LyricManager(context: Context) {
 
     private val appContext = context.applicationContext
-    private val allProviders: List<LyricProvider> = listOf(
+    private val onlineProviders: List<LyricProvider> = listOf(
         NetEaseLyricProvider(),
         QQMusicLyricProvider()
     )
+    private val localProvider = LocalLrcLyricProvider(appContext)
+    private val aiTranslator = AiLyricTranslator(appContext)
 
     suspend fun fetchLyric(title: String, artist: String = "", album: String = ""): LyricInfo? {
         return withContext(Dispatchers.IO) {
-            for (provider in providersForCurrentSource()) {
-                try {
-                    val lyric = provider.searchLyric(title, artist, album)
-                    if (lyric != null && !lyric.isEmpty) {
-                        return@withContext lyric
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+            LocalLrcBootstrap.ensureReady(appContext)
+            when (FocusPreferences.getLyricSource(appContext)) {
+                FocusPreferences.LYRIC_SOURCE_LOCAL ->
+                    localProvider.searchLyric(title, artist, album)
+                FocusPreferences.LYRIC_SOURCE_AI ->
+                    fetchWithAiTranslation(title, artist, album)
+                else ->
+                    fetchFromProviders(providersForCurrentSource(), title, artist, album)
             }
-            null
         }
     }
 
-    fun getProviderNames(): List<String> = allProviders.map { it.name }
+    fun getProviderNames(): List<String> = buildList {
+        addAll(onlineProviders.map { it.name })
+        add(localProvider.name)
+        add("AI翻译")
+    }
+
+    private suspend fun fetchWithAiTranslation(
+        title: String,
+        artist: String,
+        album: String
+    ): LyricInfo? {
+        val baseLyric = fetchFromProviders(onlineProviders, title, artist, album)
+            ?: localProvider.searchLyric(title, artist, album)
+            ?: return null
+        return aiTranslator.translateIfNeeded(baseLyric, title, artist)
+    }
+
+    private suspend fun fetchFromProviders(
+        providers: List<LyricProvider>,
+        title: String,
+        artist: String,
+        album: String
+    ): LyricInfo? {
+        for (provider in providers) {
+            try {
+                val lyric = provider.searchLyric(title, artist, album)
+                if (lyric != null && !lyric.isEmpty) {
+                    return lyric
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        return null
+    }
 
     private fun providersForCurrentSource(): List<LyricProvider> {
         return when (FocusPreferences.getLyricSource(appContext)) {
             FocusPreferences.LYRIC_SOURCE_NETEASE ->
-                allProviders.filter { it.id == FocusPreferences.LYRIC_SOURCE_NETEASE }
+                onlineProviders.filter { it.id == FocusPreferences.LYRIC_SOURCE_NETEASE }
             FocusPreferences.LYRIC_SOURCE_QQ ->
-                allProviders.filter { it.id == FocusPreferences.LYRIC_SOURCE_QQ }
-            else -> allProviders
+                onlineProviders.filter { it.id == FocusPreferences.LYRIC_SOURCE_QQ }
+            else -> onlineProviders
         }
+    }
+}
+
+object LocalLrcBootstrap {
+    fun ensureReady(context: Context) {
+        LocalLrcStore.getBootstrapDirectory(context)
+        if (FocusPreferences.isLocalLrcBootstrapped(context)) return
+        if (!LocalLrcStore.hasAnyLrcFile(context)) {
+            LocalLrcStore.copyBundledLyricsIfNeeded(context)
+        }
+        FocusPreferences.setLocalLrcBootstrapped(context, true)
     }
 }
