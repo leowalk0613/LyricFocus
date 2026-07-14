@@ -171,11 +171,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             textColorBlack,
             lyricLinesGroup,
             translationLinesGroup,
-            gravityGroup,
-            backgroundGroup,
-            backgroundDefault,
-            backgroundBlack,
-            backgroundWhite
+            gravityGroup
         )
         customAodControls += listOf(
             sliderCustomAodTextSize,

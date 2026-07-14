@@ -29,7 +29,7 @@ class LyricNotificationManager(private val context: Context) {
 
     companion object {
         const val CHANNEL_ID = "lyric_service"
-        private const val CHANNEL_NAME = "歌词服务"
+        private const val CHANNEL_NAME = "LyricFocus 后台服务"
         const val NOTIFICATION_ID = 1
     }
 
@@ -44,7 +44,7 @@ class LyricNotificationManager(private val context: Context) {
                 CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "歌词显示前台服务通知"
+                description = "用于歌词拉取与服务保活；锁屏 / 息屏歌词由焦点通知展示，不走此渠道"
                 setShowBadge(false)
                 enableVibration(false)
                 setSound(null, null)
@@ -81,7 +81,7 @@ class LyricNotificationManager(private val context: Context) {
                 else -> "正在运行"
             }
             NotificationCompat.Builder(context, CHANNEL_ID)
-                .setContentTitle("歌词显示服务")
+                .setContentTitle("LyricFocus")
                 .setContentText(contentText)
                 .setSmallIcon(R.drawable.ic_music_note)
                 .setContentIntent(pendingIntent)

@@ -1,10 +1,18 @@
 package com.leowalk.LyricFocus
 
 import android.content.Intent
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.os.Bundle
-import android.widget.ImageButton
+import android.os.Handler
+import android.os.Looper
+import android.view.Menu
+import android.view.MenuItem
+import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.MenuItemCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -12,7 +20,6 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.commit
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.bottomnavigation.BottomNavigationView
-import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.leowalk.LyricFocus.ui.AboutFragment
 import com.leowalk.LyricFocus.ui.HomeFragment
@@ -24,10 +31,13 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
 
     private lateinit var toolbar: MaterialToolbar
     private lateinit var bottomNav: BottomNavigationView
-    private lateinit var btnRestartSystemUi: ImageButton
-    private lateinit var btnUpdateAvailable: ImageButton
     private var isCheckingRoot = false
+    private var hasRootAccess = false
     private var pendingUpdateInfo: UpdateChecker.UpdateInfo? = null
+    private var updateDialog: AlertDialog? = null
+    private var updateMenuItem: MenuItem? = null
+    private var restartMenuItem: MenuItem? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,15 +50,8 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
         setContentView(R.layout.activity_main)
         toolbar = findViewById(R.id.toolbar)
         bottomNav = findViewById(R.id.bottom_navigation)
-        btnRestartSystemUi = findViewById(R.id.btn_restart_systemui)
-        btnUpdateAvailable = findViewById(R.id.btn_update_available)
         setSupportActionBar(toolbar)
         setupWindowInsets()
-
-        btnRestartSystemUi.setOnClickListener { confirmRestartSystemUi() }
-        btnUpdateAvailable.setOnClickListener {
-            pendingUpdateInfo?.let { showUpdateDialog(it) }
-        }
 
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
@@ -61,6 +64,45 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
 
         if (savedInstanceState == null) {
             bottomNav.selectedItemId = R.id.nav_home
+        }
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.menu_main, menu)
+        restartMenuItem = menu.findItem(R.id.action_restart_systemui)
+        updateMenuItem = menu.findItem(R.id.action_update)
+        applyRestartMenuState()
+        applyUpdateMenuState()
+        return true
+    }
+
+    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
+        applyRestartMenuState()
+        applyUpdateMenuState()
+        return super.onPrepareOptionsMenu(menu)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_restart_systemui -> {
+                window.decorView.post {
+                    if (!isFinishing && !isDestroyed) confirmRestartSystemUi()
+                }
+                true
+            }
+            R.id.action_update -> {
+                val info = pendingUpdateInfo
+                if (info == null) {
+                    Toast.makeText(this, "正在检查更新…", Toast.LENGTH_SHORT).show()
+                } else {
+                    // 与「重启 SystemUI」相同：下一帧再弹，避开菜单点击抬起
+                    window.decorView.post {
+                        if (!isFinishing && !isDestroyed) showUpdateDialog(info)
+                    }
+                }
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
         }
     }
 
@@ -90,8 +132,14 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
         val navHost = findViewById<android.view.View>(R.id.nav_host_fragment)
         ViewCompat.setOnApplyWindowInsetsListener(navHost) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            val bottomPad = bottomNav.height.takeIf { it > 0 } ?: (56 * resources.displayMetrics.density).toInt()
-            view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, bottomPad + bars.bottom)
+            val bottomPad = bottomNav.height.takeIf { it > 0 }
+                ?: (56 * resources.displayMetrics.density).toInt()
+            view.setPadding(
+                view.paddingLeft,
+                view.paddingTop,
+                view.paddingRight,
+                bottomPad + bars.bottom
+            )
             insets
         }
         bottomNav.post { ViewCompat.requestApplyInsets(navHost) }
@@ -106,16 +154,38 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
     private fun checkRootAccessAsync() {
         if (isCheckingRoot) return
         isCheckingRoot = true
-        btnRestartSystemUi.isEnabled = false
-        btnRestartSystemUi.alpha = 0.38f
+        applyRestartMenuState(enabled = false)
         Thread {
             val granted = RootHelper.checkRootAccess()
             runOnUiThread {
                 isCheckingRoot = false
-                btnRestartSystemUi.isEnabled = granted
-                btnRestartSystemUi.alpha = if (granted) 1f else 0.38f
+                hasRootAccess = granted
+                applyRestartMenuState()
             }
         }.start()
+    }
+
+    private fun applyRestartMenuState(enabled: Boolean = hasRootAccess && !isCheckingRoot) {
+        restartMenuItem?.isEnabled = enabled
+        restartMenuItem?.icon?.mutate()?.alpha = if (enabled) 255 else 97
+    }
+
+    private fun resolveColorOnSurface(): Int {
+        val typed = theme.obtainStyledAttributes(
+            intArrayOf(com.google.android.material.R.attr.colorOnSurface)
+        )
+        return try {
+            typed.getColor(0, Color.GRAY)
+        } finally {
+            typed.recycle()
+        }
+    }
+
+    private fun applyUpdateMenuState() {
+        val item = updateMenuItem ?: return
+        val hasUpdate = pendingUpdateInfo?.hasUpdate == true
+        val tint = if (hasUpdate) getColor(R.color.red) else resolveColorOnSurface()
+        MenuItemCompat.setIconTintList(item, ColorStateList.valueOf(tint))
     }
 
     private fun confirmRestartSystemUi() {
@@ -128,8 +198,7 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
     }
 
     private fun restartSystemUi() {
-        btnRestartSystemUi.isEnabled = false
-        btnRestartSystemUi.alpha = 0.38f
+        applyRestartMenuState(enabled = false)
         RootHelper.restartSystemUiAsync { success, message ->
             runOnUiThread {
                 checkRootAccessAsync()
@@ -144,59 +213,104 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
 
     override fun onUpdateChecked(info: UpdateChecker.UpdateInfo) {
         pendingUpdateInfo = info
-        if (info.hasUpdate) {
-            btnUpdateAvailable.setColorFilter(getColor(R.color.red))
-        } else {
-            btnUpdateAvailable.clearColorFilter()
-        }
+        applyUpdateMenuState()
+        invalidateOptionsMenu()
     }
 
+    /**
+     * 与其它可用弹窗一致：只用 setTitle / setMessage / 按钮。
+     * 菜单抬起容易误触默认按钮，弹出后短暂禁用按钮。
+     * 更新日志在点开后再异步加载。
+     */
     private fun showUpdateDialog(info: UpdateChecker.UpdateInfo) {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_update, null)
+        if (isFinishing || isDestroyed) return
+        if (updateDialog?.isShowing == true) return
 
-        val btnGithub = dialogView.findViewById<MaterialButton>(R.id.btn_update_github)
-        val btnGitee = dialogView.findViewById<MaterialButton>(R.id.btn_update_gitee)
-        val btn123Pan = dialogView.findViewById<MaterialButton>(R.id.btn_update_123pan)
-        val tvReleaseNotes = dialogView.findViewById<android.widget.TextView>(R.id.tv_release_notes)
-        val tvVersionInfo = dialogView.findViewById<android.widget.TextView>(R.id.tv_version_info)
-
-        val currentVersion = UpdateChecker(this).getCurrentVersion(this)
         val checker = UpdateChecker(this)
-        if (info.hasUpdate) {
-            tvVersionInfo.text = "当前版本：$currentVersion\n最新版本：${info.latestVersion}"
-            tvReleaseNotes.text = checker.resolveReleaseNotes(this, info.releaseNotes, true)
-            btnGithub.setOnClickListener {
-                info.githubUrl?.let { openUrl(it) }
-            }
-            btnGitee.setOnClickListener {
-                info.giteeUrl?.let { openUrl(it) } ?: openUrl("https://gitee.com/leowalk0613/LyricFocus/releases")
-            }
-            btn123Pan.setOnClickListener {
-                openUrl("https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3")
-            }
-            MaterialAlertDialogBuilder(this)
-                .setTitle("发现新版本")
-                .setView(dialogView)
-                .setNegativeButton("关闭", null)
-                .show()
+        val currentVersion = checker.getCurrentVersion(this)
+        val hasUpdate = info.hasUpdate
+        val versionBlock = if (hasUpdate) {
+            "当前版本：$currentVersion\n最新版本：${info.latestVersion}"
         } else {
-            tvVersionInfo.text = "当前版本：$currentVersion"
-            tvReleaseNotes.text = checker.resolveReleaseNotes(this, info.releaseNotes, false)
-            btnGithub.setOnClickListener {
-                openUrl("https://github.com/leowalk0613/LyricFocus/releases")
-            }
-            btnGitee.setOnClickListener {
-                openUrl("https://gitee.com/leowalk0613/LyricFocus/releases")
-            }
-            btn123Pan.setOnClickListener {
-                openUrl("https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3")
-            }
-            MaterialAlertDialogBuilder(this)
-                .setTitle("当前版本")
-                .setView(dialogView)
-                .setNegativeButton("关闭", null)
-                .show()
+            "当前版本：$currentVersion"
         }
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(if (hasUpdate) "发现新版本" else "当前版本")
+            .setMessage("$versionBlock\n\n正在加载更新日志…")
+            .setNeutralButton("下载渠道") { _, _ ->
+                mainHandler.post { showDownloadChannels(info) }
+            }
+            .setNegativeButton("关闭", null)
+            .create()
+        dialog.setCanceledOnTouchOutside(false)
+        dialog.setOnDismissListener {
+            if (updateDialog === dialog) updateDialog = null
+        }
+        updateDialog = dialog
+        dialog.setOnShowListener {
+            // 菜单点击的抬起事件落在默认按钮上会导致「一点开就关」
+            guardDialogButtons(dialog)
+        }
+        dialog.show()
+
+        Thread {
+            val notes = try {
+                checker.fetchReleaseNotes(info)
+            } catch (_: Exception) {
+                "加载更新日志失败"
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (updateDialog !== dialog || !dialog.isShowing) return@runOnUiThread
+                dialog.findViewById<TextView>(android.R.id.message)?.text =
+                    "$versionBlock\n\n$notes"
+            }
+        }.start()
+    }
+
+    private fun guardDialogButtons(dialog: AlertDialog) {
+        val buttons = listOf(
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE),
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE),
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
+        )
+        buttons.forEach { it?.isClickable = false }
+        mainHandler.postDelayed({
+            if (dialog.isShowing) {
+                buttons.forEach { it?.isClickable = true }
+            }
+        }, 450L)
+    }
+
+    private fun showDownloadChannels(info: UpdateChecker.UpdateInfo) {
+        if (isFinishing || isDestroyed) return
+        val labels = arrayOf("GitHub", "Gitee", "123网盘")
+        MaterialAlertDialogBuilder(this)
+            .setTitle("下载渠道")
+            .setItems(labels) { _, which ->
+                when (which) {
+                    0 -> openUrl(
+                        info.githubUrl
+                            ?: "https://github.com/leowalk0613/LyricFocus/releases"
+                    )
+                    1 -> openUrl(
+                        info.giteeUrl
+                            ?: "https://gitee.com/leowalk0613/LyricFocus/releases"
+                    )
+                    2 -> openUrl("https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3")
+                }
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    override fun onDestroy() {
+        mainHandler.removeCallbacksAndMessages(null)
+        updateDialog?.setOnDismissListener(null)
+        updateDialog?.dismiss()
+        updateDialog = null
+        super.onDestroy()
     }
 
     private fun openUrl(url: String) {

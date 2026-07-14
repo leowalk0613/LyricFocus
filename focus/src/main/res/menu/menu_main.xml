@@ -4,8 +4,15 @@
     <item
         android:id="@+id/action_restart_systemui"
         android:icon="@drawable/ic_restart"
+        android:orderInCategory="1"
         android:title="重启系统界面"
         app:iconTint="?attr/colorOnSurface"
         app:iconTintMode="src_in"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_update"
+        android:icon="@drawable/ic_warning"
+        android:orderInCategory="2"
+        android:title="版本与更新"
         app:showAsAction="always" />
 </menu>

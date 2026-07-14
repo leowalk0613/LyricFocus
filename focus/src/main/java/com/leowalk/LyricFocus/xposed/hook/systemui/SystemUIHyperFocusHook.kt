@@ -31,7 +31,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage
 import org.json.JSONArray
 
 /**
- * HyperOS 焦点通知歌词（miui.focus.param），锁屏/AOD/超级岛通过 updatable 焦点通知刷新。
+ * HyperOS 焦点通知歌词（miui.focus.param），锁屏/AOD 通过 updatable 焦点通知刷新。
  * 参考 [HyperCeiler FocusNotifLyric](https://github.com/ReChronoRain/HyperCeiler)。
  */
 class SystemUIHyperFocusHook : BaseHook() {
@@ -91,11 +91,23 @@ class SystemUIHyperFocusHook : BaseHook() {
         private const val LAYOUT_REFLOW_DEBOUNCE_MS = 5_000L
         /** 亮屏/解锁后重发焦点通知，等待 Keyguard 与 SystemUI 就绪 */
         private const val SCREEN_REPOST_DELAY_MS = 400L
-        /** 息屏进 AOD 后略延迟，确保 isInteractive=false 且 com.miui.aod 可绑定 rvAod */
-        private const val SCREEN_OFF_REPOST_DELAY_MS = 550L
+        /**
+         * 息屏进 AOD：先让系统完成一次 DiffDispatch 切换动画，再决定是否 cancel+notify 重绑 rvAod。
+         * 原先 550ms 正好落在系统切换动画中途，表现为「亮屏锁屏正常、息屏后概率抽搐」。
+         */
+        private const val SCREEN_OFF_REPOST_DELAY_MS = 1100L
+        /**
+         * AOD DiffDispatch（alpha delay 150ms + scale）未结束前再 cancel+notify
+         * 会截断动画；息屏重绑与换行/forceResync 叠在一起时概率复现。
+         */
+        private const val AOD_SWITCH_SETTLE_MS = 900L
 
         @Volatile
         private var needsAodRebind = false
+        /** 最近一次会触发 cancel+notify 的焦点会话重建时间 */
+        private var lastFocusRecreateAt = 0L
+        private var pendingDisplayRepost: Runnable? = null
+        private var pendingCoalescedFocusPost: Runnable? = null
 
         private enum class FocusRefreshMode {
             LINE_CHANGE,
@@ -475,11 +487,14 @@ class SystemUIHyperFocusHook : BaseHook() {
         preferAppLyric = false
         musicPackage = ""
         lastFocusNotifyTime = 0L
+        lastFocusRecreateAt = 0L
         lastNotifiedLyric = ""
         lastNotifiedSecond = ""
         lastNotifiedTitle = ""
         lastNotifiedArtist = ""
         needsAodRebind = false
+        cancelPendingDisplayRepost()
+        cancelPendingCoalescedFocusPost()
         invalidateLayoutCache()
         HyperFocusLyricStyle.resetPostedCache()
         syncFocusPinState()
@@ -506,10 +521,11 @@ class SystemUIHyperFocusHook : BaseHook() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val channel = NotificationChannel(
                     HyperFocusLyricStyle.CHANNEL_ID,
-                    "焦点歌词",
+                    "LyricFocus 焦点歌词",
                     NotificationManager.IMPORTANCE_HIGH
                 ).apply {
-                    description = "HyperOS 焦点通知歌词（锁屏 / AOD，可选超级岛）"
+                    description =
+                        "LyricFocus 模块使用的 HyperOS 焦点通知：在锁屏与息屏（AOD）显示歌词"
                     setShowBadge(false)
                     enableVibration(false)
                     setSound(null, null)
@@ -572,20 +588,17 @@ class SystemUIHyperFocusHook : BaseHook() {
 
     /** 锁屏显示时重发，避免亮屏锁屏下 rv 未绑定 */
     private fun hookKeyguardRepost(classLoader: ClassLoader) {
-        val callback = Runnable {
-            if (!isKeyguardLocked()) return@Runnable
-            repostFocusForDisplayChange()
-        }
         val hook = object : XC_MethodHook() {
             override fun afterHookedMethod(param: MethodHookParam) {
-                handler.postDelayed(callback, SCREEN_REPOST_DELAY_MS)
+                if (!isKeyguardLocked()) return
+                scheduleDisplayRepost(SCREEN_REPOST_DELAY_MS, forScreenOff = false)
             }
         }
         val keyguardShowingHook = object : XC_MethodHook() {
             override fun afterHookedMethod(param: MethodHookParam) {
                 val showing = param.args.getOrNull(0) as? Boolean ?: return
                 if (!showing) return
-                handler.postDelayed(callback, SCREEN_REPOST_DELAY_MS)
+                scheduleDisplayRepost(SCREEN_REPOST_DELAY_MS, forScreenOff = false)
             }
         }
         val methodNames = listOf(
@@ -627,23 +640,23 @@ class SystemUIHyperFocusHook : BaseHook() {
                 when (intent?.action) {
                     Intent.ACTION_SCREEN_OFF -> {
                         needsAodRebind = true
-                        handler.postDelayed(
-                            { repostFocusForDisplayChange() },
-                            SCREEN_OFF_REPOST_DELAY_MS
-                        )
+                        // 系统从息屏起播 DiffDispatch；静默至重绑时刻，期间只合并不 cancel
+                        lastFocusRecreateAt = System.currentTimeMillis() -
+                            AOD_SWITCH_SETTLE_MS + SCREEN_OFF_REPOST_DELAY_MS
+                        scheduleDisplayRepost(SCREEN_OFF_REPOST_DELAY_MS, forScreenOff = true)
                     }
                     Intent.ACTION_SCREEN_ON -> {
                         needsAodRebind = false
-                        handler.postDelayed(
-                            { repostFocusForDisplayChange() },
-                            SCREEN_REPOST_DELAY_MS
-                        )
+                        scheduleDisplayRepost(SCREEN_REPOST_DELAY_MS, forScreenOff = false)
                     }
-                    Intent.ACTION_USER_PRESENT -> handler.postDelayed({
-                        hideFocusRowsInUnlockedShade()
-                        needsAodRebind = false
-                        repostFocusForDisplayChange()
-                    }, SCREEN_REPOST_DELAY_MS)
+                    Intent.ACTION_USER_PRESENT -> {
+                        cancelPendingDisplayRepost()
+                        handler.postDelayed({
+                            hideFocusRowsInUnlockedShade()
+                            needsAodRebind = false
+                            repostFocusForDisplayChange(forScreenOff = false)
+                        }, SCREEN_REPOST_DELAY_MS)
+                    }
                 }
             }
         }
@@ -655,19 +668,100 @@ class SystemUIHyperFocusHook : BaseHook() {
         registerReceiverSafe(screenReceiver!!, filter)
     }
 
-    private fun repostFocusForDisplayChange() {
+    private fun cancelPendingDisplayRepost() {
+        pendingDisplayRepost?.let { handler.removeCallbacks(it) }
+        pendingDisplayRepost = null
+    }
+
+    private fun cancelPendingCoalescedFocusPost() {
+        pendingCoalescedFocusPost?.let { handler.removeCallbacks(it) }
+        pendingCoalescedFocusPost = null
+    }
+
+    private fun scheduleDisplayRepost(delayMs: Long, forScreenOff: Boolean) {
+        cancelPendingDisplayRepost()
+        val task = Runnable {
+            pendingDisplayRepost = null
+            repostFocusForDisplayChange(forScreenOff = forScreenOff)
+        }
+        pendingDisplayRepost = task
+        handler.postDelayed(task, delayMs.coerceAtLeast(0L))
+    }
+
+    private fun isFocusContentAlreadyBound(): Boolean {
+        return lastFocusNotifyTime > 0L &&
+            currentLyricText.isNotBlank() &&
+            currentLyricText == lastNotifiedLyric &&
+            currentSecondLine == lastNotifiedSecond &&
+            currentTitle == lastNotifiedTitle &&
+            currentArtist == lastNotifiedArtist
+    }
+
+    private fun millisSinceLastFocusRecreate(): Long {
+        if (lastFocusRecreateAt <= 0L) return Long.MAX_VALUE
+        return System.currentTimeMillis() - lastFocusRecreateAt
+    }
+
+    private fun remainingAodSwitchSettleMs(): Long {
+        val elapsed = millisSinceLastFocusRecreate()
+        if (elapsed >= AOD_SWITCH_SETTLE_MS) return 0L
+        return AOD_SWITCH_SETTLE_MS - elapsed
+    }
+
+    /**
+     * 显示路径变化时重发焦点通知。息屏路径会与冷启动 forceResync 合并，
+     * 避免连续 cancel+notify 截断 AOD DiffDispatch 切换动画。
+     */
+    private fun repostFocusForDisplayChange(forScreenOff: Boolean = false) {
         if (!focusEnabled || !isPlaying || currentLyricText.isBlank()) return
-        prepareFocusSessionRecreate(
+        val shouldForceRecreate = forScreenOff && needsAodRebind
+        if (forScreenOff) {
+            // 歌词侧已在息屏后完成 rvAod 重绑：无需再撕会话
+            if (!needsAodRebind && isFocusContentAlreadyBound()) {
+                return
+            }
+            val settleLeft = remainingAodSwitchSettleMs()
+            if (settleLeft > 0L) {
+                if (!needsAodRebind && isFocusContentAlreadyBound()) return
+                scheduleDisplayRepost(settleLeft, forScreenOff = true)
+                return
+            }
+        } else if (isFocusContentAlreadyBound() && remainingAodSwitchSettleMs() > 0L) {
+            // 亮屏/锁屏：内容已绑定且动画窗口内，跳过重复重发
+            return
+        }
+        postFocusWithOptionalRecreate(
             songChanged = false,
             leavingPlaceholder = false,
-            force = true
+            forceRecreate = shouldForceRecreate || !forScreenOff,
+            forcePost = true
         )
-        postFocusUpdate(FocusRefreshMode.LINE_CHANGE, force = true)
         scheduleNextUpdate()
     }
 
     private fun repostFocusIfNeeded() {
-        repostFocusForDisplayChange()
+        repostFocusForDisplayChange(forScreenOff = false)
+    }
+
+    /**
+     * 统一出口：先准备会话缓存，真正的 AOD cancel+notify 节流在 [sendFocusNotification]。
+     */
+    private fun postFocusWithOptionalRecreate(
+        songChanged: Boolean,
+        leavingPlaceholder: Boolean,
+        forceRecreate: Boolean,
+        forcePost: Boolean
+    ) {
+        val needRecreate = songChanged || leavingPlaceholder || forceRecreate
+        if (!needRecreate && !forcePost) return
+        if (needRecreate) {
+            prepareFocusSessionRecreate(
+                songChanged = songChanged,
+                leavingPlaceholder = leavingPlaceholder,
+                force = forceRecreate
+            )
+        }
+        postFocusUpdate(FocusRefreshMode.LINE_CHANGE, force = forcePost || needRecreate)
     }
 
     private fun unregisterReceiverSafe(receiver: BroadcastReceiver?) {
@@ -725,6 +819,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         val styleChanged = intent.getBooleanExtra(FocusStyleSnapshot.EXTRA_STYLE_CHANGED, false)
         FocusStyleSnapshot.applyFromIntent(intent)
         if (styleChanged) {
+            // 仅清空已通知缓存；真正的 cancel+notify 交给随后的 repost
             prepareFocusSessionRecreate(
                 songChanged = false,
                 leavingPlaceholder = false,
@@ -841,14 +936,11 @@ class SystemUIHyperFocusHook : BaseHook() {
                     val needsPost = forceResync || songChanged || leavingPlaceholder ||
                         lastNotifiedLyric.isBlank() || styleChanged
                     if (needsPost) {
-                        prepareFocusSessionRecreate(
+                        postFocusWithOptionalRecreate(
                             songChanged = songChanged,
                             leavingPlaceholder = leavingPlaceholder,
-                            force = forceResync || styleChanged
-                        )
-                        postFocusUpdate(
-                            FocusRefreshMode.LINE_CHANGE,
-                            force = forceResync || lastNotifiedLyric.isBlank() ||
+                            forceRecreate = forceResync || styleChanged,
+                            forcePost = forceResync || lastNotifiedLyric.isBlank() ||
                                 songChanged || leavingPlaceholder || styleChanged
                         )
                     }
@@ -916,14 +1008,11 @@ class SystemUIHyperFocusHook : BaseHook() {
                 lastNotifiedLyric.isBlank() || styleChanged
 
             if (needsPost && lyric.isNotBlank() && isPlaying) {
-                prepareFocusSessionRecreate(
+                postFocusWithOptionalRecreate(
                     songChanged = songChanged,
                     leavingPlaceholder = leavingPlaceholder,
-                    force = forceResync || songChanged || leavingPlaceholder || styleChanged
-                )
-                postFocusUpdate(
-                    FocusRefreshMode.LINE_CHANGE,
-                    force = forceResync || lastNotifiedLyric.isBlank() ||
+                    forceRecreate = forceResync || songChanged || leavingPlaceholder || styleChanged,
+                    forcePost = forceResync || lastNotifiedLyric.isBlank() ||
                         songChanged || leavingPlaceholder || contentChanged || styleChanged
                 )
             } else if (!isPlaying) {
@@ -1080,15 +1169,17 @@ class SystemUIHyperFocusHook : BaseHook() {
         return FocusPreferences.readIsPackageAllowed(context, packageName)
     }
 
+    /**
+     * 仅重置「已通知」缓存，让后续 post 走完整刷新。
+     * 不在这里 cancel：与 [HyperFocusLyricStyle.postFocusNotification] 内 cancel 叠在一起
+     * 会让 AOD DiffDispatch 切换动画被撕两次，表现为抽搐/播不完整。
+     */
     private fun prepareFocusSessionRecreate(
         songChanged: Boolean,
         leavingPlaceholder: Boolean,
         force: Boolean
     ) {
         if (!songChanged && !leavingPlaceholder && !force) return
-        if (leavingPlaceholder || songChanged || force) {
-            notificationManager?.let { HyperFocusLyricStyle.cancelFocusNotification(it) }
-        }
         lastNotifiedLyric = ""
         lastNotifiedSecond = ""
         lastNotifiedTitle = ""
@@ -1110,10 +1201,6 @@ class SystemUIHyperFocusHook : BaseHook() {
                     HyperFocusLyricStyle.RefreshKind.LINE_CHANGE,
                     forceRefresh = force
                 )
-                lastNotifiedLyric = currentLyricText
-                lastNotifiedSecond = currentSecondLine
-                lastNotifiedTitle = currentTitle
-                lastNotifiedArtist = currentArtist
             }
             FocusRefreshMode.KEEPALIVE -> {
                 if (currentLyricText != lastNotifiedLyric ||
@@ -1125,6 +1212,32 @@ class SystemUIHyperFocusHook : BaseHook() {
                 sendFocusNotification(HyperFocusLyricStyle.RefreshKind.KEEPALIVE)
             }
         }
+    }
+
+    /**
+     * AOD 上任何会 cancel 的推送都必须避开 DiffDispatch 播放窗口；
+     * 窗口内多次换行/重绑合并为一次，带上最新歌词。
+     * 合并任务可代替排队中的息屏重绑，故一并取消 pending display repost。
+     */
+    private fun scheduleCoalescedAodFocusSend(
+        refreshKind: HyperFocusLyricStyle.RefreshKind,
+        forceRefresh: Boolean,
+        delayMs: Long
+    ) {
+        cancelPendingCoalescedFocusPost()
+        cancelPendingDisplayRepost()
+        val task = Runnable {
+            pendingCoalescedFocusPost = null
+            if (!focusEnabled || !isPlaying || currentLyricText.isBlank()) return@Runnable
+            // 合并后的一次发送同时完成 AOD 重绑
+            sendFocusNotification(
+                refreshKind,
+                forceRefresh = forceRefresh || needsAodRebind
+            )
+            scheduleNextUpdate()
+        }
+        pendingCoalescedFocusPost = task
+        handler.postDelayed(task, delayMs.coerceAtLeast(0L))
     }
 
     @SuppressLint("NotificationPermission")
@@ -1151,6 +1264,30 @@ class SystemUIHyperFocusHook : BaseHook() {
             val effectiveForceRefresh = forceRefresh ||
                 (aodActive && needsAodRebind &&
                     refreshKind == HyperFocusLyricStyle.RefreshKind.KEEPALIVE)
+            val willRecreate = recreateForAod || effectiveForceRefresh
+
+            // 亮屏锁屏：willRecreate 多为 false，直接 notify，不会踩 DiffDispatch。
+            // 息屏 AOD：每次换行都 recreate，必须与上一次切换动画错开。
+            if (aodActive && willRecreate) {
+                val settleLeft = remainingAodSwitchSettleMs()
+                if (settleLeft > 0L) {
+                    // 认领当前内容，避免窗口内重复排队；真正 notify 仍走合并任务
+                    lastNotifiedLyric = currentLyricText
+                    lastNotifiedSecond = currentSecondLine
+                    lastNotifiedTitle = currentTitle
+                    lastNotifiedArtist = currentArtist
+                    scheduleCoalescedAodFocusSend(
+                        refreshKind = HyperFocusLyricStyle.RefreshKind.LINE_CHANGE,
+                        forceRefresh = true,
+                        delayMs = settleLeft
+                    )
+                    return
+                }
+            }
+
+            // 即将实发：丢掉排队中的合并任务，防止 settle 结束后再发第二次
+            cancelPendingCoalescedFocusPost()
+
             HyperFocusLyricStyle.postFocusNotification(
                 systemContext = context,
                 notificationManager = nm,
@@ -1169,6 +1306,9 @@ class SystemUIHyperFocusHook : BaseHook() {
                 forceRefresh = effectiveForceRefresh,
                 recreateForAod = recreateForAod
             )
+            if (willRecreate) {
+                lastFocusRecreateAt = System.currentTimeMillis()
+            }
             if (aodActive && recreateForAod) {
                 needsAodRebind = false
             }
@@ -1176,7 +1316,19 @@ class SystemUIHyperFocusHook : BaseHook() {
                 markLayoutReflowAllowed(true)
             }
             lastFocusNotifyTime = System.currentTimeMillis()
-            scheduleLyricFocusReorder()
+            lastNotifiedLyric = currentLyricText
+            lastNotifiedSecond = currentSecondLine
+            lastNotifiedTitle = currentTitle
+            lastNotifiedArtist = currentArtist
+            // 息屏切换动画窗口内不要反复挪 View，避免与 DiffDispatch 抢布局
+            if (!aodActive || remainingAodSwitchSettleMs() <= 0L) {
+                scheduleLyricFocusReorder()
+            } else {
+                handler.postDelayed(
+                    { scheduleLyricFocusReorder() },
+                    remainingAodSwitchSettleMs()
+                )
+            }
         } catch (e: Throwable) {
             logE("Failed to send focus notification", e)
         }
@@ -1185,7 +1337,10 @@ class SystemUIHyperFocusHook : BaseHook() {
     private fun cancelFocusNotification() {
         try {
             lastFocusNotifyTime = 0L
+            lastFocusRecreateAt = 0L
             needsAodRebind = false
+            cancelPendingDisplayRepost()
+            cancelPendingCoalescedFocusPost()
             lastNotifiedLyric = ""
             lastNotifiedSecond = ""
             lastNotifiedTitle = ""

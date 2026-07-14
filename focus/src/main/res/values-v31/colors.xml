@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 跟随壁纸 Monet / Material You 取色 -->
+    <color name="ic_launcher_background">@android:color/system_accent1_600</color>
+    <color name="ic_launcher_foreground_glyph">@android:color/system_accent1_600</color>
+</resources>

@@ -71,6 +71,7 @@ object FocusPreferences {
     const val PREF_AI_API_KEY = "ai_api_key"
     const val PREF_AI_API_MODEL = "ai_api_model"
     const val PREF_AI_TARGET_LANGUAGE = "ai_target_language"
+    const val PREF_AI_TRANSLATE_ALL_LYRICS = "ai_translate_all_lyrics"
     const val PREF_LOCAL_LRC_BOOTSTRAPPED = "local_lrc_bootstrapped"
 
     const val DEFAULT_LOCAL_LRC_DIR = "/sdcard/LyricFocus/lyrics"
@@ -312,6 +313,18 @@ object FocusPreferences {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(PREF_AI_TARGET_LANGUAGE, value.trim())
+            .apply()
+    }
+
+    fun isAiTranslateAllLyrics(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_AI_TRANSLATE_ALL_LYRICS, false)
+    }
+
+    fun setAiTranslateAllLyrics(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_AI_TRANSLATE_ALL_LYRICS, enabled)
             .apply()
     }
 

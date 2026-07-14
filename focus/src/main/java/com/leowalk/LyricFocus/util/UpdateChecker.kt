@@ -22,30 +22,58 @@ class UpdateChecker(private val context: Context) {
     data class UpdateInfo(
         val hasUpdate: Boolean,
         val latestVersion: String?,
-        val releaseNotes: String?,
+        /** 后台检测不填充；点开弹窗后再 [fetchReleaseNotes] */
+        val releaseNotes: String? = null,
         val githubUrl: String?,
         val giteeUrl: String?,
         val apkUrl: String?,
         val error: String? = null
     )
 
+    /**
+     * 轻量检测：只比对本地版本与远端 tag，不解析/携带更新日志正文。
+     */
     fun checkForUpdates(): UpdateInfo {
         val latch = CountDownLatch(2)
         val results = mutableListOf<UpdateInfo>()
 
         Thread {
-            checkGitHub()?.let { results.add(it) }
+            checkGitHub(includeNotes = false)?.let { results.add(it) }
             latch.countDown()
         }.start()
 
         Thread {
-            checkGitee()?.let { results.add(it) }
+            checkGitee(includeNotes = false)?.let { results.add(it) }
             latch.countDown()
         }.start()
 
         latch.await(15, TimeUnit.SECONDS)
-
         return mergeResults(results)
+    }
+
+    /**
+     * 用户点开弹窗后再加载日志：有更新拉远端 body，否则读内置 assets。
+     */
+    fun fetchReleaseNotes(info: UpdateInfo): String {
+        if (!info.hasUpdate) {
+            return getBundledReleaseNotes(context) ?: "暂无更新日志"
+        }
+        val remote = when {
+            !info.githubUrl.isNullOrBlank() ->
+                checkGitHub(includeNotes = true)?.releaseNotes
+            !info.giteeUrl.isNullOrBlank() ->
+                checkGitee(includeNotes = true)?.releaseNotes
+            else -> null
+        }
+        if (!remote.isNullOrBlank()) return remote
+        // 主源失败时换另一源
+        val fallback = when {
+            !info.githubUrl.isNullOrBlank() ->
+                checkGitee(includeNotes = true)?.releaseNotes
+            else -> checkGitHub(includeNotes = true)?.releaseNotes
+        }
+        if (!fallback.isNullOrBlank()) return fallback
+        return getBundledReleaseNotes(context) ?: "暂无更新日志"
     }
 
     private fun mergeResults(results: List<UpdateInfo>): UpdateInfo {
@@ -53,7 +81,6 @@ class UpdateChecker(private val context: Context) {
             return UpdateInfo(
                 hasUpdate = false,
                 latestVersion = null,
-                releaseNotes = null,
                 githubUrl = null,
                 giteeUrl = null,
                 apkUrl = null
@@ -64,14 +91,17 @@ class UpdateChecker(private val context: Context) {
         val giteeResult = results.find { it.giteeUrl != null }
 
         return if (githubResult != null && giteeResult != null) {
-            val githubNewer = compareVersions(githubResult.latestVersion ?: "", giteeResult.latestVersion ?: "") >= 0
+            val githubNewer = compareVersions(
+                githubResult.latestVersion ?: "",
+                giteeResult.latestVersion ?: ""
+            ) >= 0
             if (githubNewer) githubResult else giteeResult
         } else {
             githubResult ?: giteeResult ?: results.first()
         }
     }
 
-    private fun checkGitHub(): UpdateInfo? {
+    private fun checkGitHub(includeNotes: Boolean): UpdateInfo? {
         return try {
             val request = Request.Builder()
                 .url("https://api.github.com/repos/leowalk0613/LyricFocus/releases/latest")
@@ -95,7 +125,7 @@ class UpdateChecker(private val context: Context) {
                 }
 
                 val htmlUrl = json.optString("html_url", "")
-                val bodyText = json.optString("body", "")
+                val bodyText = if (includeNotes) json.optString("body", "") else null
 
                 var apkUrl: String? = null
                 val assets = json.optJSONArray("assets")
@@ -114,7 +144,7 @@ class UpdateChecker(private val context: Context) {
                 UpdateInfo(
                     hasUpdate = hasUpdate,
                     latestVersion = latestVersion,
-                    releaseNotes = bodyText,
+                    releaseNotes = bodyText?.takeIf { it.isNotBlank() },
                     githubUrl = htmlUrl,
                     giteeUrl = null,
                     apkUrl = apkUrl
@@ -129,7 +159,7 @@ class UpdateChecker(private val context: Context) {
         }
     }
 
-    private fun checkGitee(): UpdateInfo? {
+    private fun checkGitee(includeNotes: Boolean): UpdateInfo? {
         return try {
             val request = Request.Builder()
                 .url("https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases/latest")
@@ -147,8 +177,9 @@ class UpdateChecker(private val context: Context) {
 
                 val tagName = json.optString("tag_name", "")
                 val latestVersion = tagName.replaceFirst("^[vVxX]+".toRegex(), "")
+                if (latestVersion.isBlank()) return null
                 val htmlUrl = json.optString("html_url", "")
-                val bodyText = json.optString("body", "")
+                val bodyText = if (includeNotes) json.optString("body", "") else null
 
                 var apkUrl: String? = null
                 val assets = json.optJSONArray("assets")
@@ -167,7 +198,7 @@ class UpdateChecker(private val context: Context) {
                 UpdateInfo(
                     hasUpdate = hasUpdate,
                     latestVersion = latestVersion,
-                    releaseNotes = bodyText,
+                    releaseNotes = bodyText?.takeIf { it.isNotBlank() },
                     githubUrl = null,
                     giteeUrl = htmlUrl,
                     apkUrl = apkUrl
@@ -201,7 +232,7 @@ class UpdateChecker(private val context: Context) {
             val info = context.packageManager.getPackageInfo(context.packageName, 0)
             info.versionName
         } catch (e: Exception) {
-            "1.6.0"
+            "1.6.1"
         }
     }
 
@@ -212,13 +243,5 @@ class UpdateChecker(private val context: Context) {
         } catch (_: Exception) {
             null
         }
-    }
-
-    fun resolveReleaseNotes(context: Context, remoteNotes: String?, hasUpdate: Boolean): String {
-        if (hasUpdate && !remoteNotes.isNullOrBlank()) {
-            return remoteNotes
-        }
-        getBundledReleaseNotes(context)?.let { return it }
-        return remoteNotes?.takeIf { it.isNotBlank() } ?: "暂无更新日志"
     }
 }

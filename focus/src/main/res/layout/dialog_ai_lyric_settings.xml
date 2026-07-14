@@ -60,11 +60,43 @@
                 android:inputType="text" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switch_ai_translate_all"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="翻译所有歌词" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="默认仅在歌词没有译文时调用 AI。勾选后，会用 AI 译文覆盖已有翻译。"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:textColor="?attr/colorOnSurfaceVariant" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_test_ai_connectivity"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="检测连通性" />
+
+        <TextView
+            android:id="@+id/tv_ai_connectivity_result"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="兼容 OpenAI Chat Completions 接口。选择「AI 翻译」后，会先获取在线歌词，再调用 API 生成译文。"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:visibility="gone" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="支持任意兼容 OpenAI Chat Completions 格式的接口（如 OpenAI、DeepSeek、通义、Groq、自建中转等）。填写对应服务商的 Base URL、API Key 与模型名即可。选择「AI 翻译」后，会先获取在线歌词，再调用 API 生成译文。"
             android:textAppearance="?attr/textAppearanceBodySmall"
             android:textColor="?attr/colorOnSurfaceVariant" />
 

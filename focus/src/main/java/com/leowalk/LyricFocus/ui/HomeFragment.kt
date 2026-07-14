@@ -6,13 +6,17 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.view.View
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.widget.ImageViewCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
@@ -21,10 +25,15 @@ import com.google.android.material.textfield.TextInputEditText
 import com.leowalk.LyricFocus.FocusPreferences
 import com.leowalk.LyricFocus.NotificationPermissionHelper
 import com.leowalk.LyricFocus.R
+import com.leowalk.LyricFocus.lyric.AiLyricTranslator
 import com.leowalk.LyricFocus.lyric.LocalLrcBootstrap
 import com.leowalk.LyricFocus.service.LyricService
 import com.leowalk.LyricFocus.service.MusicMonitorService
+import com.leowalk.LyricFocus.util.AutostartHelper
+import com.leowalk.LyricFocus.util.InstalledAppsHelper
+import com.leowalk.LyricFocus.util.RootHelper
 import com.leowalk.LyricFocus.util.UpdateChecker
+import kotlinx.coroutines.launch
 
 class HomeFragment : Fragment(R.layout.fragment_home) {
 
@@ -39,14 +48,21 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
     private lateinit var tvLyricSourceMode: TextView
     private lateinit var tvLyricSourceHit: TextView
     private lateinit var tvServiceStatus: TextView
-    private lateinit var tvNotificationPermission: TextView
-    private lateinit var tvPostNotificationPermission: TextView
+    private lateinit var ivNotificationPermission: ImageView
+    private lateinit var ivPostNotificationPermission: ImageView
     private lateinit var btnGrantNotification: MaterialButton
     private lateinit var btnGrantPostNotification: MaterialButton
-    private lateinit var tvRootPermission: TextView
+    private lateinit var ivRootPermission: ImageView
+    private lateinit var ivAppListPermission: ImageView
+    private lateinit var ivAutostartPermission: ImageView
+    private lateinit var ivBatteryPermission: ImageView
+    private lateinit var btnGrantAppList: MaterialButton
+    private lateinit var btnGrantAutostart: MaterialButton
+    private lateinit var btnGrantBattery: MaterialButton
     private var isSyncAdvanceSliderUpdating = false
     private var pendingUpdateInfo: UpdateChecker.UpdateInfo? = null
     private var hasCheckedForUpdates = false
+    private var isCheckingRoot = false
 
     interface UpdateCallback {
         fun onUpdateChecked(info: UpdateChecker.UpdateInfo)
@@ -124,11 +140,17 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         tvLyricSourceMode = view.findViewById(R.id.tv_lyric_source_mode)
         tvLyricSourceHit = view.findViewById(R.id.tv_lyric_source_hit)
         tvServiceStatus = view.findViewById(R.id.tv_service_status)
-        tvNotificationPermission = view.findViewById(R.id.tv_notification_permission_status)
-        tvPostNotificationPermission = view.findViewById(R.id.tv_post_notification_permission_status)
+        ivNotificationPermission = view.findViewById(R.id.iv_notification_permission_status)
+        ivPostNotificationPermission = view.findViewById(R.id.iv_post_notification_permission_status)
         btnGrantNotification = view.findViewById(R.id.btn_grant_notification)
         btnGrantPostNotification = view.findViewById(R.id.btn_grant_post_notification)
-        tvRootPermission = view.findViewById(R.id.tv_root_permission_status)
+        ivRootPermission = view.findViewById(R.id.iv_root_permission_status)
+        ivAppListPermission = view.findViewById(R.id.iv_app_list_permission_status)
+        ivAutostartPermission = view.findViewById(R.id.iv_autostart_permission_status)
+        ivBatteryPermission = view.findViewById(R.id.iv_battery_permission_status)
+        btnGrantAppList = view.findViewById(R.id.btn_grant_app_list)
+        btnGrantAutostart = view.findViewById(R.id.btn_grant_autostart)
+        btnGrantBattery = view.findViewById(R.id.btn_grant_battery)
         view.findViewById<ImageButton>(R.id.btn_usage_help).setOnClickListener {
             showUsageHelpDialog()
         }
@@ -190,6 +212,15 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
             } else {
                 NotificationPermissionHelper.openAppNotificationSettings(ctx)
             }
+        }
+        btnGrantAppList.setOnClickListener {
+            InstalledAppsHelper.openAppListPermissionSettings(requireContext())
+        }
+        btnGrantAutostart.setOnClickListener {
+            AutostartHelper.openAutostartSettings(requireContext())
+        }
+        btnGrantBattery.setOnClickListener {
+            openBatteryOptimizationSettings()
         }
         sliderSyncAdvance.addOnChangeListener { _, value, fromUser ->
             if (!fromUser || isSyncAdvanceSliderUpdating) return@addOnChangeListener
@@ -302,11 +333,43 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         val inputApiKey = dialogView.findViewById<TextInputEditText>(R.id.input_ai_api_key)
         val inputModel = dialogView.findViewById<TextInputEditText>(R.id.input_ai_model)
         val inputTargetLanguage = dialogView.findViewById<TextInputEditText>(R.id.input_ai_target_language)
+        val switchTranslateAll = dialogView.findViewById<MaterialSwitch>(R.id.switch_ai_translate_all)
+        val btnTestConnectivity = dialogView.findViewById<MaterialButton>(R.id.btn_test_ai_connectivity)
+        val tvConnectivityResult = dialogView.findViewById<TextView>(R.id.tv_ai_connectivity_result)
 
         inputBaseUrl.setText(FocusPreferences.getAiApiBaseUrl(ctx))
         inputApiKey.setText(FocusPreferences.getAiApiKey(ctx))
         inputModel.setText(FocusPreferences.getAiApiModel(ctx))
         inputTargetLanguage.setText(FocusPreferences.getAiTargetLanguage(ctx))
+        switchTranslateAll.isChecked = FocusPreferences.isAiTranslateAllLyrics(ctx)
+
+        btnTestConnectivity.setOnClickListener {
+            btnTestConnectivity.isEnabled = false
+            tvConnectivityResult.visibility = View.VISIBLE
+            tvConnectivityResult.setTextColor(ctx.getColor(R.color.grey))
+            tvConnectivityResult.text = "正在检测…"
+
+            val config = AiLyricTranslator.ApiConfig(
+                baseUrl = inputBaseUrl.text?.toString().orEmpty(),
+                apiKey = inputApiKey.text?.toString().orEmpty(),
+                model = inputModel.text?.toString().orEmpty()
+            )
+            viewLifecycleOwner.lifecycleScope.launch {
+                val result = AiLyricTranslator(ctx).testConnectivity(config)
+                if (!isAdded) return@launch
+                btnTestConnectivity.isEnabled = true
+                when (result) {
+                    is AiLyricTranslator.ConnectivityResult.Success -> {
+                        tvConnectivityResult.setTextColor(ctx.getColor(R.color.green))
+                        tvConnectivityResult.text = result.message
+                    }
+                    is AiLyricTranslator.ConnectivityResult.Failure -> {
+                        tvConnectivityResult.setTextColor(ctx.getColor(R.color.red))
+                        tvConnectivityResult.text = result.message
+                    }
+                }
+            }
+        }
 
         MaterialAlertDialogBuilder(ctx)
             .setTitle("AI 翻译配置")
@@ -316,6 +379,7 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
                 FocusPreferences.setAiApiKey(ctx, inputApiKey.text?.toString().orEmpty())
                 FocusPreferences.setAiApiModel(ctx, inputModel.text?.toString().orEmpty())
                 FocusPreferences.setAiTargetLanguage(ctx, inputTargetLanguage.text?.toString().orEmpty())
+                FocusPreferences.setAiTranslateAllLyrics(ctx, switchTranslateAll.isChecked)
                 updateLyricSourceUi()
                 broadcastSettingsChanged(includeLyricSource = true)
             }
@@ -356,27 +420,27 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
             NotificationPermissionHelper.hasPostNotificationsPermission(ctx)
         val running = LyricService.isServiceRunning
 
-        if (hasNotificationPermission) {
-            tvNotificationPermission.text = "已授权"
-            tvNotificationPermission.setTextColor(ctx.getColor(R.color.green))
-        } else {
-            tvNotificationPermission.text = "未授权"
-            tvNotificationPermission.setTextColor(ctx.getColor(R.color.red))
-        }
+        setPermissionStatusIcon(ivNotificationPermission, granted = hasNotificationPermission)
+        setPermissionStatusIcon(
+            ivPostNotificationPermission,
+            granted = !NotificationPermissionHelper.needsPostNotificationsPermission() ||
+                hasPostNotificationPermission
+        )
 
-        if (!NotificationPermissionHelper.needsPostNotificationsPermission()) {
-            tvPostNotificationPermission.text = "当前系统无需单独授权"
-            tvPostNotificationPermission.setTextColor(ctx.getColor(R.color.grey))
-        } else if (hasPostNotificationPermission) {
-            tvPostNotificationPermission.text = "已允许"
-            tvPostNotificationPermission.setTextColor(ctx.getColor(R.color.green))
-        } else {
-            tvPostNotificationPermission.text = "未允许"
-            tvPostNotificationPermission.setTextColor(ctx.getColor(R.color.red))
-        }
+        refreshRootPermissionStatus()
 
-        tvRootPermission.text = "请在工具栏使用重启 SystemUI"
-        tvRootPermission.setTextColor(ctx.getColor(R.color.grey))
+        setPermissionStatusIcon(
+            ivAppListPermission,
+            granted = !InstalledAppsHelper.hasLimitedPackageVisibility(ctx)
+        )
+        setPermissionStatusIcon(
+            ivAutostartPermission,
+            granted = AutostartHelper.isAutostartEnabled(ctx)
+        )
+        setPermissionStatusIcon(
+            ivBatteryPermission,
+            granted = isIgnoringBatteryOptimizations(ctx)
+        )
 
         tvServiceStatus.text = if (running) "运行中" else "未运行"
         tvServiceStatus.setTextColor(ctx.getColor(if (running) R.color.green else R.color.grey))
@@ -385,6 +449,79 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         if (hasNotificationPermission && !running) {
             LyricService.start(ctx)
             startMusicMonitorService()
+        }
+    }
+
+    private fun refreshRootPermissionStatus() {
+        if (!::ivRootPermission.isInitialized) return
+        if (isCheckingRoot) return
+        isCheckingRoot = true
+        setPermissionStatusIcon(ivRootPermission, granted = null)
+        Thread {
+            val granted = RootHelper.checkRootAccess()
+            activity?.runOnUiThread {
+                isCheckingRoot = false
+                if (!isAdded) return@runOnUiThread
+                setPermissionStatusIcon(ivRootPermission, granted = granted)
+            }
+        }.start()
+    }
+
+    private fun setPermissionStatusIcon(view: ImageView, granted: Boolean?) {
+        val ctx = view.context
+        when (granted) {
+            true -> {
+                view.setImageResource(R.drawable.ic_status_ok)
+                ImageViewCompat.setImageTintList(
+                    view,
+                    android.content.res.ColorStateList.valueOf(ctx.getColor(R.color.green))
+                )
+            }
+            false -> {
+                view.setImageResource(R.drawable.ic_status_fail)
+                ImageViewCompat.setImageTintList(
+                    view,
+                    android.content.res.ColorStateList.valueOf(ctx.getColor(R.color.red))
+                )
+            }
+            null -> {
+                view.setImageResource(R.drawable.ic_status_ok)
+                ImageViewCompat.setImageTintList(
+                    view,
+                    android.content.res.ColorStateList.valueOf(ctx.getColor(R.color.grey))
+                )
+            }
+        }
+    }
+
+    private fun isIgnoringBatteryOptimizations(ctx: android.content.Context): Boolean {
+        return try {
+            val pm = ctx.getSystemService(PowerManager::class.java)
+            pm?.isIgnoringBatteryOptimizations(ctx.packageName) == true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun openBatteryOptimizationSettings() {
+        val ctx = requireContext()
+        val candidates = listOf(
+            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:${ctx.packageName}")
+            },
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", ctx.packageName, null)
+            }
+        )
+        for (intent in candidates) {
+            try {
+                if (intent.resolveActivity(ctx.packageManager) != null) {
+                    startActivity(intent)
+                    return
+                }
+            } catch (_: Exception) {
+            }
         }
     }
 
@@ -479,35 +616,61 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
     }
 
     private fun showUpdateDialog(info: UpdateChecker.UpdateInfo) {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_update, null)
-
-        val btnGithub = dialogView.findViewById<MaterialButton>(R.id.btn_update_github)
-        val btnGitee = dialogView.findViewById<MaterialButton>(R.id.btn_update_gitee)
-        val btn123Pan = dialogView.findViewById<MaterialButton>(R.id.btn_update_123pan)
-        val tvReleaseNotes = dialogView.findViewById<TextView>(R.id.tv_release_notes)
-        val tvVersionInfo = dialogView.findViewById<TextView>(R.id.tv_version_info)
-
-        val currentVersion = UpdateChecker(requireContext()).getCurrentVersion(requireContext())
-        tvVersionInfo.text = "当前版本：$currentVersion\n最新版本：${info.latestVersion}"
-        tvReleaseNotes.text = UpdateChecker(requireContext())
-            .resolveReleaseNotes(requireContext(), info.releaseNotes, true)
-
-        btnGithub.setOnClickListener {
-            info.githubUrl?.let { openUrl(it) }
-        }
-        btnGitee.setOnClickListener {
-            info.giteeUrl?.let { openUrl(it) } ?: run {
-                openUrl("https://gitee.com/leowalk0613/LyricFocus/releases")
-            }
-        }
-        btn123Pan.setOnClickListener {
-            openUrl("https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3")
-        }
-
-        MaterialAlertDialogBuilder(requireContext())
+        val checker = UpdateChecker(requireContext())
+        val currentVersion = checker.getCurrentVersion(requireContext())
+        val versionBlock = "当前版本：$currentVersion\n最新版本：${info.latestVersion}"
+        val dialog = MaterialAlertDialogBuilder(requireContext())
             .setTitle("发现新版本")
-            .setView(dialogView)
+            .setMessage("$versionBlock\n\n正在加载更新日志…")
+            .setNeutralButton("下载渠道") { _, _ ->
+                view?.post { showDownloadChannels(info) }
+            }
             .setNegativeButton("关闭", null)
+            .create()
+        dialog.setCanceledOnTouchOutside(false)
+        dialog.setOnShowListener {
+            val buttons = listOf(
+                dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEGATIVE),
+                dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEUTRAL)
+            )
+            buttons.forEach { it?.isClickable = false }
+            view?.postDelayed({
+                if (dialog.isShowing) buttons.forEach { it?.isClickable = true }
+            }, 450L)
+        }
+        dialog.show()
+        Thread {
+            val notes = try {
+                checker.fetchReleaseNotes(info)
+            } catch (_: Exception) {
+                "加载更新日志失败"
+            }
+            activity?.runOnUiThread {
+                if (!isAdded || !dialog.isShowing) return@runOnUiThread
+                dialog.findViewById<TextView>(android.R.id.message)?.text =
+                    "$versionBlock\n\n$notes"
+            }
+        }.start()
+    }
+
+    private fun showDownloadChannels(info: UpdateChecker.UpdateInfo) {
+        if (!isAdded) return
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("下载渠道")
+            .setItems(arrayOf("GitHub", "Gitee", "123网盘")) { _, which ->
+                when (which) {
+                    0 -> openUrl(
+                        info.githubUrl
+                            ?: "https://github.com/leowalk0613/LyricFocus/releases"
+                    )
+                    1 -> openUrl(
+                        info.giteeUrl
+                            ?: "https://gitee.com/leowalk0613/LyricFocus/releases"
+                    )
+                    2 -> openUrl("https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3")
+                }
+            }
+            .setNegativeButton("取消", null)
             .show()
     }
 

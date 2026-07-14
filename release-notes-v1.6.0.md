@@ -26,7 +26,7 @@
 
 ## 安装说明
 
-- 下载 `LyricFocus-v1.6.0.apk` 安装
+- 下载 `LyricFocus.v1.6.0.apk` 安装
 - 若曾安装 Debug 版，请先卸载再安装
 - 需要 LSPosed，作用域：`com.android.systemui`、`com.miui.aod`
 - 安装后请在 LSPosed 中重新勾选上述作用域并**重启 SystemUI**
