@@ -32,6 +32,20 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
 
     private lateinit var switchSwapLyricTranslation: MaterialSwitch
     private lateinit var switchSingleLineOnly: MaterialSwitch
+    private lateinit var singleLineOnlyRow: View
+    private lateinit var singleLineOnlyTitle: TextView
+    private lateinit var singleLineOnlyHint: TextView
+    private lateinit var linesCard: View
+    private lateinit var linesCardTitle: TextView
+    private lateinit var linesCardHint: TextView
+    private lateinit var switchMultiLineLyrics: MaterialSwitch
+    private lateinit var multiLineCountRow: View
+    private lateinit var multiLineCountGroup: MaterialButtonToggleGroup
+    private lateinit var multiLineTranslationRow: View
+    private lateinit var switchMultiLineShowTranslation: MaterialSwitch
+    private lateinit var multiLineTextSizeRow: View
+    private lateinit var sliderMultiLineTextSize: Slider
+    private lateinit var tvMultiLineTextSizeLabel: TextView
     private lateinit var lockScreenSection: LinearLayout
     private lateinit var lockScreenSectionHint: TextView
     private lateinit var lockScreenStyleCard: MaterialCardView
@@ -88,6 +102,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
 
     private var isBindingUi = false
     private var isTextSizeSliderUpdating = false
+    private var isMultiLineTextSizeUpdating = false
     private var isCustomAodTextSizeUpdating = false
     private var isCustomAodWidthUpdating = false
     private var selectedPresetColor: Int = AodColorPresets.defaultPresetColor()
@@ -103,17 +118,33 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         updateLockScreenSectionState()
         updateCustomAodSectionState()
         updateCustomAodColorUi()
+        updateMultiLineDependentUi()
     }
 
     override fun onResume() {
         super.onResume()
         updateLockScreenSectionState()
         updateCustomAodSectionState()
+        updateMultiLineDependentUi()
     }
 
     private fun bindViews(view: View) {
         switchSwapLyricTranslation = view.findViewById(R.id.switch_swap_lyric_translation)
         switchSingleLineOnly = view.findViewById(R.id.switch_single_line_only)
+        singleLineOnlyRow = view.findViewById(R.id.single_line_only_row)
+        singleLineOnlyTitle = view.findViewById(R.id.single_line_only_title)
+        singleLineOnlyHint = view.findViewById(R.id.single_line_only_hint)
+        linesCard = view.findViewById(R.id.lines_card)
+        linesCardTitle = view.findViewById(R.id.lines_card_title)
+        linesCardHint = view.findViewById(R.id.lines_card_hint)
+        switchMultiLineLyrics = view.findViewById(R.id.switch_multi_line_lyrics)
+        multiLineCountRow = view.findViewById(R.id.multi_line_count_row)
+        multiLineCountGroup = view.findViewById(R.id.multi_line_count_group)
+        multiLineTranslationRow = view.findViewById(R.id.multi_line_translation_row)
+        switchMultiLineShowTranslation = view.findViewById(R.id.switch_multi_line_show_translation)
+        multiLineTextSizeRow = view.findViewById(R.id.multi_line_text_size_row)
+        sliderMultiLineTextSize = view.findViewById(R.id.slider_multi_line_text_size)
+        tvMultiLineTextSizeLabel = view.findViewById(R.id.multi_line_text_size_label)
         lockScreenSection = view.findViewById(R.id.lock_screen_style_section)
         lockScreenSectionHint = view.findViewById(R.id.lock_screen_section_hint)
         lockScreenStyleCard = view.findViewById(R.id.lock_screen_style_card)
@@ -171,7 +202,11 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             textColorBlack,
             lyricLinesGroup,
             translationLinesGroup,
-            gravityGroup
+            gravityGroup,
+            switchMultiLineLyrics,
+            multiLineCountGroup,
+            switchMultiLineShowTranslation,
+            sliderMultiLineTextSize
         )
         customAodControls += listOf(
             sliderCustomAodTextSize,
@@ -254,6 +289,17 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
 
         switchSwapLyricTranslation.isChecked = FocusPreferences.isSwapLyricTranslation(requireContext())
         switchSingleLineOnly.isChecked = FocusPreferences.isSingleLineOnly(requireContext())
+        switchMultiLineLyrics.isChecked = FocusPreferences.isMultiLineLyrics(requireContext())
+        switchMultiLineShowTranslation.isChecked =
+            FocusPreferences.isMultiLineShowTranslation(requireContext())
+        multiLineCountGroup.check(
+            when (FocusPreferences.getMultiLineLineCount(requireContext())) {
+                4 -> R.id.multi_line_count_4
+                6 -> R.id.multi_line_count_6
+                else -> R.id.multi_line_count_8
+            }
+        )
+        bindMultiLineTextSizeSlider(FocusPreferences.getMultiLineTextSize(requireContext()))
 
         bindTextSizeSlider(FocusPreferences.getLyricTextSize(requireContext()))
 
@@ -347,6 +393,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             control.alpha = alpha
         }
         updateDynamicColorUi()
+        updateMultiLineDependentUi()
     }
 
     private fun updateCustomAodSectionState() {
@@ -363,6 +410,43 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             chip.isEnabled = customAodEnabled
             chip.alpha = alpha
         }
+    }
+
+    private fun updateMultiLineDependentUi() {
+        val multiLineEnabled = FocusPreferences.isMultiLineLyrics(requireContext())
+        val customAodEnabled = FocusPreferences.isCustomAodLayout(requireContext())
+        val lockScreenInteractive = !customAodEnabled
+
+        multiLineCountRow.visibility = if (multiLineEnabled) View.VISIBLE else View.GONE
+        multiLineTranslationRow.visibility = if (multiLineEnabled) View.VISIBLE else View.GONE
+        multiLineTextSizeRow.visibility = if (multiLineEnabled) View.VISIBLE else View.GONE
+        val multiLineInteractive = lockScreenInteractive && multiLineEnabled
+        switchMultiLineShowTranslation.isEnabled = multiLineInteractive
+        switchMultiLineShowTranslation.alpha = if (multiLineInteractive) 1f else 0.38f
+        multiLineCountGroup.isEnabled = multiLineInteractive
+        multiLineCountGroup.alpha = if (multiLineInteractive) 1f else 0.38f
+        sliderMultiLineTextSize.isEnabled = multiLineInteractive
+        sliderMultiLineTextSize.alpha = if (multiLineInteractive) 1f else 0.38f
+        tvMultiLineTextSizeLabel.alpha = if (multiLineInteractive) 1f else 0.38f
+
+        setSectionEnabled(
+            section = singleLineOnlyRow,
+            title = singleLineOnlyTitle,
+            hint = singleLineOnlyHint,
+            hintText = if (multiLineEnabled) "多行模式下不可用" else null,
+            enabled = !multiLineEnabled,
+            controls = listOf(switchSingleLineOnly)
+        )
+
+        val linesInteractive = lockScreenInteractive && !multiLineEnabled
+        setSectionEnabled(
+            section = linesCard,
+            title = linesCardTitle,
+            hint = linesCardHint,
+            hintText = if (multiLineEnabled) "多行模式下不可用" else null,
+            enabled = linesInteractive,
+            controls = listOf(lyricLinesGroup, translationLinesGroup)
+        )
     }
 
     private fun updateDynamicColorUi() {
@@ -483,6 +567,13 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         isTextSizeSliderUpdating = false
     }
 
+    private fun bindMultiLineTextSizeSlider(sizeSp: Float) {
+        isMultiLineTextSizeUpdating = true
+        sliderMultiLineTextSize.value = sizeSp
+        tvMultiLineTextSizeLabel.text = formatTextSizeLabel(sizeSp)
+        isMultiLineTextSizeUpdating = false
+    }
+
     private fun bindCustomAodTextSizeSlider(sizeSp: Float) {
         isCustomAodTextSizeUpdating = true
         sliderCustomAodTextSize.value = sizeSp
@@ -512,9 +603,72 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         }
         switchSingleLineOnly.setOnCheckedChangeListener { _, checked ->
             if (isBindingUi) return@setOnCheckedChangeListener
+            if (FocusPreferences.isMultiLineLyrics(requireContext())) {
+                switchSingleLineOnly.isChecked = FocusPreferences.isSingleLineOnly(requireContext())
+                return@setOnCheckedChangeListener
+            }
             FocusPreferences.setSingleLineOnly(requireContext(), checked)
             notifyStyleChanged()
         }
+        switchMultiLineLyrics.setOnCheckedChangeListener { _, checked ->
+            if (isBindingUi) return@setOnCheckedChangeListener
+            if (FocusPreferences.isCustomAodLayout(requireContext())) {
+                switchMultiLineLyrics.isChecked = FocusPreferences.isMultiLineLyrics(requireContext())
+                return@setOnCheckedChangeListener
+            }
+            FocusPreferences.setMultiLineLyrics(requireContext(), checked)
+            updateMultiLineDependentUi()
+            notifyStyleChanged()
+        }
+        switchMultiLineShowTranslation.setOnCheckedChangeListener { _, checked ->
+            if (isBindingUi) return@setOnCheckedChangeListener
+            if (FocusPreferences.isCustomAodLayout(requireContext()) ||
+                !FocusPreferences.isMultiLineLyrics(requireContext())
+            ) {
+                switchMultiLineShowTranslation.isChecked =
+                    FocusPreferences.isMultiLineShowTranslation(requireContext())
+                return@setOnCheckedChangeListener
+            }
+            FocusPreferences.setMultiLineShowTranslation(requireContext(), checked)
+            notifyStyleChanged()
+        }
+        multiLineCountGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
+            if (FocusPreferences.isCustomAodLayout(requireContext()) ||
+                !FocusPreferences.isMultiLineLyrics(requireContext())
+            ) {
+                return@addOnButtonCheckedListener
+            }
+            val count = when (checkedId) {
+                R.id.multi_line_count_4 -> 4
+                R.id.multi_line_count_6 -> 6
+                else -> 8
+            }
+            FocusPreferences.setMultiLineLineCount(requireContext(), count)
+            notifyStyleChanged()
+        }
+
+        sliderMultiLineTextSize.addOnChangeListener { _, value, fromUser ->
+            if (!fromUser || isMultiLineTextSizeUpdating) return@addOnChangeListener
+            tvMultiLineTextSizeLabel.text = formatTextSizeLabel(value)
+        }
+        sliderMultiLineTextSize.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) = Unit
+            override fun onStopTrackingTouch(slider: Slider) {
+                if (!FocusPreferences.isMultiLineLyrics(requireContext()) ||
+                    !sliderMultiLineTextSize.isEnabled
+                ) {
+                    return
+                }
+                val normalized = slider.value.coerceIn(
+                    FocusPreferences.MIN_LYRIC_TEXT_SIZE_SP,
+                    FocusPreferences.MAX_LYRIC_TEXT_SIZE_SP
+                )
+                FocusPreferences.setMultiLineTextSize(requireContext(), normalized)
+                bindMultiLineTextSizeSlider(normalized)
+                notifyStyleChanged()
+            }
+        })
 
         sliderTextSize.addOnChangeListener { _, value, fromUser ->
             if (!fromUser || isTextSizeSliderUpdating) return@addOnChangeListener
@@ -582,6 +736,11 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
 
         lyricLinesGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
+            if (FocusPreferences.isMultiLineLyrics(requireContext()) ||
+                FocusPreferences.isCustomAodLayout(requireContext())
+            ) {
+                return@addOnButtonCheckedListener
+            }
             FocusPreferences.setLyricMaxLines(
                 requireContext(),
                 if (checkedId == R.id.lyric_lines_1) 1 else 2
@@ -591,6 +750,11 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
 
         translationLinesGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
+            if (FocusPreferences.isMultiLineLyrics(requireContext()) ||
+                FocusPreferences.isCustomAodLayout(requireContext())
+            ) {
+                return@addOnButtonCheckedListener
+            }
             FocusPreferences.setTranslationMaxLines(
                 requireContext(),
                 if (checkedId == R.id.translation_lines_1) 1 else 2

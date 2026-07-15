@@ -20,6 +20,10 @@ object FocusStyleSnapshot {
     const val EXTRA_STYLE_CUSTOM_AOD_LAYOUT = "style_custom_aod_layout"
     const val EXTRA_STYLE_SWAP_LYRIC_TRANSLATION = "style_swap_lyric_translation"
     const val EXTRA_STYLE_SINGLE_LINE_ONLY = "style_single_line_only"
+    const val EXTRA_STYLE_MULTI_LINE_LYRICS = "style_multi_line_lyrics"
+    const val EXTRA_STYLE_MULTI_LINE_SHOW_TRANSLATION = "style_multi_line_show_translation"
+    const val EXTRA_STYLE_MULTI_LINE_LINE_COUNT = "style_multi_line_line_count"
+    const val EXTRA_STYLE_MULTI_LINE_TEXT_SIZE = "style_multi_line_text_size"
     const val EXTRA_STYLE_CUSTOM_AOD_TEXT_SIZE = "style_custom_aod_text_size"
     const val EXTRA_STYLE_CUSTOM_AOD_LYRIC_WIDTH = "style_custom_aod_lyric_width"
     const val EXTRA_STYLE_CUSTOM_AOD_LYRIC_MAX_LINES = "style_custom_aod_lyric_max_lines"
@@ -74,6 +78,22 @@ object FocusStyleSnapshot {
 
     @Volatile
     var singleLineOnly: Boolean = false
+        private set
+
+    @Volatile
+    var multiLineLyrics: Boolean = false
+        private set
+
+    @Volatile
+    var multiLineShowTranslation: Boolean = true
+        private set
+
+    @Volatile
+    var multiLineLineCount: Int = FocusPreferences.DEFAULT_MULTI_LINE_LINE_COUNT
+        private set
+
+    @Volatile
+    var multiLineTextSizeSp: Float = FocusPreferences.DEFAULT_MULTI_LINE_TEXT_SIZE_SP
         private set
 
     @Volatile
@@ -185,6 +205,27 @@ object FocusStyleSnapshot {
         singleLineOnly = prefs.getBoolean(
             FocusPreferences.PREF_SINGLE_LINE_ONLY,
             false
+        )
+        multiLineLyrics = prefs.getBoolean(
+            FocusPreferences.PREF_MULTI_LINE_LYRICS,
+            false
+        )
+        multiLineShowTranslation = prefs.getBoolean(
+            FocusPreferences.PREF_MULTI_LINE_SHOW_TRANSLATION,
+            true
+        )
+        multiLineLineCount = FocusPreferences.coerceMultiLineLineCount(
+            prefs.getInt(
+                FocusPreferences.PREF_MULTI_LINE_LINE_COUNT,
+                FocusPreferences.DEFAULT_MULTI_LINE_LINE_COUNT
+            )
+        )
+        multiLineTextSizeSp = prefs.getFloat(
+            FocusPreferences.PREF_MULTI_LINE_TEXT_SIZE,
+            FocusPreferences.DEFAULT_MULTI_LINE_TEXT_SIZE_SP
+        ).coerceIn(
+            FocusPreferences.MIN_LYRIC_TEXT_SIZE_SP,
+            FocusPreferences.MAX_LYRIC_TEXT_SIZE_SP
         )
         customAodTextSizeSp = prefs.getFloat(
             FocusPreferences.PREF_CUSTOM_AOD_TEXT_SIZE,
@@ -320,6 +361,29 @@ object FocusStyleSnapshot {
         }
         if (intent.hasExtra(EXTRA_STYLE_SINGLE_LINE_ONLY)) {
             singleLineOnly = intent.getBooleanExtra(EXTRA_STYLE_SINGLE_LINE_ONLY, singleLineOnly)
+        }
+        if (intent.hasExtra(EXTRA_STYLE_MULTI_LINE_LYRICS)) {
+            multiLineLyrics = intent.getBooleanExtra(EXTRA_STYLE_MULTI_LINE_LYRICS, multiLineLyrics)
+        }
+        if (intent.hasExtra(EXTRA_STYLE_MULTI_LINE_SHOW_TRANSLATION)) {
+            multiLineShowTranslation = intent.getBooleanExtra(
+                EXTRA_STYLE_MULTI_LINE_SHOW_TRANSLATION,
+                multiLineShowTranslation
+            )
+        }
+        if (intent.hasExtra(EXTRA_STYLE_MULTI_LINE_LINE_COUNT)) {
+            multiLineLineCount = FocusPreferences.coerceMultiLineLineCount(
+                intent.getIntExtra(EXTRA_STYLE_MULTI_LINE_LINE_COUNT, multiLineLineCount)
+            )
+        }
+        if (intent.hasExtra(EXTRA_STYLE_MULTI_LINE_TEXT_SIZE)) {
+            multiLineTextSizeSp = intent.getFloatExtra(
+                EXTRA_STYLE_MULTI_LINE_TEXT_SIZE,
+                multiLineTextSizeSp
+            ).coerceIn(
+                FocusPreferences.MIN_LYRIC_TEXT_SIZE_SP,
+                FocusPreferences.MAX_LYRIC_TEXT_SIZE_SP
+            )
         }
         if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_TEXT_SIZE)) {
             customAodTextSizeSp = intent.getFloatExtra(EXTRA_STYLE_CUSTOM_AOD_TEXT_SIZE, customAodTextSizeSp)

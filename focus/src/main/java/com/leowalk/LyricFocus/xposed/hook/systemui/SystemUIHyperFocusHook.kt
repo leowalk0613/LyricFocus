@@ -86,6 +86,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         private var lastNotifiedSecond = ""
         private var lastNotifiedTitle = ""
         private var lastNotifiedArtist = ""
+        private var lastNotifiedMultiLineKey = ""
 
         private const val MIN_TICK_MS = 500L
         private const val LAYOUT_REFLOW_DEBOUNCE_MS = 5_000L
@@ -488,10 +489,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         musicPackage = ""
         lastFocusNotifyTime = 0L
         lastFocusRecreateAt = 0L
-        lastNotifiedLyric = ""
-        lastNotifiedSecond = ""
-        lastNotifiedTitle = ""
-        lastNotifiedArtist = ""
+        clearNotifiedLyricContent()
         needsAodRebind = false
         cancelPendingDisplayRepost()
         cancelPendingCoalescedFocusPost()
@@ -691,8 +689,7 @@ class SystemUIHyperFocusHook : BaseHook() {
     private fun isFocusContentAlreadyBound(): Boolean {
         return lastFocusNotifyTime > 0L &&
             currentLyricText.isNotBlank() &&
-            currentLyricText == lastNotifiedLyric &&
-            currentSecondLine == lastNotifiedSecond &&
+            isLyricDisplayContentSame() &&
             currentTitle == lastNotifiedTitle &&
             currentArtist == lastNotifiedArtist
     }
@@ -820,6 +817,8 @@ class SystemUIHyperFocusHook : BaseHook() {
         FocusStyleSnapshot.applyFromIntent(intent)
         if (styleChanged) {
             // 仅清空已通知缓存；真正的 cancel+notify 交给随后的 repost
+            invalidateLayoutCache()
+            markLayoutReflowAllowed(forceRecreate = true)
             prepareFocusSessionRecreate(
                 songChanged = false,
                 leavingPlaceholder = false,
@@ -840,10 +839,7 @@ class SystemUIHyperFocusHook : BaseHook() {
             val newShowOnIsland = intent.getBooleanExtra(FocusPreferences.EXTRA_SHOW_ON_ISLAND, false)
             if (newShowOnIsland != showOnIsland) {
                 notificationManager?.let { HyperFocusLyricStyle.cancelFocusNotification(it) }
-                lastNotifiedLyric = ""
-                lastNotifiedSecond = ""
-                lastNotifiedTitle = ""
-                lastNotifiedArtist = ""
+                clearNotifiedLyricContent()
                 HyperFocusLyricStyle.resetPostedCache()
             }
             showOnIsland = newShowOnIsland
@@ -989,7 +985,6 @@ class SystemUIHyperFocusHook : BaseHook() {
             val songChanged = title != currentTitle || artist != currentArtist
             val forceResync = intent.getBooleanExtra(EXTRA_FORCE_RESYNC, false)
             val prevLyric = currentLyricText
-            val prevSecond = currentSecondLine
             val leavingPlaceholder = isPlaceholderLyric(prevLyric) &&
                 lyric.isNotBlank() && !isPlaceholderLyric(lyric)
             currentTitle = title
@@ -1002,8 +997,9 @@ class SystemUIHyperFocusHook : BaseHook() {
                 currentLineTranslation = lineTranslation
             }
 
-            val contentChanged = lyric.isNotBlank() && isPlaying &&
-                (lyric != prevLyric || secondLine != prevSecond || songChanged)
+            val contentChanged = lyric.isNotBlank() && isPlaying && (
+                songChanged || isLyricDisplayContentChanged()
+            )
             val needsPost = contentChanged || forceResync || leavingPlaceholder ||
                 lastNotifiedLyric.isBlank() || styleChanged
 
@@ -1125,6 +1121,134 @@ class SystemUIHyperFocusHook : BaseHook() {
 
     private fun getAdjustedPosition(position: Long): Long = position + lyricOffset + syncAdvanceMs
 
+    private fun getCurrentLineIndex(position: Long): Int {
+        if (lyricLines.isEmpty()) return -1
+        val adjusted = getAdjustedPosition(position)
+        var result = -1
+        for (i in lyricLines.indices) {
+            if (lyricLines[i].time <= adjusted) result = i else break
+        }
+        return result
+    }
+
+    private fun hasRealTimedLyrics(): Boolean {
+        if (lyricLines.size < 2) return false
+        if (isPlaceholderLyric(currentLyricText)) return false
+        return true
+    }
+
+    private fun buildMultiLineWindow(): HyperFocusLyricStyle.MultiLineWindow? {
+        if (!FocusStyleSnapshot.multiLineLyrics) return null
+        if (!hasRealTimedLyrics()) return null
+        // 未到首句也展示第一页，进入多行模式即见完整歌词页
+        val currentIndex = getCurrentLineIndex(currentPosition).coerceAtLeast(0)
+        val visibleCount = FocusPreferences.coerceMultiLineLineCount(
+            FocusStyleSnapshot.multiLineLineCount
+        )
+        val maxSlots = HyperFocusLyricStyle.MULTI_LINE_MAX_SLOTS
+
+        if (FocusStyleSnapshot.multiLineShowTranslation) {
+            // 有翻译：(原文+翻译) 交错填满所选行数，例如 8 行 = 4 对
+            val pairCount = visibleCount / 2
+            val pageStart = (currentIndex / pairCount) * pairCount
+            val originals = ArrayList<String>(pairCount)
+            val translations = ArrayList<String>(pairCount)
+            var hasAnyTranslation = false
+            for (i in 0 until pairCount) {
+                val line = lyricLines.getOrNull(pageStart + i)
+                val text = line?.text?.trim().orEmpty()
+                val secondary = line?.translation
+                    ?.replace('\n', ' ')
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                    .orEmpty()
+                originals += text
+                translations += secondary
+                if (secondary.isNotBlank()) hasAnyTranslation = true
+            }
+            // 当前行可能只有单独下发的翻译（无逐行 translation 字段）
+            if (!hasAnyTranslation) {
+                val offsetInPage = currentIndex - pageStart
+                val fallback = currentLineTranslation
+                    ?.replace('\n', ' ')
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                if (fallback != null && offsetInPage in 0 until pairCount) {
+                    translations[offsetInPage] = fallback
+                    hasAnyTranslation = true
+                }
+            }
+            if (hasAnyTranslation) {
+                val interleaved = ArrayList<String>(maxSlots)
+                for (i in 0 until pairCount) {
+                    interleaved += originals[i]
+                    interleaved += translations[i]
+                }
+                while (interleaved.size < maxSlots) {
+                    interleaved += ""
+                }
+                return HyperFocusLyricStyle.MultiLineWindow(
+                    lines = interleaved,
+                    interleavedTranslations = true,
+                    visibleCount = visibleCount
+                )
+            }
+        }
+
+        val pageStart = (currentIndex / visibleCount) * visibleCount
+        val lines = ArrayList<String>(maxSlots)
+        for (i in 0 until visibleCount) {
+            val text = lyricLines.getOrNull(pageStart + i)?.text?.trim().orEmpty()
+            lines += text
+        }
+        while (lines.size < maxSlots) {
+            lines += ""
+        }
+        return HyperFocusLyricStyle.MultiLineWindow(
+            lines = lines,
+            visibleCount = visibleCount
+        )
+    }
+
+    private fun multiLineContentKey(): String {
+        return buildMultiLineWindow()?.contentKey().orEmpty()
+    }
+
+    /** 多行模式按页判定内容变化；否则按单句+次行判定 */
+    private fun isLyricDisplayContentChanged(): Boolean {
+        val multiKey = multiLineContentKey()
+        if (multiKey.isNotEmpty()) {
+            return multiKey != lastNotifiedMultiLineKey
+        }
+        return currentLyricText != lastNotifiedLyric ||
+            currentSecondLine != lastNotifiedSecond
+    }
+
+    private fun isLyricDisplayContentSame(): Boolean {
+        val multiKey = multiLineContentKey()
+        if (multiKey.isNotEmpty()) {
+            return lastNotifiedMultiLineKey.isNotEmpty() && multiKey == lastNotifiedMultiLineKey
+        }
+        return currentLyricText == lastNotifiedLyric &&
+            currentSecondLine == lastNotifiedSecond
+    }
+
+    private fun rememberNotifiedLyricContent() {
+        lastNotifiedLyric = currentLyricText
+        lastNotifiedSecond = currentSecondLine
+        lastNotifiedTitle = currentTitle
+        lastNotifiedArtist = currentArtist
+        lastNotifiedMultiLineKey = multiLineContentKey()
+    }
+
+    private fun clearNotifiedLyricContent() {
+        lastNotifiedLyric = ""
+        lastNotifiedSecond = ""
+        lastNotifiedTitle = ""
+        lastNotifiedArtist = ""
+        lastNotifiedMultiLineKey = ""
+    }
+
     private fun resolveSecondLine(current: LyricLineData?, next: LyricLineData?): String {
         val secondary = current?.secondaryText()
         if (!secondary.isNullOrBlank()) return secondary
@@ -1180,10 +1304,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         force: Boolean
     ) {
         if (!songChanged && !leavingPlaceholder && !force) return
-        lastNotifiedLyric = ""
-        lastNotifiedSecond = ""
-        lastNotifiedTitle = ""
-        lastNotifiedArtist = ""
+        clearNotifiedLyricContent()
         HyperFocusLyricStyle.resetPostedCache()
     }
 
@@ -1194,8 +1315,7 @@ class SystemUIHyperFocusHook : BaseHook() {
             FocusRefreshMode.LINE_CHANGE -> {
                 val metaChanged = currentTitle != lastNotifiedTitle ||
                     currentArtist != lastNotifiedArtist
-                val contentChanged = currentLyricText != lastNotifiedLyric ||
-                    currentSecondLine != lastNotifiedSecond
+                val contentChanged = isLyricDisplayContentChanged()
                 if (!force && !contentChanged && !metaChanged) return
                 sendFocusNotification(
                     HyperFocusLyricStyle.RefreshKind.LINE_CHANGE,
@@ -1203,9 +1323,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                 )
             }
             FocusRefreshMode.KEEPALIVE -> {
-                if (currentLyricText != lastNotifiedLyric ||
-                    currentSecondLine != lastNotifiedSecond
-                ) {
+                if (!isLyricDisplayContentSame()) {
                     return
                 }
                 if (now - lastFocusNotifyTime < effectiveKeepaliveMs()) return
@@ -1272,10 +1390,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                 val settleLeft = remainingAodSwitchSettleMs()
                 if (settleLeft > 0L) {
                     // 认领当前内容，避免窗口内重复排队；真正 notify 仍走合并任务
-                    lastNotifiedLyric = currentLyricText
-                    lastNotifiedSecond = currentSecondLine
-                    lastNotifiedTitle = currentTitle
-                    lastNotifiedArtist = currentArtist
+                    rememberNotifiedLyricContent()
                     scheduleCoalescedAodFocusSend(
                         refreshKind = HyperFocusLyricStyle.RefreshKind.LINE_CHANGE,
                         forceRefresh = true,
@@ -1288,6 +1403,7 @@ class SystemUIHyperFocusHook : BaseHook() {
             // 即将实发：丢掉排队中的合并任务，防止 settle 结束后再发第二次
             cancelPendingCoalescedFocusPost()
 
+            val multiLine = buildMultiLineWindow()
             HyperFocusLyricStyle.postFocusNotification(
                 systemContext = context,
                 notificationManager = nm,
@@ -1295,9 +1411,15 @@ class SystemUIHyperFocusHook : BaseHook() {
                     songTitle = currentTitle,
                     artist = currentArtist,
                     lyricText = currentLyricText,
-                    secondLineText = currentSecondLine.ifBlank { currentArtist },
-                    lineTranslation = currentLineTranslation,
-                    musicPackage = musicPackage
+                    // 多行模式只展示当前页，不附带下一句/翻译次行
+                    secondLineText = if (multiLine != null) {
+                        ""
+                    } else {
+                        currentSecondLine.ifBlank { currentArtist }
+                    },
+                    lineTranslation = if (multiLine != null) null else currentLineTranslation,
+                    musicPackage = musicPackage,
+                    multiLine = multiLine
                 ),
                 showInShade = showInShade,
                 pinAboveMedia = pinAboveMedia,
@@ -1316,10 +1438,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                 markLayoutReflowAllowed(true)
             }
             lastFocusNotifyTime = System.currentTimeMillis()
-            lastNotifiedLyric = currentLyricText
-            lastNotifiedSecond = currentSecondLine
-            lastNotifiedTitle = currentTitle
-            lastNotifiedArtist = currentArtist
+            rememberNotifiedLyricContent()
             // 息屏切换动画窗口内不要反复挪 View，避免与 DiffDispatch 抢布局
             if (!aodActive || remainingAodSwitchSettleMs() <= 0L) {
                 scheduleLyricFocusReorder()
@@ -1341,10 +1460,7 @@ class SystemUIHyperFocusHook : BaseHook() {
             needsAodRebind = false
             cancelPendingDisplayRepost()
             cancelPendingCoalescedFocusPost()
-            lastNotifiedLyric = ""
-            lastNotifiedSecond = ""
-            lastNotifiedTitle = ""
-            lastNotifiedArtist = ""
+            clearNotifiedLyricContent()
             invalidateLayoutCache()
             notificationManager?.let { HyperFocusLyricStyle.cancelFocusNotification(it) }
         } catch (_: Throwable) {

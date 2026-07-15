@@ -73,11 +73,13 @@ object HyperFocusLyricStyle {
 
 
     @Volatile
-
     private var lastPostedLyric = ""
 
     @Volatile
     private var lastPostedSecond = ""
+
+    @Volatile
+    private var lastPostedMultiLineKey = ""
 
     @Volatile
     private var focusUpdateSequence = 0L
@@ -99,8 +101,43 @@ object HyperFocusLyricStyle {
         /** 当前行真实翻译；无翻译时为 null，与 secondLineText（可能为下一句预览）区分 */
         val lineTranslation: String? = null,
 
-        val musicPackage: String = ""
+        val musicPackage: String = "",
 
+        /** 多行模式窗口；null 时走默认双行布局 */
+        val multiLine: MultiLineWindow? = null
+
+    )
+
+    data class MultiLineWindow(
+        /** 固定 [MULTI_LINE_MAX_SLOTS] 槽，空串表示该位置无歌词 */
+        val lines: List<String>,
+        /**
+         * true：交错排布 (原文, 翻译)×(lineCount/2)，填满所选行数。
+         * false：所选行数皆为原文。
+         */
+        val interleavedTranslations: Boolean = false,
+        /** 实际展示行数：4 / 6 / 8 */
+        val visibleCount: Int = FocusPreferences.DEFAULT_MULTI_LINE_LINE_COUNT
+    ) {
+        fun contentKey(): String {
+            return lines.joinToString("\u0001") + "\u0001|" +
+                (if (interleavedTranslations) "1" else "0") +
+                "\u0001@" + visibleCount
+        }
+    }
+
+    /** 布局最大槽位数 */
+    const val MULTI_LINE_MAX_SLOTS = 8
+
+    private val MULTI_LINE_IDS = intArrayOf(
+        R.id.focus_ml_line_0,
+        R.id.focus_ml_line_1,
+        R.id.focus_ml_line_2,
+        R.id.focus_ml_line_3,
+        R.id.focus_ml_line_4,
+        R.id.focus_ml_line_5,
+        R.id.focus_ml_line_6,
+        R.id.focus_ml_line_7
     )
 
 
@@ -169,18 +206,20 @@ object HyperFocusLyricStyle {
 
         val secondKey = secondLine.orEmpty()
 
+        val multiLine = content.multiLine?.takeIf {
+            it.lines.size == MULTI_LINE_MAX_SLOTS &&
+                FocusPreferences.coerceMultiLineLineCount(it.visibleCount) == it.visibleCount
+        }
+        val multiLineKey = multiLine?.contentKey().orEmpty()
+
         if (!forceRefresh &&
-
-            refreshKind == RefreshKind.LINE_CHANGE &&
-
-            lyric == lastPostedLyric &&
-
-            secondKey == lastPostedSecond
-
+            refreshKind == RefreshKind.LINE_CHANGE
         ) {
-
-            return
-
+            if (multiLine != null) {
+                if (multiLineKey == lastPostedMultiLineKey) return
+            } else if (lyric == lastPostedLyric && secondKey == lastPostedSecond) {
+                return
+            }
         }
 
         val musicLabel = content.songTitle.ifBlank { content.artist }.ifBlank { "音乐" }
@@ -195,13 +234,23 @@ object HyperFocusLyricStyle {
 
 
 
-        val lockViews = buildLyricRemoteViews(
-            moduleContext,
-            R.layout.focus_lyric_lock,
-            lyric,
-            secondLine,
-            lineTranslation
-        )
+        val lockViews = if (multiLine != null) {
+            buildMultiLineRemoteViews(
+                moduleContext,
+                R.layout.focus_lyric_lock_multiline,
+                multiLine,
+                hideIcon = true,
+                icon = null
+            )
+        } else {
+            buildLyricRemoteViews(
+                moduleContext,
+                R.layout.focus_lyric_lock,
+                lyric,
+                secondLine,
+                lineTranslation
+            )
+        }
 
         val aodViews = buildAodRemoteViews(
             moduleContext,
@@ -211,7 +260,8 @@ object HyperFocusLyricStyle {
             secondLine,
             lineTranslation,
             lightIcon,
-            content.musicPackage
+            content.musicPackage,
+            multiLine
         )
 
 
@@ -371,26 +421,21 @@ object HyperFocusLyricStyle {
 
         lastPostedSecond = secondKey
 
+        lastPostedMultiLineKey = multiLineKey
+
     }
 
 
 
     fun cancelFocusNotification(notificationManager: NotificationManager) {
-
         resetPostedCache()
-
         notificationManager.cancel(CHANNEL_ID.hashCode())
-
     }
 
-
-
     fun resetPostedCache() {
-
         lastPostedLyric = ""
-
         lastPostedSecond = ""
-
+        lastPostedMultiLineKey = ""
     }
 
 
@@ -696,7 +741,8 @@ object HyperFocusLyricStyle {
             primaryText = actualTranslation
             secondaryText = lyric
         }
-        if (FocusStyleSnapshot.singleLineOnly) {
+        // 多行模式下「仅显示第一行」不生效；默认双行布局仍尊重该开关
+        if (FocusStyleSnapshot.singleLineOnly && !FocusStyleSnapshot.multiLineLyrics) {
             secondaryText = null
         }
 
@@ -1062,11 +1108,23 @@ object HyperFocusLyricStyle {
 
         icon: Icon,
 
-        musicPackage: String
+        musicPackage: String,
+
+        multiLine: MultiLineWindow? = null
 
     ): RemoteViews {
 
         val useCustomLayout = FocusStyleSnapshot.customAodLayout
+        if (!useCustomLayout && multiLine != null) {
+            return buildMultiLineRemoteViews(
+                moduleContext,
+                R.layout.focus_lyric_aod_multiline,
+                multiLine,
+                hideIcon = false,
+                icon = icon
+            )
+        }
+
         val layoutId = if (useCustomLayout) {
             R.layout.focus_lyric_aod_custom
         } else {
@@ -1097,6 +1155,90 @@ object HyperFocusLyricStyle {
 
         return views
 
+    }
+
+    private fun buildMultiLineRemoteViews(
+        moduleContext: Context,
+        layoutId: Int,
+        multiLine: MultiLineWindow,
+        hideIcon: Boolean,
+        icon: Icon?
+    ): RemoteViews {
+        val views = RemoteViews(moduleContext.packageName, layoutId)
+        val style = resolveLyricStyle(
+            moduleContext,
+            if (layoutId == R.layout.focus_lyric_aod_multiline) {
+                R.layout.focus_lyric_aod
+            } else {
+                R.layout.focus_lyric_lock
+            }
+        )
+        if (!hideIcon && icon != null) {
+            views.setImageViewIcon(R.id.focusicon, icon)
+        }
+        applyMultiLineStyle(views, multiLine, style)
+        return views
+    }
+
+    private fun applyMultiLineStyle(
+        views: RemoteViews,
+        multiLine: MultiLineWindow,
+        style: LyricStyle
+    ) {
+        views.setInt(R.id.focus_lyric_content, "setGravity", style.gravityValue)
+
+        val interleaved = multiLine.interleavedTranslations
+        val rawLines = multiLine.lines
+        val visibleCount = FocusPreferences.coerceMultiLineLineCount(multiLine.visibleCount)
+        val displayLines = if (interleaved && FocusStyleSnapshot.swapLyricTranslation) {
+            // 每对内互换：偶数槽显示翻译（主色），奇数槽显示原文（淡色）
+            List(MULTI_LINE_MAX_SLOTS) { i ->
+                if (i >= visibleCount) return@List ""
+                val pair = i / 2
+                val partner = if (i % 2 == 0) pair * 2 + 1 else pair * 2
+                rawLines.getOrNull(partner).orEmpty()
+            }
+        } else {
+            List(MULTI_LINE_MAX_SLOTS) { i ->
+                if (i >= visibleCount) "" else rawLines.getOrNull(i).orEmpty()
+            }
+        }
+
+        val textSizeSp = FocusStyleSnapshot.multiLineTextSizeSp
+        val translationColor = fadeTextColor(style.colorSecondary)
+
+        for (i in 0 until MULTI_LINE_MAX_SLOTS) {
+            val viewId = MULTI_LINE_IDS[i]
+            val displayText = displayLines[i]
+            val isTranslation = interleaved && i < visibleCount && i % 2 == 1
+            if (i >= visibleCount || displayText.isBlank()) {
+                views.setTextViewText(viewId, " ")
+                views.setViewVisibility(viewId, View.GONE)
+                continue
+            }
+            views.setViewVisibility(viewId, View.VISIBLE)
+            views.setTextViewText(viewId, displayText)
+            views.setTextColor(
+                viewId,
+                if (isTranslation) translationColor else style.colorPrimary
+            )
+            views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp)
+            views.setInt(viewId, "setMaxLines", 1)
+            views.setInt(viewId, "setGravity", style.gravityValue)
+        }
+
+        if (style.backgroundColor != null) {
+            safeSetViewVisibility(views, R.id.focus_lyric_bg, View.VISIBLE)
+            safeSetImageViewBitmap(views, R.id.focus_lyric_bg, solidColorBitmap(style.backgroundColor))
+        } else {
+            safeSetViewVisibility(views, R.id.focus_lyric_bg, View.GONE)
+        }
+    }
+
+    /** 翻译行比次要色再淡一档，避免与原文抢视觉 */
+    private fun fadeTextColor(color: Int, factor: Float = 0.72f): Int {
+        val a = (Color.alpha(color) * factor).toInt().coerceIn(0, 255)
+        return Color.argb(a, Color.red(color), Color.green(color), Color.blue(color))
     }
 
 

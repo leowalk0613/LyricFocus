@@ -45,7 +45,7 @@
 - **权限设置（v1.6.1）**：分为必要 / 其他；每项显示用途说明与状态图标；支持自启动、读取应用列表、忽略电池优化跳转
 - **样式设置（v1.5）**：分 **通用**、**锁屏样式 AOD**、**万象息屏 AOD** 三类；开启万象息屏时锁屏样式项置灰，关闭时万象息屏专用项置灰
 - **通用样式**：歌词与翻译位置互换、仅显示第一行、**焦点通知背景**、**Monet 动态取色** 与 **通知文字取色**（全局作用于全部布局）
-- **锁屏样式 AOD**：字号、文字颜色、行数、排版
+- **锁屏样式 AOD**：字号、文字颜色、固定行数、排版、**多行模式**（4 / 6 / 8 行按页显示；有翻译时可交错显示原文与更淡翻译）
 - **万象息屏 AOD 专用样式**：字号、歌词宽度（50–100%）、歌名显示（全部/隐藏歌名/隐藏歌手/全部隐藏）、歌词/翻译行数、排版、颜色（白/专辑取色/24 色推荐色 + RGB 自定义）；歌名 · 歌手 3:2 居中块，长标题代码 ellipsize
 - **样式设置 UI（v1.5.1+）**：锁屏样式 AOD 合并为单卡片统一置灰；万象息屏字体排版区块与锁屏样式层级一致
 - **Monet 动态取色**：从当前播放专辑封面实时提取背景与文字色（Material You 风格），自动增强对比度以保证歌词可读性；开启后手动背景/文字/文字取色选项置灰
@@ -333,7 +333,7 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 | AOD 保活间隔 | `aod_keepalive_sec` | `9` | 受焦点会话 ~9s 系统上限约束 |
 | 万象息屏 AOD | `custom_aod_layout` | 关 | 万象/自定义息屏时使用横向 rvAod 布局 |
 | 歌词与翻译互换 | `swap_lyric_translation` | 关 | 全局：第一行显示翻译 |
-| 仅显示第一行 | `single_line_only` | 关 | 全局：隐藏第二行 |
+| 仅显示第一行 | `single_line_only` | 关 | 全局：隐藏第二行；多行模式下不可用 |
 | 万象息屏字号 | `custom_aod_text_size` | `18` sp | 12 ~ 32 sp；仅万象息屏 AOD |
 | 万象息屏歌词宽度 | `custom_aod_lyric_width` | `100` | 50 ~ 100 % |
 | 万象息屏歌词行数 | `custom_aod_lyric_max_lines` | `2` | 1 ~ 2 |
@@ -346,8 +346,12 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 | 万象息屏图标大小 | `custom_aod_title_icon_size` | `150` | 75 ~ 200 %；相对歌名字号 |
 | 歌词字号 | `lyric_text_size` | `18` sp | 12 ~ 32 sp；锁屏样式 AOD |
 | 文字颜色 | `lyric_text_color` | `white` | `white` / `black`；Monet 或文字取色开启时无效 |
-| 歌词行数 | `lyric_max_lines` | `2` | 1 ~ 2 |
-| 翻译行数 | `translation_max_lines` | `1` | 1 ~ 2 |
+| 歌词行数 | `lyric_max_lines` | `2` | 1 ~ 2；多行模式下不可用 |
+| 翻译行数 | `translation_max_lines` | `1` | 1 ~ 2；多行模式下不可用 |
+| 多行模式 | `multi_line_lyrics` | 关 | 锁屏按页多行歌词 |
+| 多行显示翻译 | `multi_line_show_translation` | 开 | 有翻译时交错填满所选行数 |
+| 多行行数 | `multi_line_line_count` | `8` | 4 / 6 / 8 |
+| 多行字号 | `multi_line_text_size` | `14` | 12 ~ 32 sp |
 | 对齐方式 | `lyric_gravity` | `center` | `left` / `center` / `right`；锁屏样式 AOD |
 | 焦点通知背景 | `focus_background` | `default` | `default` / `black` / `white`；Monet 开启时无效 |
 | Monet 动态取色 | `monet_dynamic_color` | 关 | 专辑封面实时取背景+文字色 |
@@ -423,6 +427,23 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 ---
 
 ## 版本更新
+
+### v1.6.2
+
+#### 新功能
+
+- **多行模式**：锁屏样式 AOD 新增多行歌词；可选 4 / 6 / 8 行；无翻译按页展示原文；有翻译时可交错填满所选行数（原文 + 更淡翻译），统一字号；可开关是否显示翻译
+
+#### 优化
+
+- **桌面图标**：前景缩小，桌面显示更紧凑
+- **版本弹窗**：修复工具栏首次点击一点开就关
+
+#### 说明
+
+- 多行模式下「仅显示第一行」与锁屏「固定行数」不可用；「歌词与翻译位置互换」仍生效
+
+- **版本号**：`1.6.2`（versionCode 18）
 
 ### v1.6.1
 

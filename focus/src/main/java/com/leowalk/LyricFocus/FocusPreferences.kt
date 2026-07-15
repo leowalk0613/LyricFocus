@@ -19,6 +19,14 @@ object FocusPreferences {
     const val PREF_SWAP_LYRIC_TRANSLATION = "swap_lyric_translation"
     /** 全局：仅显示第一行（隐藏第二行翻译/歌词） */
     const val PREF_SINGLE_LINE_ONLY = "single_line_only"
+    /** 锁屏样式 AOD：多行模式（按页显示原文；有翻译时交错填满所选行数） */
+    const val PREF_MULTI_LINE_LYRICS = "multi_line_lyrics"
+    /** 多行模式下是否显示翻译（有翻译时交错显示原文与翻译） */
+    const val PREF_MULTI_LINE_SHOW_TRANSLATION = "multi_line_show_translation"
+    /** 多行模式一页行数：4 / 6 / 8 */
+    const val PREF_MULTI_LINE_LINE_COUNT = "multi_line_line_count"
+    /** 多行歌词独立字号（原文/翻译统一） */
+    const val PREF_MULTI_LINE_TEXT_SIZE = "multi_line_text_size"
     /** 万象息屏 AOD 独立样式 */
     const val PREF_CUSTOM_AOD_TEXT_SIZE = "custom_aod_text_size"
     const val PREF_CUSTOM_AOD_LYRIC_WIDTH = "custom_aod_lyric_width"
@@ -130,11 +138,22 @@ object FocusPreferences {
     const val MAX_SYNC_ADVANCE_MS = 3000L
 
     const val DEFAULT_LYRIC_TEXT_SIZE_SP = 18f
+    const val DEFAULT_MULTI_LINE_TEXT_SIZE_SP = 14f
     const val MIN_LYRIC_TEXT_SIZE_SP = 12f
     const val MAX_LYRIC_TEXT_SIZE_SP = 32f
 
+    const val DEFAULT_MULTI_LINE_LINE_COUNT = 8
+    val MULTI_LINE_LINE_COUNT_OPTIONS = intArrayOf(4, 6, 8)
+
     const val DEFAULT_LYRIC_MAX_LINES = 2
     const val DEFAULT_TRANSLATION_MAX_LINES = 1
+
+    fun coerceMultiLineLineCount(lines: Int): Int {
+        return when (lines) {
+            4, 6, 8 -> lines
+            else -> DEFAULT_MULTI_LINE_LINE_COUNT
+        }
+    }
 
     fun defaultMusicPackages(): Set<String> = linkedSetOf(
         "com.netease.cloudmusic",
@@ -514,6 +533,76 @@ object FocusPreferences {
 
     fun readSingleLineOnly(context: Context): Boolean {
         return readFromModule(context) { isSingleLineOnly(it) } ?: false
+    }
+
+    fun isMultiLineLyrics(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_MULTI_LINE_LYRICS, false)
+    }
+
+    fun setMultiLineLyrics(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_MULTI_LINE_LYRICS, enabled)
+            .apply()
+    }
+
+    fun readMultiLineLyrics(context: Context): Boolean {
+        return readFromModule(context) { isMultiLineLyrics(it) } ?: false
+    }
+
+    fun isMultiLineShowTranslation(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_MULTI_LINE_SHOW_TRANSLATION, true)
+    }
+
+    fun setMultiLineShowTranslation(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_MULTI_LINE_SHOW_TRANSLATION, enabled)
+            .apply()
+    }
+
+    fun readMultiLineShowTranslation(context: Context): Boolean {
+        return readFromModule(context) { isMultiLineShowTranslation(it) } ?: true
+    }
+
+    fun getMultiLineLineCount(context: Context): Int {
+        return coerceMultiLineLineCount(
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getInt(PREF_MULTI_LINE_LINE_COUNT, DEFAULT_MULTI_LINE_LINE_COUNT)
+        )
+    }
+
+    fun setMultiLineLineCount(context: Context, lines: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(PREF_MULTI_LINE_LINE_COUNT, coerceMultiLineLineCount(lines))
+            .apply()
+    }
+
+    fun readMultiLineLineCount(context: Context): Int {
+        return readFromModule(context) { getMultiLineLineCount(it) } ?: DEFAULT_MULTI_LINE_LINE_COUNT
+    }
+
+    fun getMultiLineTextSize(context: Context): Float {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getFloat(PREF_MULTI_LINE_TEXT_SIZE, DEFAULT_MULTI_LINE_TEXT_SIZE_SP)
+            .coerceIn(MIN_LYRIC_TEXT_SIZE_SP, MAX_LYRIC_TEXT_SIZE_SP)
+    }
+
+    fun setMultiLineTextSize(context: Context, sizeSp: Float) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putFloat(
+                PREF_MULTI_LINE_TEXT_SIZE,
+                sizeSp.coerceIn(MIN_LYRIC_TEXT_SIZE_SP, MAX_LYRIC_TEXT_SIZE_SP)
+            )
+            .commit()
+    }
+
+    fun readMultiLineTextSize(context: Context): Float {
+        return readFromModule(context) { getMultiLineTextSize(it) } ?: DEFAULT_MULTI_LINE_TEXT_SIZE_SP
     }
 
     fun getCustomAodTextSize(context: Context): Float {
@@ -1074,6 +1163,22 @@ object FocusPreferences {
                 putExtra(
                     FocusStyleSnapshot.EXTRA_STYLE_SINGLE_LINE_ONLY,
                     isSingleLineOnly(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_MULTI_LINE_LYRICS,
+                    isMultiLineLyrics(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_MULTI_LINE_SHOW_TRANSLATION,
+                    isMultiLineShowTranslation(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_MULTI_LINE_LINE_COUNT,
+                    getMultiLineLineCount(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_MULTI_LINE_TEXT_SIZE,
+                    getMultiLineTextSize(context)
                 )
                 putExtra(
                     FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_TEXT_SIZE,

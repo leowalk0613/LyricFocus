@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 整体缩小前景，避免桌面图标显得撑满 -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
-    android:drawable="@drawable/ic_launcher_full"
+    android:drawable="@drawable/ic_launcher_mono"
     android:inset="14%" />

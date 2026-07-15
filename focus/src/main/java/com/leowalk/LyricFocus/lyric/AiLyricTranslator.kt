@@ -76,7 +76,7 @@ class AiLyricTranslator(context: Context) {
             .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
             .header("Authorization", "Bearer $apiKey")
             .header("Content-Type", "application/json")
-            .header("User-Agent", "LyricFocus/1.6.1")
+            .header("User-Agent", "LyricFocus/1.6.2")
             .build()
 
         try {
@@ -110,7 +110,7 @@ class AiLyricTranslator(context: Context) {
             .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
             .header("Authorization", "Bearer ${FocusPreferences.getAiApiKey(appContext)}")
             .header("Content-Type", "application/json")
-            .header("User-Agent", "LyricFocus/1.6.1")
+            .header("User-Agent", "LyricFocus/1.6.2")
             .build()
 
         client.newCall(request).execute().use { response ->

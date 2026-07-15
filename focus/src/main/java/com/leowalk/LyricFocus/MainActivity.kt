@@ -6,8 +6,10 @@ import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -20,6 +22,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.commit
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.leowalk.LyricFocus.ui.AboutFragment
 import com.leowalk.LyricFocus.ui.HomeFragment
@@ -38,6 +41,7 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
     private var updateMenuItem: MenuItem? = null
     private var restartMenuItem: MenuItem? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var suppressDialogTouchUntil = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -85,9 +89,9 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_restart_systemui -> {
-                window.decorView.post {
+                mainHandler.postDelayed({
                     if (!isFinishing && !isDestroyed) confirmRestartSystemUi()
-                }
+                }, 280L)
                 true
             }
             R.id.action_update -> {
@@ -95,10 +99,13 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
                 if (info == null) {
                     Toast.makeText(this, "正在检查更新…", Toast.LENGTH_SHORT).show()
                 } else {
-                    // 与「重启 SystemUI」相同：下一帧再弹，避开菜单点击抬起
-                    window.decorView.post {
-                        if (!isFinishing && !isDestroyed) showUpdateDialog(info)
-                    }
+                    // 等工具栏图标的抬起事件结束后再弹，避免同一次 touch 点到弹窗按钮
+                    mainHandler.removeCallbacksAndMessages(SHOW_UPDATE_TOKEN)
+                    mainHandler.postAtTime(
+                        { if (!isFinishing && !isDestroyed) showUpdateDialog(info) },
+                        SHOW_UPDATE_TOKEN,
+                        android.os.SystemClock.uptimeMillis() + 320L
+                    )
                 }
                 true
             }
@@ -217,11 +224,6 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
         invalidateOptionsMenu()
     }
 
-    /**
-     * 与其它可用弹窗一致：只用 setTitle / setMessage / 按钮。
-     * 菜单抬起容易误触默认按钮，弹出后短暂禁用按钮。
-     * 更新日志在点开后再异步加载。
-     */
     private fun showUpdateDialog(info: UpdateChecker.UpdateInfo) {
         if (isFinishing || isDestroyed) return
         if (updateDialog?.isShowing == true) return
@@ -235,22 +237,53 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
             "当前版本：$currentVersion"
         }
 
+        val content = LayoutInflater.from(this).inflate(R.layout.dialog_update, null, false)
+        val tvVersion = content.findViewById<TextView>(R.id.tv_version_info)
+        val tvNotes = content.findViewById<TextView>(R.id.tv_release_notes)
+        val btnClose = content.findViewById<MaterialButton>(R.id.btn_update_close)
+        val btnDownload = content.findViewById<MaterialButton>(R.id.btn_update_download)
+
+        tvVersion.text = versionBlock
+        tvNotes.text = "正在加载更新日志…"
+
         val dialog = MaterialAlertDialogBuilder(this)
             .setTitle(if (hasUpdate) "发现新版本" else "当前版本")
-            .setMessage("$versionBlock\n\n正在加载更新日志…")
-            .setNeutralButton("下载渠道") { _, _ ->
-                mainHandler.post { showDownloadChannels(info) }
-            }
-            .setNegativeButton("关闭", null)
+            .setView(content)
             .create()
         dialog.setCanceledOnTouchOutside(false)
+        dialog.setCancelable(true)
         dialog.setOnDismissListener {
             if (updateDialog === dialog) updateDialog = null
         }
+
+        // 不使用 AlertDialog 底部标准按钮栏，避免与工具栏同一次触摸抬起重合
+        btnClose.setOnClickListener { dialog.dismiss() }
+        btnDownload.setOnClickListener {
+            dialog.dismiss()
+            mainHandler.post { showDownloadChannels(info) }
+        }
+
         updateDialog = dialog
+        suppressDialogTouchUntil = android.os.SystemClock.uptimeMillis() + 500L
         dialog.setOnShowListener {
-            // 菜单点击的抬起事件落在默认按钮上会导致「一点开就关」
-            guardDialogButtons(dialog)
+            dialog.window?.decorView?.setOnTouchListener { _, event ->
+                if (android.os.SystemClock.uptimeMillis() < suppressDialogTouchUntil) {
+                    // 吞掉刚弹窗时残留的抬起/取消事件
+                    event.action == MotionEvent.ACTION_UP ||
+                        event.action == MotionEvent.ACTION_CANCEL ||
+                        event.action == MotionEvent.ACTION_OUTSIDE
+                } else {
+                    false
+                }
+            }
+            btnClose.isEnabled = false
+            btnDownload.isEnabled = false
+            mainHandler.postDelayed({
+                if (dialog.isShowing) {
+                    btnClose.isEnabled = true
+                    btnDownload.isEnabled = true
+                }
+            }, 520L)
         }
         dialog.show()
 
@@ -263,24 +296,9 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (updateDialog !== dialog || !dialog.isShowing) return@runOnUiThread
-                dialog.findViewById<TextView>(android.R.id.message)?.text =
-                    "$versionBlock\n\n$notes"
+                tvNotes.text = notes
             }
         }.start()
-    }
-
-    private fun guardDialogButtons(dialog: AlertDialog) {
-        val buttons = listOf(
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE),
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE),
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
-        )
-        buttons.forEach { it?.isClickable = false }
-        mainHandler.postDelayed({
-            if (dialog.isShowing) {
-                buttons.forEach { it?.isClickable = true }
-            }
-        }, 450L)
     }
 
     private fun showDownloadChannels(info: UpdateChecker.UpdateInfo) {
@@ -318,5 +336,9 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
             startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
         } catch (_: Exception) {
         }
+    }
+
+    companion object {
+        private val SHOW_UPDATE_TOKEN = Any()
     }
 }
