@@ -12,6 +12,7 @@ import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.widget.ImageViewCompat
@@ -580,21 +581,27 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
     }
 
     private fun showUsageHelpDialog() {
+        val textView = TextView(requireContext()).apply {
+            text = "【基础步骤】\n" +
+                "1. 授予通知访问与发送通知权限\n" +
+                "2. LSPosed 勾选「系统界面」和「息屏与锁屏编辑(com.miui.aod)」\n" +
+                "3. 使用 Root 重启系统界面使 Hook 生效\n" +
+                "4. 播放音乐后锁屏/AOD 显示歌词\n\n" +
+                "【后台保活】\n" +
+                "5. 设置 → 应用 → LyricFocus → 省电策略设为「无限制」，避免后台被杀\n" +
+                "6. 设置 → 通知与状态栏 → 通知管理 → LyricFocus：允许通知，关闭「静默」\n\n" +
+                "【常见问题】\n" +
+                "7. 若使用白名单，确认目标音乐 App 未被「应用双开」隔离到不同用户空间\n" +
+                "8. 焦点通知白名单：系统级焦点通知白名单限制会导致 LyricFocus 无法正常显示歌词，需通过 LSPosed 模块（如 HyperCeiler）移除该限制"
+            setPadding(48, 24, 48, 0)
+            setTextIsSelectable(true)
+        }
+        val scrollView = ScrollView(requireContext()).apply {
+            addView(textView)
+        }
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("使用说明")
-            .setMessage(
-                "【基础步骤】\n" +
-                    "1. 授予通知访问与发送通知权限\n" +
-                    "2. LSPosed 勾选「系统界面」和「息屏与锁屏编辑(com.miui.aod)」\n" +
-                    "3. 使用 Root 重启系统界面使 Hook 生效\n" +
-                    "4. 播放音乐后锁屏/AOD 显示歌词\n\n" +
-                    "【后台保活】\n" +
-                    "5. 设置 → 应用 → LyricFocus → 省电策略设为「无限制」，避免后台被杀\n" +
-                    "6. 设置 → 通知与状态栏 → 通知管理 → LyricFocus：允许通知，关闭「静默」\n\n" +
-                    "【常见问题】\n" +
-                    "7. 若使用白名单，确认目标音乐 App 未被「应用双开」隔离到不同用户空间\n" +
-                    "8. 焦点通知白名单：系统级焦点通知白名单限制会导致 LyricFocus 无法正常显示歌词，需通过 LSPosed 模块（如 HyperCeiler）移除该限制"
-            )
+            .setView(scrollView)
             .setPositiveButton("知道了", null)
             .show()
     }
@@ -619,9 +626,17 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         val checker = UpdateChecker(requireContext())
         val currentVersion = checker.getCurrentVersion(requireContext())
         val versionBlock = "当前版本：$currentVersion\n最新版本：${info.latestVersion}"
+        val textView = TextView(requireContext()).apply {
+            text = "$versionBlock\n\n正在加载更新日志…"
+            setPadding(48, 24, 48, 0)
+            setTextIsSelectable(true)
+        }
+        val scrollView = ScrollView(requireContext()).apply {
+            addView(textView)
+        }
         val dialog = MaterialAlertDialogBuilder(requireContext())
             .setTitle("发现新版本")
-            .setMessage("$versionBlock\n\n正在加载更新日志…")
+            .setView(scrollView)
             .setNeutralButton("下载渠道") { _, _ ->
                 view?.post { showDownloadChannels(info) }
             }
@@ -647,8 +662,7 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
             }
             activity?.runOnUiThread {
                 if (!isAdded || !dialog.isShowing) return@runOnUiThread
-                dialog.findViewById<TextView>(android.R.id.message)?.text =
-                    "$versionBlock\n\n$notes"
+                textView.text = "$versionBlock\n\n$notes"
             }
         }.start()
     }

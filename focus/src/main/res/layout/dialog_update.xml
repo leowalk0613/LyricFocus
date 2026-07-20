@@ -23,10 +23,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:maxHeight="280dp"
-            android:scrollbars="vertical"
             android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?attr/colorOnSurfaceVariant" />
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textIsSelectable="true" />
 
         <LinearLayout
             android:layout_width="match_parent"
