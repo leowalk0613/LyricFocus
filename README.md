@@ -58,6 +58,8 @@
 - **歌词焦点通知置顶**：歌词焦点卡片优先于其他焦点通知（含倒计时、HyperIsland 转换通知）
 - **万象息屏（自定义）AOD**：主界面开关；横向 `rvAod` 布局，修复万象/自定义息屏歌词只显示首字的问题；歌名左侧可显示音乐图标（按歌词颜色染色，网易云音乐自动识别预设图标）
 - **超级岛（固定关闭）**：主界面已移除开关，代码层固定关闭
+- **防闪烁 Hook 已移除**：`FocusAntiFlickerHook` 已删除——新的原地更新方案不再触发焦点通知入场动画，无需手动压制
+- **通知更新模式**：锁屏 / AOD 歌词换行不再重建通知会话，仅更新通知内 RemoteViews 内容
 - **应用白名单**：可选仅对指定音乐 App 的 MediaSession 响应；支持搜索已安装应用、手动添加包名
 - **歌词提前量**：可调同步偏移（默认提前 200 ms）
 - **Root 重启 SystemUI**：主界面右上角一键重启，Hook / 样式变更后快速生效
@@ -180,7 +182,7 @@ LyricFocus/
 
 ### 方式一：下载 Release APK（推荐）
 
-1. 在 [Releases](../../releases) 页面下载最新 `LyricFocus.v*.apk`（如 `LyricFocus.v1.6.1.apk`）
+1. 在 [Releases](../../releases) 页面下载最新 `LyricFocus.v*.apk`（如 `LyricFocus.v1.7.0.apk`）
 2. 将 APK 传到手机，在系统设置中允许「安装未知来源应用」
 3. 点击 APK 完成安装
 4. 继续下方 [LSPosed 配置](#lsposed-配置) 与 [应用权限](#应用权限)
@@ -410,7 +412,6 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 | | `FocusPinAboveHook` | 焦点通知数据层/视图层置顶歌词卡片 |
 | | `SystemUIPluginHook` | 焦点/AOD 插件 ClassLoader bypass |
 | | `FocusIslandSuppressHook` | 关闭超级岛兜底 |
-| | `FocusAntiFlickerHook` | 换行防闪烁 |
 | `com.miui.aod` | `AodFocusPluginHook` | AOD 进程焦点权限 bypass |
 
 焦点通知构建见 `HyperFocusLyricStyle.kt`：`FocusApi.sendDiyFocus()`、渠道 `channel_id_focusNotifLyrics`。
@@ -430,6 +431,20 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 ---
 
 ## 版本更新
+
+### v1.7.0
+
+#### 新功能
+
+- **多行歌词当前行高亮**：多行歌词模式下当前播放行字号增大 20% 并使用专辑主打色高亮；非当前播放行统一用默认白/黑色
+- **AOD 实时刷新重构**：从原来的「每次换行 cancel+notify」改为仅首次息屏绑定时 cancel+notify，后续换行全走 `notify()` 原地更新 + Hook 强制 AOD 路由；锁屏不再有焦点通知闪烁
+
+#### 优化
+
+- **移除防闪烁 Hook**：`FocusAntiFlickerHook` 已删除——新的原地更新方案不再触发焦点通知入场动画
+- **通知更新模式**：锁屏 / AOD 歌词换行不再重建通知会话，仅更新通知内 RemoteViews 内容
+
+- **版本号**：`1.7.0`（versionCode 19）
 
 ### v1.6.2
 

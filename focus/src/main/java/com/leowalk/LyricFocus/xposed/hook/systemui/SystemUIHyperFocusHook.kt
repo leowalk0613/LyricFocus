@@ -156,12 +156,12 @@ class SystemUIHyperFocusHook : BaseHook() {
         log("Starting SystemUI Hyper Focus hook")
         hookSystemUIContext(lpparam)
         hookFocusPermissionBypass(lpparam.classLoader)
-        hookAntiFlicker(lpparam.classLoader)
         hookHideFromShadeIfNeeded(lpparam.classLoader)
         hookPinAboveMediaCompat(lpparam.classLoader)
         FocusPinAboveHook.install(lpparam.classLoader, tag)
         hookSuppressIslandIfNeeded(lpparam.classLoader)
         hookKeyguardRepost(lpparam.classLoader)
+        hookForceAodUpdate(lpparam.classLoader)
     }
 
     private fun hookSuppressIslandIfNeeded(classLoader: ClassLoader) {
@@ -244,10 +244,6 @@ class SystemUIHyperFocusHook : BaseHook() {
             log("Auth bypass hooked")
         } catch (_: Throwable) {
         }
-    }
-
-    private fun hookAntiFlicker(classLoader: ClassLoader) {
-        FocusAntiFlickerHook.install(classLoader, tag)
     }
 
     private fun hookHideFromShadeIfNeeded(classLoader: ClassLoader) {
@@ -1187,10 +1183,14 @@ class SystemUIHyperFocusHook : BaseHook() {
                 while (interleaved.size < maxSlots) {
                     interleaved += ""
                 }
+                val currentSlot = if (currentIndex >= pageStart && currentIndex < pageStart + pairCount) {
+                    (currentIndex - pageStart) * 2
+                } else -1
                 return HyperFocusLyricStyle.MultiLineWindow(
                     lines = interleaved,
                     interleavedTranslations = true,
-                    visibleCount = visibleCount
+                    visibleCount = visibleCount,
+                    currentLineSlot = currentSlot
                 )
             }
         }
@@ -1204,9 +1204,13 @@ class SystemUIHyperFocusHook : BaseHook() {
         while (lines.size < maxSlots) {
             lines += ""
         }
+        val currentSlot = if (currentIndex >= pageStart && currentIndex < pageStart + visibleCount) {
+            currentIndex - pageStart
+        } else -1
         return HyperFocusLyricStyle.MultiLineWindow(
             lines = lines,
-            visibleCount = visibleCount
+            visibleCount = visibleCount,
+            currentLineSlot = currentSlot
         )
     }
 
@@ -1285,7 +1289,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         return pm?.isInteractive != false
     }
 
-    /** 息屏 AOD（非亮屏锁屏）：rvAod 需 cancel+notify 才能刷新 */
+    /** 息屏 AOD：仅首次绑定（needsAodRebind）时 cancel+notify；后续换行靠 notify+enableAlert=true 驱动 AOD 刷新。 */
     private fun isAodActive(): Boolean = !isScreenInteractive()
 
     private fun isSourcePackageAllowed(packageName: String): Boolean {
@@ -1375,17 +1379,13 @@ class SystemUIHyperFocusHook : BaseHook() {
                 return
             }
             val aodActive = isAodActive()
-            val recreateForAod = aodActive && (
-                refreshKind == HyperFocusLyricStyle.RefreshKind.LINE_CHANGE ||
-                    (refreshKind == HyperFocusLyricStyle.RefreshKind.KEEPALIVE && needsAodRebind)
-                )
+            // 仅屏幕状态切换进入 AOD 时 cancel+notify 绑定 rvAod；
+            // 其余全部仅 notify（锁屏 / AOD 换行 / 保活），靠 updatable=true 驱动 SystemUI 重读 RemoteViews。
+            val recreateForAod = aodActive && needsAodRebind
             val effectiveForceRefresh = forceRefresh ||
                 (aodActive && needsAodRebind &&
                     refreshKind == HyperFocusLyricStyle.RefreshKind.KEEPALIVE)
-            val willRecreate = recreateForAod || effectiveForceRefresh
-
-            // 亮屏锁屏：willRecreate 多为 false，直接 notify，不会踩 DiffDispatch。
-            // 息屏 AOD：每次换行都 recreate，必须与上一次切换动画错开。
+            val willRecreate = recreateForAod
             if (aodActive && willRecreate) {
                 val settleLeft = remainingAodSwitchSettleMs()
                 if (settleLeft > 0L) {
@@ -1435,7 +1435,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                 needsAodRebind = false
             }
             if (refreshKind == HyperFocusLyricStyle.RefreshKind.LINE_CHANGE) {
-                markLayoutReflowAllowed(true)
+                markLayoutReflowAllowed(willRecreate)
             }
             lastFocusNotifyTime = System.currentTimeMillis()
             rememberNotifiedLyricContent()
@@ -1483,6 +1483,45 @@ class SystemUIHyperFocusHook : BaseHook() {
         } catch (e: Throwable) {
             logE("Failed to parse lyric json", e)
             emptyList()
+        }
+    }
+
+    /**
+     * Hook AodFocusControllerV2$3.onAdd() 在调用前为我们的焦点通知强制设置 enableAlert=true。
+     * 迫使 MIUI 走 NON-UPDATABLE 路径 (addAodView → DozeService → AOD 进程)，
+     * 解决 updatable=true 时 AOD 只更新本地 ViewGroup 不通知 DozeService 导致息屏不刷新的问题。
+     * 参考：AodFocusControllerV2$3.onAdd() 中决策逻辑。
+     */
+    private fun hookForceAodUpdate(classLoader: ClassLoader) {
+        try {
+            XposedHelpers.findAndHookMethod(
+                "com.android.systemui.statusbar.notification.focus.AodFocusControllerV2\$3",
+                classLoader,
+                "onAdd",
+                "com.android.systemui.statusbar.notification.collection.NotificationEntry",
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        try {
+                            val entry = param.args[0]
+                            val sbn = XposedHelpers.getObjectField(entry, "mSbn")
+                            val notification = XposedHelpers.callMethod(
+                                sbn,
+                                "getNotification"
+                            ) as? Notification
+                            if (notification?.channelId == HyperFocusLyricStyle.CHANNEL_ID) {
+                                notification.extras.putBoolean(
+                                    "miui.focus.enableAlert",
+                                    true
+                                )
+                            }
+                        } catch (_: Throwable) {
+                        }
+                    }
+                }
+            )
+            log("AodFocusControllerV2 onAdd hook installed for force AOD update")
+        } catch (e: Throwable) {
+            log("AodFocusControllerV2 hook skipped (non-critical): ${e.message}")
         }
     }
 

@@ -117,12 +117,15 @@ object HyperFocusLyricStyle {
          */
         val interleavedTranslations: Boolean = false,
         /** 实际展示行数：4 / 6 / 8 */
-        val visibleCount: Int = FocusPreferences.DEFAULT_MULTI_LINE_LINE_COUNT
+        val visibleCount: Int = FocusPreferences.DEFAULT_MULTI_LINE_LINE_COUNT,
+        /** 当前正在播放的歌词行在 [lines] 中的槽位索引，-1 表示不标识 */
+        val currentLineSlot: Int = -1
     ) {
         fun contentKey(): String {
             return lines.joinToString("\u0001") + "\u0001|" +
                 (if (interleavedTranslations) "1" else "0") +
-                "\u0001@" + visibleCount
+                "\u0001@" + visibleCount +
+                "\u0001#" + currentLineSlot
         }
     }
 
@@ -158,9 +161,11 @@ object HyperFocusLyricStyle {
 
     /**
 
-     * @param recreateForAod 仅 AOD 换行时为 true（cancel+notify 更新 rvAod 文字）；
+     * @param recreateForAod 仅 needsAodRebind 时为 true（cancel+notify 首次绑定 rvAod）；
 
-     *                       保活续期只用 notify，避免 periodic cancel 导致息屏闪没。
+     *                       其余全走 notify，靠 updatable=true 驱动 SystemUI 原地刷新 RemoteViews。
+
+     *                       参考 HyperCeiler MusicBaseHook：AOD/非AOD 均只 notify，不 cancel。
 
      */
 
@@ -409,7 +414,7 @@ object HyperFocusLyricStyle {
 
         val notifyId = CHANNEL_ID.hashCode()
 
-        if (recreateForAod || forceRefresh) {
+        if (recreateForAod) {
 
             notificationManager.cancel(notifyId)
 
@@ -1205,12 +1210,21 @@ object HyperFocusLyricStyle {
         }
 
         val textSizeSp = FocusStyleSnapshot.multiLineTextSizeSp
-        val translationColor = fadeTextColor(style.colorSecondary)
+        val defaultLineColor = when (style.backgroundColor) {
+            Color.WHITE -> Color.BLACK
+            else -> COLOR_LYRIC_PRIMARY
+        }
+        val translationColor = fadeTextColor(defaultLineColor)
+        val currentLineColor = FocusStyleSnapshot.extractedAccentColor
+            ?: FocusStyleSnapshot.extractedTextColor
+            ?: style.colorPrimary
+        val currentLineSize = textSizeSp * 1.2f
 
         for (i in 0 until MULTI_LINE_MAX_SLOTS) {
             val viewId = MULTI_LINE_IDS[i]
             val displayText = displayLines[i]
             val isTranslation = interleaved && i < visibleCount && i % 2 == 1
+            val isCurrentLine = i == multiLine.currentLineSlot
             if (i >= visibleCount || displayText.isBlank()) {
                 views.setTextViewText(viewId, " ")
                 views.setViewVisibility(viewId, View.GONE)
@@ -1218,11 +1232,16 @@ object HyperFocusLyricStyle {
             }
             views.setViewVisibility(viewId, View.VISIBLE)
             views.setTextViewText(viewId, displayText)
-            views.setTextColor(
-                viewId,
-                if (isTranslation) translationColor else style.colorPrimary
-            )
-            views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp)
+            if (isCurrentLine) {
+                views.setTextColor(viewId, currentLineColor)
+                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, currentLineSize)
+            } else if (isTranslation) {
+                views.setTextColor(viewId, translationColor)
+                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp)
+            } else {
+                views.setTextColor(viewId, defaultLineColor)
+                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp)
+            }
             views.setInt(viewId, "setMaxLines", 1)
             views.setInt(viewId, "setGravity", style.gravityValue)
         }
