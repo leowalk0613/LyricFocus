@@ -1283,7 +1283,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                     val notification = ReflectUtil.callMethod(sbn!!, "getNotification") as? Notification
                     if (notification?.channelId == HyperFocusLyricStyle.CHANNEL_ID) {
                         notification.extras.putBoolean("miui.focus.enableAlert", true)
-                    } else if (isCustomAodActive() && isPlaying && isAodActive()) {
+                    } else if (isCustomAodActive() && isPlaying && isAodActiveCached()) {
                         return@intercept null
                     }
                 } catch (_: Throwable) {}
@@ -1309,12 +1309,21 @@ class SystemUIHyperFocusHook : BaseHook() {
         return cachedCustomAod
     }
 
+    /** 缓存 500ms 避免 isAodActive() 的 Binder 调用在通知列表重建时耗尽缓冲 */
+    private var cachedAodActive = false
+    private var cachedAodActiveTime = 0L
+    private fun isAodActiveCached(): Boolean {
+        val now = System.currentTimeMillis()
+        if (now - cachedAodActiveTime > 500L) { cachedAodActive = isAodActive(); cachedAodActiveTime = now }
+        return cachedAodActive
+    }
+
     private fun hookHideOtherNotificationsInAod(classLoader: ClassLoader, module: XposedModule) {
         try {
             val entryClass = classLoader.loadClass("com.android.systemui.statusbar.notification.collection.NotificationEntry")
             val method = ReflectUtil.findMethod("com.android.systemui.statusbar.notification.interruption.KeyguardNotificationVisibilityProviderImpl", classLoader, "shouldHideNotification", entryClass)
             module.hook(method).intercept { chain ->
-                if (!isCustomAodActive() || !isPlaying || !isAodActive()) return@intercept chain.proceed()
+                if (!isCustomAodActive() || !isPlaying || !isAodActiveCached()) return@intercept chain.proceed()
                 val entry = chain.args.getOrNull(0) ?: return@intercept chain.proceed()
                 val sbn = ReflectUtil.getField(entry, "mSbn")
                 val n = ReflectUtil.callMethod(sbn!!, "getNotification") as? Notification
