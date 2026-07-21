@@ -150,10 +150,23 @@ class SystemUIHyperFocusHook : BaseHook() {
     /** 缓存 500ms 避免 Binder 调用耗尽缓冲区 */
     private var cachedAodActive = false
     private var cachedAodActiveTime = 0L
+    private var cachedSuppression = false
+    private var cachedSuppressionTime = 0L
+
     private fun isAodActiveCached(): Boolean {
         val now = System.currentTimeMillis()
         if (now - cachedAodActiveTime > 500L) { cachedAodActive = isAodActive(); cachedAodActiveTime = now }
         return cachedAodActive
+    }
+
+    /** 仅万象息屏 + 播放 + AOD 活跃时返回 true */
+    private fun shouldSuppressAod(): Boolean {
+        val now = System.currentTimeMillis()
+        if (now - cachedSuppressionTime > 1000L) {
+            cachedSuppression = FocusStyleSnapshot.customAodLayout && isPlaying && isAodActiveCached()
+            cachedSuppressionTime = now
+        }
+        return cachedSuppression
     }
 
     /** 万象息屏时隐藏非歌词通知：仅在 AOD 活跃 + 播放时 Hook shouldHideNotification */
@@ -162,7 +175,7 @@ class SystemUIHyperFocusHook : BaseHook() {
             val entryClass = classLoader.loadClass("com.android.systemui.statusbar.notification.collection.NotificationEntry")
             val method = ReflectUtil.findMethod("com.android.systemui.statusbar.notification.interruption.KeyguardNotificationVisibilityProviderImpl", classLoader, "shouldHideNotification", entryClass)
             module.hook(method).intercept { chain ->
-                if (!FocusStyleSnapshot.customAodLayout || !isPlaying || !isAodActiveCached()) return@intercept chain.proceed()
+                if (!shouldSuppressAod()) return@intercept chain.proceed()
                 val entry = chain.args.getOrNull(0) ?: return@intercept chain.proceed()
                 val sbn = ReflectUtil.getField(entry, "mSbn")
                 val n = ReflectUtil.callMethod(sbn!!, "getNotification") as? Notification
@@ -1308,7 +1321,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                     val notification = ReflectUtil.callMethod(sbn!!, "getNotification") as? Notification
                     if (notification?.channelId == HyperFocusLyricStyle.CHANNEL_ID) {
                         notification.extras.putBoolean("miui.focus.enableAlert", true)
-                    } else if (FocusStyleSnapshot.customAodLayout && isPlaying && isAodActiveCached()) {
+                    } else if (shouldSuppressAod()) {
                         return@intercept null
                     }
                 } catch (_: Throwable) {}
