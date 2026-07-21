@@ -17,6 +17,9 @@ object FocusPinAboveHook {
 
     private val pinGuard = ThreadLocal.withInitial { false }
 
+    /** 防止递归重入 ShadeListBuilder buildList 导致 section 重复崩溃 */
+    private val buildListGuard = ThreadLocal.withInitial { false }
+
     private const val FOCUSED_NOTIF_CONTROLLER =
         "com.android.systemui.statusbar.phone.FocusedNotifPromptController"
 
@@ -355,20 +358,22 @@ object FocusPinAboveHook {
         try {
             val dispatchMethod = ReflectUtil.findMethod(shadeBuilder, classLoader, "dispatchOnBeforeSort", List::class.java)
             module.hook(dispatchMethod).intercept { chain ->
+                if (buildListGuard.get()) return@intercept chain.proceed()
                 if (FocusPinState.shouldPin()) {
-                    @Suppress("UNCHECKED_CAST")
-                    val list = chain.args.getOrNull(0) as? MutableList<Any?>
-                    if (list != null) {
-                        safePinLyricEntryToFront(list)
-                    }
+                    try {
+                        @Suppress("UNCHECKED_CAST")
+                        val list = chain.args.getOrNull(0) as? MutableList<Any?>
+                        if (list != null) safePinLyricEntryToFront(list)
+                    } catch (_: Throwable) {}
                 }
-                val result = chain.proceed()
+                buildListGuard.set(true)
+                val result = try { chain.proceed() } finally { buildListGuard.set(false) }
                 if (FocusPinState.shouldPin()) {
-                    @Suppress("UNCHECKED_CAST")
-                    val list = chain.args.getOrNull(0) as? MutableList<Any?>
-                    if (list != null) {
-                        safePinLyricEntryToFront(list)
-                    }
+                    try {
+                        @Suppress("UNCHECKED_CAST")
+                        val list = chain.args.getOrNull(0) as? MutableList<Any?>
+                        if (list != null) safePinLyricEntryToFront(list)
+                    } catch (_: Throwable) {}
                 }
                 result
             }
@@ -849,12 +854,16 @@ object FocusPinAboveHook {
     }
 
     private fun safePinLyricEntryToFront(list: MutableList<Any?>): Boolean {
+        if (pinGuard.get()) return false
+        pinGuard.set(true)
         return try {
             pinLyricEntryToFront(list)
         } catch (_: UnsupportedOperationException) {
             false
         } catch (_: ConcurrentModificationException) {
             false
+        } finally {
+            pinGuard.set(false)
         }
     }
 
