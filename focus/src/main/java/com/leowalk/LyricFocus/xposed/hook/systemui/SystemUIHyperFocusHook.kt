@@ -87,7 +87,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         private var lastNotifiedMultiLineKey = ""
 
         private const val MIN_TICK_MS = 500L
-        private const val LAYOUT_REFLOW_DEBOUNCE_MS = 5_000L
+        private const val LAYOUT_REFLOW_DEBOUNCE_MS = 2_000L
         /** 亮屏/解锁后重发焦点通知，等待 Keyguard 与 SystemUI 就绪 */
         private const val SCREEN_REPOST_DELAY_MS = 100L
 
@@ -214,6 +214,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                 registerScreenReceiver()
                 refreshSettings()
                 scheduleResyncRequests()
+                registerFocusPinRepostCallback()
                 log("SystemUI context ready for focus lyrics")
                 result
             }
@@ -459,6 +460,18 @@ class SystemUIHyperFocusHook : BaseHook() {
     private fun scheduleLyricFocusReorder() {
         syncFocusPinState()
         FocusPinAboveHook.scheduleViewReorder(cachedFocusRow)
+    }
+
+    private fun registerFocusPinRepostCallback() {
+        FocusPinState.onRepostRequested = {
+            handler.post {
+                if (!focusEnabled || !isPlaying || currentLyricText.isBlank()) return@post
+                log("FocusPin repost triggered")
+                cancelFocusNotification()
+                postFocusUpdate(FocusRefreshMode.LINE_CHANGE, force = true)
+                scheduleNextUpdate()
+            }
+        }
     }
 
     private fun invalidateLayoutCache() {

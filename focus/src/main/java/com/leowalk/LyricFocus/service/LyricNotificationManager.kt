@@ -95,6 +95,8 @@ class LyricNotificationManager(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     fun updateForegroundNotification(title: String = "", artist: String = "", isPlaying: Boolean = false) {
+        val sameState = title == lastTitle && artist == lastArtist && isPlaying == lastIsPlaying
+
         lastTitle = title
         lastArtist = artist
         lastIsPlaying = isPlaying
@@ -103,6 +105,8 @@ class LyricNotificationManager(private val context: Context) {
             lastLyricText = ""
             lastSecondLineText = ""
         }
+
+        if (sameState) return
 
         if (NotificationPermissionHelper.hasPostNotificationsPermission(context)) {
             notificationManager.notify(NOTIFICATION_ID, buildForegroundNotification())

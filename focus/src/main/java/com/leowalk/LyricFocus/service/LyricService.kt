@@ -55,9 +55,8 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         const val EXTRA_MUSIC_PACKAGE = "music_package"
 
         private const val PACKAGE_SYSTEMUI = "com.android.systemui"
-        private const val MIN_SCHEDULE_MS = 50L
-        /** ?? Handler ????Alarm ????/doze ?? */
-        private const val UPDATE_INTERVAL_MS = 100L
+        private const val MIN_SCHEDULE_MS = 100L
+        private const val UPDATE_INTERVAL_MS = 250L
 
         var isServiceRunning = false
             private set
