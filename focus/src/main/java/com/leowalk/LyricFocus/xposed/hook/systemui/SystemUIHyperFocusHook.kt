@@ -1276,16 +1276,9 @@ class SystemUIHyperFocusHook : BaseHook() {
 
     private fun hookForceAodUpdate(classLoader: ClassLoader, module: XposedModule) {
         try {
-            val entryClass = classLoader.loadClass(
-                "com.android.systemui.statusbar.notification.collection.NotificationEntry"
-            )
-            val method = ReflectUtil.findMethod(
-                "com.android.systemui.statusbar.notification.focus.AodFocusControllerV2\$3",
-                classLoader,
-                "onAdd",
-                entryClass
-            )
-            module.hook(method).intercept { chain ->
+            val entryClass = classLoader.loadClass("com.android.systemui.statusbar.notification.collection.NotificationEntry")
+            val onAddMethod = ReflectUtil.findMethod("com.android.systemui.statusbar.notification.focus.AodFocusControllerV2\$3", classLoader, "onAdd", entryClass)
+            module.hook(onAddMethod).intercept { chain ->
                 try {
                     val entry = chain.args[0]
                     val sbn = ReflectUtil.getField(entry, "mSbn")
@@ -1295,14 +1288,11 @@ class SystemUIHyperFocusHook : BaseHook() {
                     } else if (isCustomAodActive() && isPlaying && isAodActive()) {
                         return@intercept null
                     }
-                } catch (_: Throwable) {
-                }
+                } catch (_: Throwable) {}
                 chain.proceed()
             }
-            log("AodFocusControllerV2 onAdd hook installed (force AOD + suppress)")
-        } catch (e: Throwable) {
-            log("AodFocusControllerV2 hook skipped: ${e.message}")
-        }
+            log("AodFocusControllerV2 hooks installed")
+        } catch (e: Throwable) { log("AodFocusControllerV2 hook skipped: ${e.message}") }
     }
 
     /** 万象息屏时 Hook shouldHideNotification：仅隐藏非歌词通知 */
