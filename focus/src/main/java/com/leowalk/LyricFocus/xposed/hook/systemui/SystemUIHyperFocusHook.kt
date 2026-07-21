@@ -144,6 +144,32 @@ class SystemUIHyperFocusHook : BaseHook() {
         hookSuppressIslandIfNeeded(classLoader, module)
         hookKeyguardRepost(classLoader, module)
         hookForceAodUpdate(classLoader, module)
+        hookHideOtherNotificationsInAod(classLoader, module)
+    }
+
+    /** 缓存 500ms 避免 Binder 调用耗尽缓冲区 */
+    private var cachedAodActive = false
+    private var cachedAodActiveTime = 0L
+    private fun isAodActiveCached(): Boolean {
+        val now = System.currentTimeMillis()
+        if (now - cachedAodActiveTime > 500L) { cachedAodActive = isAodActive(); cachedAodActiveTime = now }
+        return cachedAodActive
+    }
+
+    /** 万象息屏时隐藏非歌词通知：仅在 AOD 活跃 + 播放时 Hook shouldHideNotification */
+    private fun hookHideOtherNotificationsInAod(classLoader: ClassLoader, module: XposedModule) {
+        try {
+            val entryClass = classLoader.loadClass("com.android.systemui.statusbar.notification.collection.NotificationEntry")
+            val method = ReflectUtil.findMethod("com.android.systemui.statusbar.notification.interruption.KeyguardNotificationVisibilityProviderImpl", classLoader, "shouldHideNotification", entryClass)
+            module.hook(method).intercept { chain ->
+                if (!FocusStyleSnapshot.customAodLayout || !isPlaying || !isAodActiveCached()) return@intercept chain.proceed()
+                val entry = chain.args.getOrNull(0) ?: return@intercept chain.proceed()
+                val sbn = ReflectUtil.getField(entry, "mSbn")
+                val n = ReflectUtil.callMethod(sbn!!, "getNotification") as? Notification
+                if (n?.channelId != HyperFocusLyricStyle.CHANNEL_ID) return@intercept java.lang.Boolean.TRUE
+                chain.proceed()
+            }
+        } catch (_: Throwable) {}
     }
 
     private fun hookSuppressIslandIfNeeded(classLoader: ClassLoader, module: XposedModule) {
@@ -1290,15 +1316,6 @@ class SystemUIHyperFocusHook : BaseHook() {
             }
             log("AodFocusControllerV2 hooks installed")
         } catch (e: Throwable) { log("AodFocusControllerV2 hook skipped: ${e.message}") }
-    }
-
-    /** 缓存 500ms 避免 isAodActive() 的 Binder 调用在通知列表重建时耗尽缓冲 */
-    private var cachedAodActive = false
-    private var cachedAodActiveTime = 0L
-    private fun isAodActiveCached(): Boolean {
-        val now = System.currentTimeMillis()
-        if (now - cachedAodActiveTime > 500L) { cachedAodActive = isAodActive(); cachedAodActiveTime = now }
-        return cachedAodActive
     }
 
 }
