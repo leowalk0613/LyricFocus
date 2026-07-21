@@ -18,7 +18,6 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.service.notification.StatusBarNotification
-import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import com.leowalk.LyricFocus.FocusPreferences
@@ -146,7 +145,6 @@ class SystemUIHyperFocusHook : BaseHook() {
         hookKeyguardRepost(classLoader, module)
         hookForceAodUpdate(classLoader, module)
         hookHideOtherNotificationsInAod(classLoader, module)
-        hookSuppressOtherNotificationsInAod(classLoader, module)
     }
 
     private fun hookSuppressIslandIfNeeded(classLoader: ClassLoader, module: XposedModule) {
@@ -1304,7 +1302,6 @@ class SystemUIHyperFocusHook : BaseHook() {
         if (now - cachedCustomAodTime > 1000L) {
             cachedCustomAod = FocusStyleSnapshot.customAodLayout
             if (!cachedCustomAod) {
-                // 兜底：广播可能未及时同步，尝试直接读
                 systemUIContext?.let { cachedCustomAod = FocusPreferences.readCustomAodLayout(it) }
             }
             cachedCustomAodTime = now
@@ -1321,48 +1318,10 @@ class SystemUIHyperFocusHook : BaseHook() {
                 val entry = chain.args.getOrNull(0) ?: return@intercept chain.proceed()
                 val sbn = ReflectUtil.getField(entry, "mSbn")
                 val n = ReflectUtil.callMethod(sbn!!, "getNotification") as? Notification
-                if (n?.channelId != HyperFocusLyricStyle.CHANNEL_ID) {
-                    val pkg = ReflectUtil.getField(sbn, "mPkgName") as? String ?: "?"
-                    Log.d(tag, "AOD hide: suppressing notification from $pkg")
-                    return@intercept java.lang.Boolean.TRUE
-                }
+                if (n?.channelId != HyperFocusLyricStyle.CHANNEL_ID) return@intercept java.lang.Boolean.TRUE
                 chain.proceed()
             }
-            log("AOD hide hook installed")
-        } catch (e: Throwable) { log("AOD hide hook skipped: ${e.message}") }
-    }
-
-    /** 万象息屏时 Hook 焦点通知数据加载方法：移除非歌词条目 */
-    private fun hookSuppressOtherNotificationsInAod(classLoader: ClassLoader, module: XposedModule) {
-        val classes = listOf(
-            "com.android.systemui.statusbar.phone.FocusedNotifPromptView",
-            "com.android.systemui.statusbar.phone.FocusedNotifPromptController",
-            "miui.systemui.notification.focus.FocusNotificationController",
-            "miui.systemui.notification.focus.FocusNotificationPluginImpl",
-            "com.android.systemui.plugins.miui.notification.focus.FocusNotificationPluginImpl"
-        )
-        val methods = listOf("setData", "bind", "update", "refresh", "show", "onDataChanged", "sortList", "onNotificationPosted", "onEntryAdded")
-        for (cn in classes) {
-            for (mn in methods) {
-                try {
-                    val clazz = ReflectUtil.findClass(cn, classLoader)
-                    for (m in ReflectUtil.findMethodsByName(clazz, mn)) {
-                        module.hook(m).intercept { chain ->
-                            if (!isCustomAodActive() || !isPlaying || !isAodActive()) return@intercept chain.proceed()
-                            for (i in 0 until chain.args.size) {
-                                (chain.args[i] as? java.util.ArrayList<*>)?.let { list ->
-                                    val iter = list.iterator()
-                                    while (iter.hasNext()) {
-                                        try { if ((ReflectUtil.getField(iter.next(), "mSbn") as? StatusBarNotification)?.let { ReflectUtil.callMethod(it, "getNotification") }?.let { (it as? Notification)?.channelId != HyperFocusLyricStyle.CHANNEL_ID } == true) iter.remove() } catch (_: Throwable) {}
-                                    }
-                                }
-                            }
-                            chain.proceed()
-                        }
-                    }
-                } catch (_: Throwable) {}
-            }
-        }
+        } catch (_: Throwable) {}
     }
 
 }
