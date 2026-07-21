@@ -18,6 +18,7 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import com.leowalk.LyricFocus.FocusPreferences
@@ -1330,7 +1331,11 @@ class SystemUIHyperFocusHook : BaseHook() {
                 val entry = chain.args.getOrNull(0) ?: return@intercept chain.proceed()
                 val sbn = ReflectUtil.getField(entry, "mSbn")
                 val n = ReflectUtil.callMethod(sbn!!, "getNotification") as? Notification
-                if (n?.channelId != HyperFocusLyricStyle.CHANNEL_ID) return@intercept java.lang.Boolean.TRUE
+                if (n?.channelId != HyperFocusLyricStyle.CHANNEL_ID) {
+                    val pkg = ReflectUtil.getField(sbn, "mPkgName") as? String ?: "?"
+                    Log.d(tag, "AOD hide: suppressing notification from $pkg")
+                    return@intercept java.lang.Boolean.TRUE
+                }
                 chain.proceed()
             }
             log("AOD hide hook installed")
@@ -1339,8 +1344,14 @@ class SystemUIHyperFocusHook : BaseHook() {
 
     /** 万象息屏时 Hook 焦点通知数据加载方法：移除非歌词条目 */
     private fun hookSuppressOtherNotificationsInAod(classLoader: ClassLoader, module: XposedModule) {
-        val classes = listOf("com.android.systemui.statusbar.phone.FocusedNotifPromptView", "miui.systemui.notification.focus.FocusNotificationPluginImpl", "com.android.systemui.plugins.miui.notification.focus.FocusNotificationPluginImpl")
-        val methods = listOf("setData", "bind", "update", "refresh", "show", "onDataChanged")
+        val classes = listOf(
+            "com.android.systemui.statusbar.phone.FocusedNotifPromptView",
+            "com.android.systemui.statusbar.phone.FocusedNotifPromptController",
+            "miui.systemui.notification.focus.FocusNotificationController",
+            "miui.systemui.notification.focus.FocusNotificationPluginImpl",
+            "com.android.systemui.plugins.miui.notification.focus.FocusNotificationPluginImpl"
+        )
+        val methods = listOf("setData", "bind", "update", "refresh", "show", "onDataChanged", "sortList", "onNotificationPosted", "onEntryAdded")
         for (cn in classes) {
             for (mn in methods) {
                 try {
