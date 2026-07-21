@@ -588,7 +588,8 @@ class SystemUIHyperFocusHook : BaseHook() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
                     Intent.ACTION_SCREEN_OFF -> {
-                        handler.postDelayed({ repostFocusIfNeeded() }, SCREEN_REPOST_DELAY_MS)
+                        // 锁屏→息屏时 PowerManager.isInteractive 可能仍返回 true，延迟到 AOD 完全启动后再触发
+                        handler.postDelayed({ repostFocusIfNeeded() }, 600L)
                     }
                     Intent.ACTION_SCREEN_ON -> {
                         handler.postDelayed({ repostFocusIfNeeded() }, SCREEN_REPOST_DELAY_MS)
