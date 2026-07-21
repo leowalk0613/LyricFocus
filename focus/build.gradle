@@ -40,6 +40,11 @@ android {
             if (keystorePropertiesFile.exists()) {
                 signingConfig signingConfigs.release
             }
+            android.applicationVariants.all { variant ->
+                variant.outputs.all {
+                    outputFileName = "LyricFocus.v${variant.versionName}.apk"
+                }
+            }
         }
         debug {
             minifyEnabled false
