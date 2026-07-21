@@ -442,7 +442,12 @@ class SystemUIHyperFocusHook : BaseHook() {
                     ) {
                         return@intercept null
                     }
-                    chain.proceed()
+                    val result = chain.proceed()
+                    // 面板回流后检测歌词通知视图排位，降低则触发 repost
+                    if (FocusPinState.shouldPin()) {
+                        FocusPinAboveHook.checkPanelAfterReflow(chain.thisObject)
+                    }
+                    result
                 }
                 log("Debounced positionClockAndNotifications on $target")
                 break
