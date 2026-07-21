@@ -23,11 +23,9 @@ import android.view.ViewGroup
 import com.leowalk.LyricFocus.FocusPreferences
 import com.leowalk.LyricFocus.FocusStyleSnapshot
 import com.leowalk.LyricFocus.notification.HyperFocusLyricStyle
+import com.leowalk.LyricFocus.xposed.ReflectUtil
 import com.leowalk.LyricFocus.xposed.hook.BaseHook
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
-import de.robv.android.xposed.callbacks.XC_LoadPackage
+import io.github.libxposed.api.XposedModule
 import org.json.JSONArray
 
 /**
@@ -91,24 +89,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         private const val MIN_TICK_MS = 500L
         private const val LAYOUT_REFLOW_DEBOUNCE_MS = 5_000L
         /** 亮屏/解锁后重发焦点通知，等待 Keyguard 与 SystemUI 就绪 */
-        private const val SCREEN_REPOST_DELAY_MS = 400L
-        /**
-         * 息屏进 AOD：先让系统完成一次 DiffDispatch 切换动画，再决定是否 cancel+notify 重绑 rvAod。
-         * 原先 550ms 正好落在系统切换动画中途，表现为「亮屏锁屏正常、息屏后概率抽搐」。
-         */
-        private const val SCREEN_OFF_REPOST_DELAY_MS = 1100L
-        /**
-         * AOD DiffDispatch（alpha delay 150ms + scale）未结束前再 cancel+notify
-         * 会截断动画；息屏重绑与换行/forceResync 叠在一起时概率复现。
-         */
-        private const val AOD_SWITCH_SETTLE_MS = 900L
-
-        @Volatile
-        private var needsAodRebind = false
-        /** 最近一次会触发 cancel+notify 的焦点会话重建时间 */
-        private var lastFocusRecreateAt = 0L
-        private var pendingDisplayRepost: Runnable? = null
-        private var pendingCoalescedFocusPost: Runnable? = null
+        private const val SCREEN_REPOST_DELAY_MS = 100L
 
         private enum class FocusRefreshMode {
             LINE_CHANGE,
@@ -152,118 +133,112 @@ class SystemUIHyperFocusHook : BaseHook() {
         }
     }
 
-    override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
+    override fun install(classLoader: ClassLoader, module: XposedModule) {
         log("Starting SystemUI Hyper Focus hook")
-        hookSystemUIContext(lpparam)
-        hookFocusPermissionBypass(lpparam.classLoader)
-        hookHideFromShadeIfNeeded(lpparam.classLoader)
-        hookPinAboveMediaCompat(lpparam.classLoader)
-        FocusPinAboveHook.install(lpparam.classLoader, tag)
-        hookSuppressIslandIfNeeded(lpparam.classLoader)
-        hookKeyguardRepost(lpparam.classLoader)
-        hookForceAodUpdate(lpparam.classLoader)
+        FocusStyleSnapshot.attachModule(module)
+        hookSystemUIContext(classLoader, module)
+        hookFocusPermissionBypass(classLoader, module)
+        hookHideFromShadeIfNeeded(classLoader, module)
+        hookPinAboveMediaCompat(classLoader, module)
+        FocusPinAboveHook.install(classLoader, module, tag)
+        hookSuppressIslandIfNeeded(classLoader, module)
+        hookKeyguardRepost(classLoader, module)
+        hookForceAodUpdate(classLoader, module)
+        hookHideOtherNotificationsInAod(classLoader, module)
+        hookSuppressOtherNotificationsInAod(classLoader, module)
     }
 
-    private fun hookSuppressIslandIfNeeded(classLoader: ClassLoader) {
-        FocusIslandSuppressHook.install(classLoader, tag) { systemUIContext }
+    private fun hookSuppressIslandIfNeeded(classLoader: ClassLoader, module: XposedModule) {
+        FocusIslandSuppressHook.install(classLoader, module, tag) { systemUIContext }
     }
 
-    private fun hookSystemUIContext(lpparam: XC_LoadPackage.LoadPackageParam) {
+    private fun hookSystemUIContext(classLoader: ClassLoader, module: XposedModule) {
         try {
-            XposedHelpers.findAndHookMethod(
+            val method = ReflectUtil.findMethod(
                 "com.android.systemui.SystemUIApplication",
-                lpparam.classLoader,
-                "onCreate",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val app = param.thisObject as android.app.Application
-                        systemUIContext = app.applicationContext
-                        notificationManager = systemUIContext?.getSystemService(
-                            Context.NOTIFICATION_SERVICE
-                        ) as NotificationManager?
-                        alarmManager = systemUIContext?.getSystemService(
-                            Context.ALARM_SERVICE
-                        ) as AlarmManager?
-                        resetSessionState()
-                        createNotificationChannel()
-                        createAlarmIntent()
-                        registerLyricReceiver()
-                        registerAlarmReceiver()
-                        registerScreenReceiver()
-                        refreshSettings()
-                        scheduleResyncRequests()
-                        log("SystemUI context ready for focus lyrics")
-                    }
-                }
+                classLoader,
+                "onCreate"
             )
+            module.hook(method).intercept { chain ->
+                val result = chain.proceed()
+                val app = chain.thisObject as android.app.Application
+                systemUIContext = app.applicationContext
+                notificationManager = systemUIContext?.getSystemService(
+                    Context.NOTIFICATION_SERVICE
+                ) as NotificationManager?
+                alarmManager = systemUIContext?.getSystemService(
+                    Context.ALARM_SERVICE
+                ) as AlarmManager?
+                resetSessionState()
+                createNotificationChannel()
+                createAlarmIntent()
+                registerLyricReceiver()
+                registerAlarmReceiver()
+                registerScreenReceiver()
+                refreshSettings()
+                scheduleResyncRequests()
+                log("SystemUI context ready for focus lyrics")
+                result
+            }
         } catch (e: Throwable) {
             logE("Error hooking SystemUI context", e)
         }
     }
 
-    private fun hookFocusPermissionBypass(classLoader: ClassLoader) {
-        bypassBooleanMethod(classLoader, "miui.systemui.notification.NotificationSettingsManager", "canShowFocus")
-        bypassBooleanMethod(classLoader, "miui.systemui.notification.NotificationSettingsManager", "canCustomFocus")
-        tryHookAuthBypass(classLoader)
+    private fun hookFocusPermissionBypass(classLoader: ClassLoader, module: XposedModule) {
+        bypassBooleanMethod(classLoader, module, "miui.systemui.notification.NotificationSettingsManager", "canShowFocus")
+        bypassBooleanMethod(classLoader, module, "miui.systemui.notification.NotificationSettingsManager", "canCustomFocus")
+        tryHookAuthBypass(classLoader, module)
     }
 
-    private fun bypassBooleanMethod(classLoader: ClassLoader, className: String, methodName: String) {
+    private fun bypassBooleanMethod(classLoader: ClassLoader, module: XposedModule, className: String, methodName: String) {
         try {
-            XposedHelpers.findAndHookMethod(
-                className,
-                classLoader,
-                methodName,
-                object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        param.result = true
-                    }
-                }
-            )
+            val method = ReflectUtil.findMethod(className, classLoader, methodName)
+            module.hook(method).intercept { chain -> true }
             log("Bypassed $className.$methodName")
         } catch (e: Throwable) {
             log("Skip bypass $className.$methodName: ${e.message}")
         }
     }
 
-    private fun tryHookAuthBypass(classLoader: ClassLoader) {
+    private fun tryHookAuthBypass(classLoader: ClassLoader, module: XposedModule) {
         try {
             val authClass = classLoader.loadClass(
                 "miui.systemui.notification.auth.AuthManager\$AuthServiceCallback\$onAuthResult\$1"
             )
-            XposedHelpers.findAndHookMethod(
-                authClass,
-                "invokeSuspend",
-                Object::class.java,
-                object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        val bundle = XposedHelpers.getObjectField(param.thisObject, "\$authBundle") as? Bundle
-                        bundle?.putInt("result_code", 0)
-                    }
-                }
-            )
+            val method = authClass.getDeclaredMethod("invokeSuspend", Object::class.java)
+            method.isAccessible = true
+            module.hook(method).intercept { chain ->
+                val bundle = ReflectUtil.getField(chain.thisObject, "\$authBundle") as? Bundle
+                bundle?.putInt("result_code", 0)
+                chain.proceed()
+            }
             log("Auth bypass hooked")
         } catch (_: Throwable) {
         }
     }
 
-    private fun hookHideFromShadeIfNeeded(classLoader: ClassLoader) {
-        hookHideFocusRowInShadeStack(classLoader)
+    private fun hookHideFromShadeIfNeeded(classLoader: ClassLoader, module: XposedModule) {
+        hookHideFocusRowInShadeStack(classLoader, module)
     }
 
     /** 仅在下拉通知栏隐藏焦点行，不阻断 bind pipeline（锁屏/AOD/岛仍正常绑定） */
-    private fun hookHideFocusRowInShadeStack(classLoader: ClassLoader) {
+    private fun hookHideFocusRowInShadeStack(classLoader: ClassLoader, module: XposedModule) {
         try {
-            val stackClass = XposedHelpers.findClass(
+            val stackClass = ReflectUtil.findClass(
                 "com.android.systemui.statusbar.stack.NotificationStackScrollLayout",
                 classLoader
             )
-            val hook = object : XC_MethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    applyFocusRowShadeVisibility(param.args[0] as? View)
+            val addViewMethods = ReflectUtil.findMethodsByName(stackClass, "addView")
+            val addViewInLayoutMethods = ReflectUtil.findMethodsByName(stackClass, "addViewInLayout")
+            val allMethods = addViewMethods + addViewInLayoutMethods
+            for (method in allMethods) {
+                module.hook(method).intercept { chain ->
+                    val result = chain.proceed()
+                    applyFocusRowShadeVisibility(chain.args.getOrNull(0) as? View)
+                    result
                 }
             }
-            XposedBridge.hookAllMethods(stackClass, "addView", hook)
-            XposedBridge.hookAllMethods(stackClass, "addViewInLayout", hook)
             log("Shade-only focus row hide hook ready")
         } catch (e: Throwable) {
             log("Shade hide hook skipped: ${e.message}")
@@ -308,8 +283,8 @@ class SystemUIHyperFocusHook : BaseHook() {
             }
         }
         row ?: return null
-        val entry = XposedHelpers.callMethod(row, "getEntry") ?: return null
-        val sbn = XposedHelpers.getObjectField(entry, "mSbn") as? StatusBarNotification ?: return null
+        val entry = ReflectUtil.callMethod(row, "getEntry") ?: return null
+        val sbn = ReflectUtil.getField(entry, "mSbn") as? StatusBarNotification ?: return null
         return if (sbn.notification?.channelId == HyperFocusLyricStyle.CHANNEL_ID) row else null
     }
 
@@ -334,107 +309,103 @@ class SystemUIHyperFocusHook : BaseHook() {
             text == "\u52a0\u8f7d\u6b4c\u8bcd\u4e2d..."
     }
 
-    private fun hookPinAboveMediaCompat(classLoader: ClassLoader) {
-        hookSuppressFocusRowHeightReflow(classLoader)
-        hookStabilizeKeyguardSinking(classLoader)
-        hookDebouncePanelReflow(classLoader)
+    private fun hookPinAboveMediaCompat(classLoader: ClassLoader, module: XposedModule) {
+        hookSuppressFocusRowHeightReflow(classLoader, module)
+        hookStabilizeKeyguardSinking(classLoader, module)
+        hookDebouncePanelReflow(classLoader, module)
     }
 
-    private fun hookSuppressFocusRowHeightReflow(classLoader: ClassLoader) {
+    private fun hookSuppressFocusRowHeightReflow(classLoader: ClassLoader, module: XposedModule) {
         try {
-            XposedHelpers.findAndHookMethod(
+            val method = ReflectUtil.findMethod(
                 "com.android.systemui.statusbar.notification.row.ExpandableNotificationRow",
                 classLoader,
                 "notifyHeightChanged",
-                Boolean::class.java,
-                object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        if (!pinAboveMedia || allowLayoutReflow) return
-                        if (param.args[0] != true) return
-                        val entry = XposedHelpers.callMethod(param.thisObject, "getEntry") ?: return
-                        val sbn = XposedHelpers.getObjectField(entry, "mSbn") as? StatusBarNotification
-                            ?: return
-                        if (sbn.notification?.channelId == HyperFocusLyricStyle.CHANNEL_ID) {
-                            param.args[0] = false
-                        }
-                    }
-                }
+                Boolean::class.java
             )
+            module.hook(method).intercept { chain ->
+                if (!pinAboveMedia || allowLayoutReflow) return@intercept chain.proceed()
+                if (chain.args.getOrNull(0) != true) return@intercept chain.proceed()
+                val entry = ReflectUtil.callMethod(chain.thisObject, "getEntry") ?: return@intercept chain.proceed()
+                val sbn = ReflectUtil.getField(entry, "mSbn") as? StatusBarNotification
+                    ?: return@intercept chain.proceed()
+                if (sbn.notification?.channelId == HyperFocusLyricStyle.CHANNEL_ID) {
+                    return@intercept null
+                }
+                chain.proceed()
+            }
         } catch (e: Throwable) {
             log("ExpandableNotificationRow height hook skipped: ${e.message}")
         }
     }
 
-    private fun hookStabilizeKeyguardSinking(classLoader: ClassLoader) {
+    private fun hookStabilizeKeyguardSinking(classLoader: ClassLoader, module: XposedModule) {
         try {
-            XposedHelpers.findAndHookMethod(
+            val clockMethod = ReflectUtil.findMethod(
                 "com.android.keyguard.clock.KeyguardClockContainer",
                 classLoader,
-                "getClockBottom",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        if (!pinAboveMedia || currentLyricText.isBlank()) return
-                        val bottom = param.result as? Int ?: return
-                        if (currentLyricText == cachedClockBottomLyric && cachedClockBottom != null) {
-                            param.result = cachedClockBottom
-                            return
-                        }
-                        cachedClockBottom = bottom
-                        cachedClockBottomLyric = currentLyricText
-                    }
-                }
+                "getClockBottom"
             )
+            module.hook(clockMethod).intercept { chain ->
+                val result = chain.proceed()
+                if (!pinAboveMedia || currentLyricText.isBlank()) return@intercept result
+                val bottom = result as? Int ?: return@intercept result
+                if (currentLyricText == cachedClockBottomLyric && cachedClockBottom != null) {
+                    return@intercept cachedClockBottom
+                }
+                cachedClockBottom = bottom
+                cachedClockBottomLyric = currentLyricText
+                result
+            }
         } catch (e: Throwable) {
             log("KeyguardClockContainer hook skipped: ${e.message}")
         }
 
         try {
-            XposedHelpers.findAndHookMethod(
+            val contentMethod = ReflectUtil.findMethod(
                 "com.android.systemui.statusbar.stack.NotificationStackScrollLayout",
                 classLoader,
-                "getIntrinsicContentHeight",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        if (!pinAboveMedia || currentLyricText.isBlank()) return
-                        val height = param.result as? Int ?: return
-                        if (currentLyricText == cachedStackContentLyric && cachedStackContentHeight != null) {
-                            param.result = cachedStackContentHeight
-                            return
-                        }
-                        cachedStackContentHeight = height
-                        cachedStackContentLyric = currentLyricText
-                    }
-                }
+                "getIntrinsicContentHeight"
             )
+            module.hook(contentMethod).intercept { chain ->
+                val result = chain.proceed()
+                if (!pinAboveMedia || currentLyricText.isBlank()) return@intercept result
+                val height = result as? Int ?: return@intercept result
+                if (currentLyricText == cachedStackContentLyric && cachedStackContentHeight != null) {
+                    return@intercept cachedStackContentHeight
+                }
+                cachedStackContentHeight = height
+                cachedStackContentLyric = currentLyricText
+                result
+            }
         } catch (e: Throwable) {
             log("NotificationStackScrollLayout height hook skipped: ${e.message}")
         }
     }
 
-    private fun hookDebouncePanelReflow(classLoader: ClassLoader) {
+    private fun hookDebouncePanelReflow(classLoader: ClassLoader, module: XposedModule) {
         val targets = listOf(
             "com.android.systemui.shade.MiuiNotificationPanelViewController",
             "com.android.systemui.shade.NotificationPanelViewController"
         )
         for (target in targets) {
             try {
-                XposedHelpers.findAndHookMethod(
+                val method = ReflectUtil.findMethod(
                     target,
                     classLoader,
                     "positionClockAndNotifications",
-                    Boolean::class.java,
-                    object : XC_MethodHook() {
-                        override fun beforeHookedMethod(param: MethodHookParam) {
-                            if (!pinAboveMedia) return
-                            val now = System.currentTimeMillis()
-                            if (!allowLayoutReflow &&
-                                now - lastLayoutReflowTime < LAYOUT_REFLOW_DEBOUNCE_MS
-                            ) {
-                                param.result = null
-                            }
-                        }
-                    }
+                    Boolean::class.java
                 )
+                module.hook(method).intercept { chain ->
+                    if (!pinAboveMedia) return@intercept chain.proceed()
+                    val now = System.currentTimeMillis()
+                    if (!allowLayoutReflow &&
+                        now - lastLayoutReflowTime < LAYOUT_REFLOW_DEBOUNCE_MS
+                    ) {
+                        return@intercept null
+                    }
+                    chain.proceed()
+                }
                 log("Debounced positionClockAndNotifications on $target")
                 break
             } catch (_: Throwable) {
@@ -460,16 +431,6 @@ class SystemUIHyperFocusHook : BaseHook() {
         cachedStackContentLyric = ""
     }
 
-    private fun markLayoutReflowAllowed(forceRecreate: Boolean) {
-        if (!pinAboveMedia) return
-        if (forceRecreate) {
-            invalidateLayoutCache()
-            allowLayoutReflow = true
-            lastLayoutReflowTime = System.currentTimeMillis()
-            handler.postDelayed({ allowLayoutReflow = false }, 800L)
-        }
-    }
-
     private fun resetSessionState() {
         currentLyricText = ""
         currentSecondLine = ""
@@ -484,11 +445,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         preferAppLyric = false
         musicPackage = ""
         lastFocusNotifyTime = 0L
-        lastFocusRecreateAt = 0L
         clearNotifiedLyricContent()
-        needsAodRebind = false
-        cancelPendingDisplayRepost()
-        cancelPendingCoalescedFocusPost()
         invalidateLayoutCache()
         HyperFocusLyricStyle.resetPostedCache()
         syncFocusPinState()
@@ -581,20 +538,7 @@ class SystemUIHyperFocusHook : BaseHook() {
     }
 
     /** 锁屏显示时重发，避免亮屏锁屏下 rv 未绑定 */
-    private fun hookKeyguardRepost(classLoader: ClassLoader) {
-        val hook = object : XC_MethodHook() {
-            override fun afterHookedMethod(param: MethodHookParam) {
-                if (!isKeyguardLocked()) return
-                scheduleDisplayRepost(SCREEN_REPOST_DELAY_MS, forScreenOff = false)
-            }
-        }
-        val keyguardShowingHook = object : XC_MethodHook() {
-            override fun afterHookedMethod(param: MethodHookParam) {
-                val showing = param.args.getOrNull(0) as? Boolean ?: return
-                if (!showing) return
-                scheduleDisplayRepost(SCREEN_REPOST_DELAY_MS, forScreenOff = false)
-            }
-        }
+    private fun hookKeyguardRepost(classLoader: ClassLoader, module: XposedModule) {
         val methodNames = listOf(
             "notifyKeyguardStateChanged",
             "handleKeyguardChanged",
@@ -603,21 +547,32 @@ class SystemUIHyperFocusHook : BaseHook() {
         for (name in methodNames) {
             try {
                 if (name == "notifyKeyguardStateChanged") {
-                    XposedHelpers.findAndHookMethod(
+                    val method = ReflectUtil.findMethod(
                         "com.android.keyguard.KeyguardUpdateMonitor",
                         classLoader,
                         name,
                         Boolean::class.java,
-                        Boolean::class.java,
-                        keyguardShowingHook
+                        Boolean::class.java
                     )
+                    module.hook(method).intercept { chain ->
+                        val result = chain.proceed()
+                        val showing = chain.args.getOrNull(0) as? Boolean ?: return@intercept result
+                        if (!showing) return@intercept result
+                        handler.postDelayed({ repostFocusIfNeeded() }, SCREEN_REPOST_DELAY_MS)
+                        result
+                    }
                 } else {
-                    XposedHelpers.findAndHookMethod(
+                    val method = ReflectUtil.findMethod(
                         "com.android.keyguard.KeyguardUpdateMonitor",
                         classLoader,
-                        name,
-                        hook
+                        name
                     )
+                    module.hook(method).intercept { chain ->
+                        val result = chain.proceed()
+                        if (!isKeyguardLocked()) return@intercept result
+                        handler.postDelayed({ repostFocusIfNeeded() }, SCREEN_REPOST_DELAY_MS)
+                        result
+                    }
                 }
                 log("Keyguard repost hook: KeyguardUpdateMonitor.$name")
                 return
@@ -633,22 +588,15 @@ class SystemUIHyperFocusHook : BaseHook() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
                     Intent.ACTION_SCREEN_OFF -> {
-                        needsAodRebind = true
-                        // 系统从息屏起播 DiffDispatch；静默至重绑时刻，期间只合并不 cancel
-                        lastFocusRecreateAt = System.currentTimeMillis() -
-                            AOD_SWITCH_SETTLE_MS + SCREEN_OFF_REPOST_DELAY_MS
-                        scheduleDisplayRepost(SCREEN_OFF_REPOST_DELAY_MS, forScreenOff = true)
+                        handler.postDelayed({ repostFocusIfNeeded() }, SCREEN_REPOST_DELAY_MS)
                     }
                     Intent.ACTION_SCREEN_ON -> {
-                        needsAodRebind = false
-                        scheduleDisplayRepost(SCREEN_REPOST_DELAY_MS, forScreenOff = false)
+                        handler.postDelayed({ repostFocusIfNeeded() }, SCREEN_REPOST_DELAY_MS)
                     }
                     Intent.ACTION_USER_PRESENT -> {
-                        cancelPendingDisplayRepost()
                         handler.postDelayed({
                             hideFocusRowsInUnlockedShade()
-                            needsAodRebind = false
-                            repostFocusForDisplayChange(forScreenOff = false)
+                            repostFocusIfNeeded()
                         }, SCREEN_REPOST_DELAY_MS)
                     }
                 }
@@ -662,24 +610,11 @@ class SystemUIHyperFocusHook : BaseHook() {
         registerReceiverSafe(screenReceiver!!, filter)
     }
 
-    private fun cancelPendingDisplayRepost() {
-        pendingDisplayRepost?.let { handler.removeCallbacks(it) }
-        pendingDisplayRepost = null
-    }
-
-    private fun cancelPendingCoalescedFocusPost() {
-        pendingCoalescedFocusPost?.let { handler.removeCallbacks(it) }
-        pendingCoalescedFocusPost = null
-    }
-
-    private fun scheduleDisplayRepost(delayMs: Long, forScreenOff: Boolean) {
-        cancelPendingDisplayRepost()
-        val task = Runnable {
-            pendingDisplayRepost = null
-            repostFocusForDisplayChange(forScreenOff = forScreenOff)
-        }
-        pendingDisplayRepost = task
-        handler.postDelayed(task, delayMs.coerceAtLeast(0L))
+    private fun repostFocusIfNeeded() {
+        if (!focusEnabled || !isPlaying || currentLyricText.isBlank()) return
+        if (currentLyricText == lastNotifiedLyric && currentSecondLine == lastNotifiedSecond) return
+        postFocusUpdate(FocusRefreshMode.LINE_CHANGE, force = true)
+        scheduleNextUpdate()
     }
 
     private fun isFocusContentAlreadyBound(): Boolean {
@@ -690,71 +625,19 @@ class SystemUIHyperFocusHook : BaseHook() {
             currentArtist == lastNotifiedArtist
     }
 
-    private fun millisSinceLastFocusRecreate(): Long {
-        if (lastFocusRecreateAt <= 0L) return Long.MAX_VALUE
-        return System.currentTimeMillis() - lastFocusRecreateAt
-    }
-
-    private fun remainingAodSwitchSettleMs(): Long {
-        val elapsed = millisSinceLastFocusRecreate()
-        if (elapsed >= AOD_SWITCH_SETTLE_MS) return 0L
-        return AOD_SWITCH_SETTLE_MS - elapsed
-    }
-
-    /**
-     * 显示路径变化时重发焦点通知。息屏路径会与冷启动 forceResync 合并，
-     * 避免连续 cancel+notify 截断 AOD DiffDispatch 切换动画。
-     */
-    private fun repostFocusForDisplayChange(forScreenOff: Boolean = false) {
-        if (!focusEnabled || !isPlaying || currentLyricText.isBlank()) return
-        val shouldForceRecreate = forScreenOff && needsAodRebind
-        if (forScreenOff) {
-            // 歌词侧已在息屏后完成 rvAod 重绑：无需再撕会话
-            if (!needsAodRebind && isFocusContentAlreadyBound()) {
-                return
-            }
-            val settleLeft = remainingAodSwitchSettleMs()
-            if (settleLeft > 0L) {
-                if (!needsAodRebind && isFocusContentAlreadyBound()) return
-                scheduleDisplayRepost(settleLeft, forScreenOff = true)
-                return
-            }
-        } else if (isFocusContentAlreadyBound() && remainingAodSwitchSettleMs() > 0L) {
-            // 亮屏/锁屏：内容已绑定且动画窗口内，跳过重复重发
-            return
-        }
-        postFocusWithOptionalRecreate(
-            songChanged = false,
-            leavingPlaceholder = false,
-            forceRecreate = shouldForceRecreate || !forScreenOff,
-            forcePost = true
-        )
-        scheduleNextUpdate()
-    }
-
-    private fun repostFocusIfNeeded() {
-        repostFocusForDisplayChange(forScreenOff = false)
-    }
-
-    /**
-     * 统一出口：先准备会话缓存，真正的 AOD cancel+notify 节流在 [sendFocusNotification]。
-     */
     private fun postFocusWithOptionalRecreate(
         songChanged: Boolean,
         leavingPlaceholder: Boolean,
         forceRecreate: Boolean,
         forcePost: Boolean
     ) {
-        val needRecreate = songChanged || leavingPlaceholder || forceRecreate
-        if (!needRecreate && !forcePost) return
-        if (needRecreate) {
-            prepareFocusSessionRecreate(
-                songChanged = songChanged,
-                leavingPlaceholder = leavingPlaceholder,
-                force = forceRecreate
-            )
+        val needPost = songChanged || leavingPlaceholder || forceRecreate || forcePost
+        if (!needPost) return
+        if (songChanged || leavingPlaceholder || forceRecreate) {
+            clearNotifiedLyricContent()
+            HyperFocusLyricStyle.resetPostedCache()
         }
-        postFocusUpdate(FocusRefreshMode.LINE_CHANGE, force = forcePost || needRecreate)
+        postFocusUpdate(FocusRefreshMode.LINE_CHANGE, force = forcePost || needPost)
     }
 
     private fun unregisterReceiverSafe(receiver: BroadcastReceiver?) {
@@ -812,14 +695,9 @@ class SystemUIHyperFocusHook : BaseHook() {
         val styleChanged = intent.getBooleanExtra(FocusStyleSnapshot.EXTRA_STYLE_CHANGED, false)
         FocusStyleSnapshot.applyFromIntent(intent)
         if (styleChanged) {
-            // 仅清空已通知缓存；真正的 cancel+notify 交给随后的 repost
             invalidateLayoutCache()
-            markLayoutReflowAllowed(forceRecreate = true)
-            prepareFocusSessionRecreate(
-                songChanged = false,
-                leavingPlaceholder = false,
-                force = true
-            )
+            clearNotifiedLyricContent()
+            HyperFocusLyricStyle.resetPostedCache()
         }
         if (intent.hasExtra(FocusPreferences.EXTRA_FOCUS_ENABLED)) {
             focusEnabled = intent.getBooleanExtra(FocusPreferences.EXTRA_FOCUS_ENABLED, true)
@@ -1297,21 +1175,6 @@ class SystemUIHyperFocusHook : BaseHook() {
         return FocusPreferences.readIsPackageAllowed(context, packageName)
     }
 
-    /**
-     * 仅重置「已通知」缓存，让后续 post 走完整刷新。
-     * 不在这里 cancel：与 [HyperFocusLyricStyle.postFocusNotification] 内 cancel 叠在一起
-     * 会让 AOD DiffDispatch 切换动画被撕两次，表现为抽搐/播不完整。
-     */
-    private fun prepareFocusSessionRecreate(
-        songChanged: Boolean,
-        leavingPlaceholder: Boolean,
-        force: Boolean
-    ) {
-        if (!songChanged && !leavingPlaceholder && !force) return
-        clearNotifiedLyricContent()
-        HyperFocusLyricStyle.resetPostedCache()
-    }
-
     private fun postFocusUpdate(mode: FocusRefreshMode, force: Boolean = false) {
         if (currentLyricText.isBlank()) return
         val now = System.currentTimeMillis()
@@ -1336,32 +1199,6 @@ class SystemUIHyperFocusHook : BaseHook() {
         }
     }
 
-    /**
-     * AOD 上任何会 cancel 的推送都必须避开 DiffDispatch 播放窗口；
-     * 窗口内多次换行/重绑合并为一次，带上最新歌词。
-     * 合并任务可代替排队中的息屏重绑，故一并取消 pending display repost。
-     */
-    private fun scheduleCoalescedAodFocusSend(
-        refreshKind: HyperFocusLyricStyle.RefreshKind,
-        forceRefresh: Boolean,
-        delayMs: Long
-    ) {
-        cancelPendingCoalescedFocusPost()
-        cancelPendingDisplayRepost()
-        val task = Runnable {
-            pendingCoalescedFocusPost = null
-            if (!focusEnabled || !isPlaying || currentLyricText.isBlank()) return@Runnable
-            // 合并后的一次发送同时完成 AOD 重绑
-            sendFocusNotification(
-                refreshKind,
-                forceRefresh = forceRefresh || needsAodRebind
-            )
-            scheduleNextUpdate()
-        }
-        pendingCoalescedFocusPost = task
-        handler.postDelayed(task, delayMs.coerceAtLeast(0L))
-    }
-
     @SuppressLint("NotificationPermission")
     private fun sendFocusNotification(
         refreshKind: HyperFocusLyricStyle.RefreshKind,
@@ -1378,31 +1215,6 @@ class SystemUIHyperFocusHook : BaseHook() {
                 cancelFocusNotification()
                 return
             }
-            val aodActive = isAodActive()
-            // 仅屏幕状态切换进入 AOD 时 cancel+notify 绑定 rvAod；
-            // 其余全部仅 notify（锁屏 / AOD 换行 / 保活），靠 updatable=true 驱动 SystemUI 重读 RemoteViews。
-            val recreateForAod = aodActive && needsAodRebind
-            val effectiveForceRefresh = forceRefresh ||
-                (aodActive && needsAodRebind &&
-                    refreshKind == HyperFocusLyricStyle.RefreshKind.KEEPALIVE)
-            val willRecreate = recreateForAod
-            if (aodActive && willRecreate) {
-                val settleLeft = remainingAodSwitchSettleMs()
-                if (settleLeft > 0L) {
-                    // 认领当前内容，避免窗口内重复排队；真正 notify 仍走合并任务
-                    rememberNotifiedLyricContent()
-                    scheduleCoalescedAodFocusSend(
-                        refreshKind = HyperFocusLyricStyle.RefreshKind.LINE_CHANGE,
-                        forceRefresh = true,
-                        delayMs = settleLeft
-                    )
-                    return
-                }
-            }
-
-            // 即将实发：丢掉排队中的合并任务，防止 settle 结束后再发第二次
-            cancelPendingCoalescedFocusPost()
-
             val multiLine = buildMultiLineWindow()
             HyperFocusLyricStyle.postFocusNotification(
                 systemContext = context,
@@ -1411,12 +1223,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                     songTitle = currentTitle,
                     artist = currentArtist,
                     lyricText = currentLyricText,
-                    // 多行模式只展示当前页，不附带下一句/翻译次行
-                    secondLineText = if (multiLine != null) {
-                        ""
-                    } else {
-                        currentSecondLine.ifBlank { currentArtist }
-                    },
+                    secondLineText = if (multiLine != null) "" else currentSecondLine.ifBlank { currentArtist },
                     lineTranslation = if (multiLine != null) null else currentLineTranslation,
                     musicPackage = musicPackage,
                     multiLine = multiLine
@@ -1425,29 +1232,12 @@ class SystemUIHyperFocusHook : BaseHook() {
                 pinAboveMedia = pinAboveMedia,
                 showOnIsland = showOnIsland,
                 refreshKind = refreshKind,
-                forceRefresh = effectiveForceRefresh,
-                recreateForAod = recreateForAod
+                forceRefresh = forceRefresh,
+                recreateForAod = false
             )
-            if (willRecreate) {
-                lastFocusRecreateAt = System.currentTimeMillis()
-            }
-            if (aodActive && recreateForAod) {
-                needsAodRebind = false
-            }
-            if (refreshKind == HyperFocusLyricStyle.RefreshKind.LINE_CHANGE) {
-                markLayoutReflowAllowed(willRecreate)
-            }
             lastFocusNotifyTime = System.currentTimeMillis()
             rememberNotifiedLyricContent()
-            // 息屏切换动画窗口内不要反复挪 View，避免与 DiffDispatch 抢布局
-            if (!aodActive || remainingAodSwitchSettleMs() <= 0L) {
-                scheduleLyricFocusReorder()
-            } else {
-                handler.postDelayed(
-                    { scheduleLyricFocusReorder() },
-                    remainingAodSwitchSettleMs()
-                )
-            }
+            scheduleLyricFocusReorder()
         } catch (e: Throwable) {
             logE("Failed to send focus notification", e)
         }
@@ -1456,10 +1246,6 @@ class SystemUIHyperFocusHook : BaseHook() {
     private fun cancelFocusNotification() {
         try {
             lastFocusNotifyTime = 0L
-            lastFocusRecreateAt = 0L
-            needsAodRebind = false
-            cancelPendingDisplayRepost()
-            cancelPendingCoalescedFocusPost()
             clearNotifiedLyricContent()
             invalidateLayoutCache()
             notificationManager?.let { HyperFocusLyricStyle.cancelFocusNotification(it) }
@@ -1486,51 +1272,82 @@ class SystemUIHyperFocusHook : BaseHook() {
         }
     }
 
-    /**
-     * Hook AodFocusControllerV2$3.onAdd() 在调用前为我们的焦点通知强制设置 enableAlert=true。
-     * 迫使 MIUI 走 NON-UPDATABLE 路径 (addAodView → DozeService → AOD 进程)，
-     * 解决 updatable=true 时 AOD 只更新本地 ViewGroup 不通知 DozeService 导致息屏不刷新的问题。
-     * 参考：AodFocusControllerV2$3.onAdd() 中决策逻辑。
-     */
-    private fun hookForceAodUpdate(classLoader: ClassLoader) {
+    private fun hookForceAodUpdate(classLoader: ClassLoader, module: XposedModule) {
         try {
-            XposedHelpers.findAndHookMethod(
+            val entryClass = classLoader.loadClass(
+                "com.android.systemui.statusbar.notification.collection.NotificationEntry"
+            )
+            val method = ReflectUtil.findMethod(
                 "com.android.systemui.statusbar.notification.focus.AodFocusControllerV2\$3",
                 classLoader,
                 "onAdd",
-                "com.android.systemui.statusbar.notification.collection.NotificationEntry",
-                object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        try {
-                            val entry = param.args[0]
-                            val sbn = XposedHelpers.getObjectField(entry, "mSbn")
-                            val notification = XposedHelpers.callMethod(
-                                sbn,
-                                "getNotification"
-                            ) as? Notification
-                            if (notification?.channelId == HyperFocusLyricStyle.CHANNEL_ID) {
-                                notification.extras.putBoolean(
-                                    "miui.focus.enableAlert",
-                                    true
-                                )
-                            }
-                        } catch (_: Throwable) {
-                        }
-                    }
-                }
+                entryClass
             )
-            log("AodFocusControllerV2 onAdd hook installed for force AOD update")
+            module.hook(method).intercept { chain ->
+                try {
+                    val entry = chain.args[0]
+                    val sbn = ReflectUtil.getField(entry, "mSbn")
+                    val notification = ReflectUtil.callMethod(sbn!!, "getNotification") as? Notification
+                    if (notification?.channelId == HyperFocusLyricStyle.CHANNEL_ID) {
+                        notification.extras.putBoolean("miui.focus.enableAlert", true)
+                    } else if (isPlaying && isAodActive()) {
+                        val ctx = systemUIContext
+                        if (ctx != null && FocusPreferences.readCustomAodLayout(ctx)) return@intercept null
+                    }
+                } catch (_: Throwable) {
+                }
+                chain.proceed()
+            }
+            log("AodFocusControllerV2 onAdd hook installed (force AOD + suppress)")
         } catch (e: Throwable) {
-            log("AodFocusControllerV2 hook skipped (non-critical): ${e.message}")
+            log("AodFocusControllerV2 hook skipped: ${e.message}")
         }
     }
 
-    override fun log(msg: String) {
-        XposedBridge.log("$tag: $msg")
+    /** 万象息屏时 Hook shouldHideNotification：仅隐藏非歌词通知 */
+    private fun hookHideOtherNotificationsInAod(classLoader: ClassLoader, module: XposedModule) {
+        try {
+            val entryClass = classLoader.loadClass("com.android.systemui.statusbar.notification.collection.NotificationEntry")
+            val method = ReflectUtil.findMethod("com.android.systemui.statusbar.notification.interruption.KeyguardNotificationVisibilityProviderImpl", classLoader, "shouldHideNotification", entryClass)
+            module.hook(method).intercept { chain ->
+                val ctx = systemUIContext ?: return@intercept chain.proceed()
+                if (!FocusPreferences.readCustomAodLayout(ctx) || !isPlaying || !isAodActive()) return@intercept chain.proceed()
+                val entry = chain.args.getOrNull(0) ?: return@intercept chain.proceed()
+                val sbn = ReflectUtil.getField(entry, "mSbn")
+                val n = ReflectUtil.callMethod(sbn!!, "getNotification") as? Notification
+                if (n?.channelId != HyperFocusLyricStyle.CHANNEL_ID) return@intercept java.lang.Boolean.TRUE
+                chain.proceed()
+            }
+            log("AOD hide hook installed")
+        } catch (e: Throwable) { log("AOD hide hook skipped: ${e.message}") }
     }
 
-    override fun logE(msg: String, throwable: Throwable?) {
-        XposedBridge.log("$tag: $msg")
-        throwable?.let { XposedBridge.log(it) }
+    /** 万象息屏时 Hook 焦点通知数据加载方法：移除非歌词条目 */
+    private fun hookSuppressOtherNotificationsInAod(classLoader: ClassLoader, module: XposedModule) {
+        val classes = listOf("com.android.systemui.statusbar.phone.FocusedNotifPromptView", "miui.systemui.notification.focus.FocusNotificationPluginImpl", "com.android.systemui.plugins.miui.notification.focus.FocusNotificationPluginImpl")
+        val methods = listOf("setData", "bind", "update", "refresh", "show", "onDataChanged")
+        for (cn in classes) {
+            for (mn in methods) {
+                try {
+                    val clazz = ReflectUtil.findClass(cn, classLoader)
+                    for (m in ReflectUtil.findMethodsByName(clazz, mn)) {
+                        module.hook(m).intercept { chain ->
+                            val ctx = systemUIContext
+                            if (ctx == null || !FocusPreferences.readCustomAodLayout(ctx) || !isPlaying || !isAodActive()) return@intercept chain.proceed()
+                            for (i in 0 until chain.args.size) {
+                                (chain.args[i] as? java.util.ArrayList<*>)?.let { list ->
+                                    val iter = list.iterator()
+                                    while (iter.hasNext()) {
+                                        try { if ((ReflectUtil.getField(iter.next(), "mSbn") as? StatusBarNotification)?.let { ReflectUtil.callMethod(it, "getNotification") }?.let { (it as? Notification)?.channelId != HyperFocusLyricStyle.CHANNEL_ID } == true) iter.remove() } catch (_: Throwable) {}
+                                    }
+                                }
+                            }
+                            chain.proceed()
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+        }
     }
+
 }

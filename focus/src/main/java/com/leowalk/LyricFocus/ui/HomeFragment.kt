@@ -180,6 +180,7 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         switchCustomAodLayout.setOnCheckedChangeListener { _, checked ->
             FocusPreferences.setCustomAodLayout(requireContext(), checked)
             FocusPreferences.notifyStyleSettingsChanged(requireContext())
+            broadcastSettingsChanged()
         }
         switchAppWhitelist.setOnCheckedChangeListener { _, checked ->
             val ctx = requireContext()

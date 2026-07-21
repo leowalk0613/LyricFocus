@@ -4,127 +4,84 @@ import android.content.ComponentName
 import android.content.ContextWrapper
 import android.os.Bundle
 import com.leowalk.LyricFocus.xposed.hook.BaseHook
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
-import de.robv.android.xposed.callbacks.XC_LoadPackage
+import com.leowalk.LyricFocus.xposed.ReflectUtil
+import io.github.libxposed.api.XposedModule
 
-/**
- * SystemUI 插件 ClassLoader 内补焦点通知权限（对齐 HyperCeiler FocusNotifLyric.initLoader）。
- * 焦点/AOD 渲染走 FocusNotificationPluginImpl，仅 hook 主进程不够。
- */
 class SystemUIPluginHook : BaseHook() {
 
     override val tag: String = "SystemUIPluginHook"
 
-    override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
-        hookPluginFactory(lpparam.classLoader)
+    override fun install(classLoader: ClassLoader, module: XposedModule) {
+        hookPluginFactory(classLoader, module)
     }
 
-    private fun hookPluginFactory(classLoader: ClassLoader) {
+    private fun hookPluginFactory(classLoader: ClassLoader, module: XposedModule) {
         try {
-            XposedHelpers.findAndHookMethod(
+            val method = ReflectUtil.findMethod(
                 "com.android.systemui.shared.plugins.PluginInstance\$PluginFactory",
                 classLoader,
-                "createPluginContext",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val result = param.result as? ContextWrapper ?: return
-                        val factory = param.thisObject
-                        val component = XposedHelpers.getObjectField(factory, "mComponentName")
-                        val className = when (component) {
-                            is ComponentName -> component.className
-                            else -> component?.toString().orEmpty()
-                        }
-                        if (className.contains("FocusNotificationPluginImpl")) {
-                            bypassFocusPluginClassLoader(result.classLoader, "FocusNotificationPluginImpl")
-                            FocusIslandSuppressHook.install(result.classLoader, tag) {
-                                result.applicationContext
-                            }
-                            FocusPinAboveHook.install(result.classLoader, tag)
-                        }
-                        if (className.contains("DozeServicePluginImpl")) {
-                            bypassFocusPluginClassLoader(result.classLoader, "DozeServicePluginImpl")
-                            FocusPinAboveHook.install(result.classLoader, tag)
-                        }
-                    }
-                }
+                "createPluginContext"
             )
+            module.hook(method).intercept { chain ->
+                val proceeded = chain.proceed()
+                val result = proceeded as? ContextWrapper ?: return@intercept proceeded
+                val factory = chain.thisObject
+                val component = ReflectUtil.getField(factory, "mComponentName")
+                val className = when (component) {
+                    is ComponentName -> component.className
+                    else -> component?.toString().orEmpty()
+                }
+                if (className.contains("FocusNotificationPluginImpl")) {
+                    bypassFocusPluginClassLoader(result.classLoader, module, "FocusNotificationPluginImpl")
+                    FocusIslandSuppressHook.install(result.classLoader, module, tag) { result.applicationContext }
+                }
+                if (className.contains("DozeServicePluginImpl")) {
+                    bypassFocusPluginClassLoader(result.classLoader, module, "DozeServicePluginImpl")
+                }
+                result
+            }
             log("PluginInstance.PluginFactory hooked")
         } catch (e: Throwable) {
             logE("Failed to hook PluginFactory", e)
         }
     }
 
-    private fun bypassFocusPluginClassLoader(pluginLoader: ClassLoader, label: String) {
-        bypassBooleanMethod(
-            pluginLoader,
-            "miui.systemui.notification.NotificationSettingsManager",
-            "canShowFocus",
-            label
-        )
-        bypassBooleanMethod(
-            pluginLoader,
-            "miui.systemui.notification.NotificationSettingsManager",
-            "canCustomFocus",
-            label
-        )
-        tryHookAuthBypass(pluginLoader, label)
+    private fun bypassFocusPluginClassLoader(pluginLoader: ClassLoader, module: XposedModule, label: String) {
+        bypassBoolean(pluginLoader, module, "miui.systemui.notification.NotificationSettingsManager", "canShowFocus", label)
+        bypassBoolean(pluginLoader, module, "miui.systemui.notification.NotificationSettingsManager", "canCustomFocus", label)
+        tryHookAuthBypass(pluginLoader, module, label)
     }
 
-    private fun bypassBooleanMethod(
+    private fun bypassBoolean(
         classLoader: ClassLoader,
+        module: XposedModule,
         className: String,
         methodName: String,
         label: String
     ) {
         try {
-            XposedHelpers.findAndHookMethod(
-                className,
-                classLoader,
-                methodName,
-                object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        param.result = true
-                    }
-                }
-            )
+            val method = ReflectUtil.findMethod(className, classLoader, methodName)
+            module.hook(method).intercept { _ -> java.lang.Boolean.TRUE }
             log("[$label] bypassed $className.$methodName")
         } catch (e: Throwable) {
             log("[$label] skip $className.$methodName: ${e.message}")
         }
     }
 
-    private fun tryHookAuthBypass(classLoader: ClassLoader, label: String) {
+    private fun tryHookAuthBypass(classLoader: ClassLoader, module: XposedModule, label: String) {
         try {
             val authClass = classLoader.loadClass(
                 "miui.systemui.notification.auth.AuthManager\$AuthServiceCallback\$onAuthResult\$1"
             )
-            XposedHelpers.findAndHookMethod(
-                authClass,
-                "invokeSuspend",
-                Object::class.java,
-                object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        val bundle = XposedHelpers.getObjectField(
-                            param.thisObject,
-                            "\$authBundle"
-                        ) as? Bundle
-                        bundle?.putInt("result_code", 0)
-                    }
-                }
-            )
+            val method = authClass.getDeclaredMethod("invokeSuspend", Object::class.java)
+            method.isAccessible = true
+            module.hook(method).intercept { chain ->
+                val bundle = ReflectUtil.getField(chain.thisObject, "\$authBundle") as? Bundle
+                bundle?.putInt("result_code", 0)
+                chain.proceed()
+            }
             log("[$label] auth bypass hooked")
         } catch (_: Throwable) {
         }
-    }
-
-    override fun log(msg: String) {
-        XposedBridge.log("$tag: $msg")
-    }
-
-    override fun logE(msg: String, throwable: Throwable?) {
-        XposedBridge.log("$tag: $msg")
-        throwable?.let { XposedBridge.log(it) }
     }
 }

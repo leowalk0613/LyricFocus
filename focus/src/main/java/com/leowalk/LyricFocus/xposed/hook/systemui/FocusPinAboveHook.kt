@@ -1,12 +1,12 @@
 package com.leowalk.LyricFocus.xposed.hook.systemui
 
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import com.leowalk.LyricFocus.notification.HyperFocusLyricStyle
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
+import com.leowalk.LyricFocus.xposed.ReflectUtil
+import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Modifier
 
 /**
@@ -63,7 +63,9 @@ object FocusPinAboveHook {
         "mTimerBeans",
         "mTopNotifBeans",
         "mPriorityNotifBeans",
-        "mLiveNotifBeans"
+        "mLiveNotifBeans",
+        "mSortListEntries",
+        "mPendingList"
     )
 
     private val countdownCoordinatorCandidates = listOf(
@@ -109,209 +111,461 @@ object FocusPinAboveHook {
             name.contains("prompt")
     }
 
-    fun install(classLoader: ClassLoader, tag: String) {
-        hookShadeListBuilder(classLoader, tag)
-        hookFocusedNotifPromptController(classLoader, tag)
-        hookFocusedNotifPromptView(classLoader, tag)
-        hookFocusCoordinatorCandidates(classLoader, tag)
-        hookFocusViewContainers(classLoader, tag)
-        hookNotificationStackScrollLayout(classLoader, tag)
-        hookFocusPluginImpl(classLoader, tag)
-        hookCountdownFocusCandidates(classLoader, tag)
-        hookFocusComparator(classLoader, tag)
-        hookNotificationPanelReflow(classLoader, tag)
+    fun install(classLoader: ClassLoader, module: XposedModule, tag: String) {
+        hookShadeListBuilder(classLoader, module, tag)
+        hookFocusedNotifPromptController(classLoader, module, tag)
+        hookFocusedNotifPromptView(classLoader, module, tag)
+        hookFocusCoordinatorCandidates(classLoader, module, tag)
+        hookFocusViewContainers(classLoader, module, tag)
+        hookNotificationStackScrollLayout(classLoader, module, tag)
+        hookFocusPluginImpl(classLoader, module, tag)
+        hookCountdownFocusCandidates(classLoader, module, tag)
+        hookFocusComparator(classLoader, module, tag)
+        hookNotificationPanelReflow(classLoader, module, tag)
+        hookNotifEntryChangeListeners(classLoader, module, tag)
     }
 
-    private fun hookFocusComparator(classLoader: ClassLoader, tag: String) {
+    private var topLevelComparatorHooked = false
+
+    private fun hookFocusComparator(classLoader: ClassLoader, module: XposedModule, tag: String) {
         try {
-            val clazz = XposedHelpers.findClass(FOCUSED_NOTIF_CONTROLLER, classLoader)
+            val clazz = ReflectUtil.findClass(FOCUSED_NOTIF_CONTROLLER, classLoader)
             for (inner in clazz.declaredClasses) {
                 if (!Comparator::class.java.isAssignableFrom(inner)) continue
-                XposedBridge.hookAllMethods(inner, "compare", object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        if (!FocusPinState.shouldPin()) return
-                        val left = param.args.getOrNull(0)
-                        val right = param.args.getOrNull(1)
+                for (method in inner.declaredMethods) {
+                    if (method.name != "compare") continue
+                    module.hook(method).intercept { chain ->
+                        if (!FocusPinState.shouldPin()) return@intercept chain.proceed()
+                        val left = chain.args.getOrNull(0)
+                        val right = chain.args.getOrNull(1)
                         val leftLyric = isLyricListItem(left)
                         val rightLyric = isLyricListItem(right)
                         when {
-                            leftLyric && !rightLyric -> param.result = -1
-                            !leftLyric && rightLyric -> param.result = 1
-                            leftLyric && isCountdownListItem(right) -> param.result = -1
-                            isCountdownListItem(left) && rightLyric -> param.result = 1
+                            leftLyric && !rightLyric -> return@intercept -1
+                            !leftLyric && rightLyric -> return@intercept 1
+                            leftLyric && isCountdownListItem(right) -> return@intercept -1
+                            isCountdownListItem(left) && rightLyric -> return@intercept 1
                         }
+                        chain.proceed()
                     }
-                })
-                XposedBridge.log("$tag: FocusPin hooked comparator ${inner.name}")
+                }
+                module.log(Log.INFO, tag, "FocusPin hooked comparator ${inner.name}")
             }
         } catch (e: Throwable) {
-            XposedBridge.log("$tag: Focus comparator hook skipped: ${e.message}")
+            module.log(Log.INFO, tag, "Focus comparator hook skipped: ${e.message}")
+        }
+        // Also hook ShadeListBuilder.mTopLevelComparator which is the REAL comparator used by sortList
+        hookTopLevelComparator(classLoader, module, tag)
+    }
+
+    private fun hookTopLevelComparator(classLoader: ClassLoader, module: XposedModule, tag: String) {
+        try {
+            val controllerClazz = ReflectUtil.findClass(FOCUSED_NOTIF_CONTROLLER, classLoader)
+            // Hook any method that gives us access to the controller instance so we can chain to ShadeListBuilder
+            for (method in controllerClazz.declaredMethods) {
+                if (Modifier.isStatic(method.modifiers)) continue
+                try {
+                    module.hook(method).intercept { chain ->
+                        val result = chain.proceed()
+                        if (topLevelComparatorHooked) return@intercept result
+                        try {
+                            val controller = chain.thisObject
+                            val focusCoordinator = ReflectUtil.getField(controller, "mFocusCoordinator")
+                            val pipeline = ReflectUtil.getField(focusCoordinator!!, "mPipeline")
+                            val shadeListBuilder = ReflectUtil.getField(pipeline!!, "mShadeListBuilder")
+                            val comparator = ReflectUtil.getField(shadeListBuilder!!, "mTopLevelComparator") as? Comparator<*>
+                            if (comparator != null) {
+                                val compareMethod = comparator.javaClass.getDeclaredMethod("compare", Object::class.java, Object::class.java)
+                                compareMethod.isAccessible = true
+                                module.hook(compareMethod).intercept { compChain ->
+                                    if (!FocusPinState.shouldPin()) return@intercept compChain.proceed()
+                                    val left = compChain.args.getOrNull(0)
+                                    val right = compChain.args.getOrNull(1)
+                                    val lk = isLyricListItem(left)
+                                    val rk = isLyricListItem(right)
+                                    when {
+                                        lk && !rk -> return@intercept -1
+                                        !lk && rk -> return@intercept 1
+                                        lk && isCountdownListItem(right) -> return@intercept -1
+                                        isCountdownListItem(left) && rk -> return@intercept 1
+                                    }
+                                    compChain.proceed()
+                                }
+                                topLevelComparatorHooked = true
+                                module.log(Log.INFO, tag, "FocusPin hooked ShadeListBuilder.mTopLevelComparator")
+                            }
+                        } catch (_: Throwable) {}
+                        result
+                    }
+                } catch (_: Throwable) {}
+            }
+        } catch (e: Throwable) {
+            module.log(Log.INFO, tag, "TopLevelComparator hook skipped: ${e.message}")
         }
     }
 
-    private fun hookNotificationPanelReflow(classLoader: ClassLoader, tag: String) {
+    private fun hookNotificationPanelReflow(classLoader: ClassLoader, module: XposedModule, tag: String) {
         val targets = listOf(
             "com.android.systemui.shade.MiuiNotificationPanelViewController",
             "com.android.systemui.shade.NotificationPanelViewController"
         )
         for (target in targets) {
             try {
-                XposedHelpers.findAndHookMethod(
-                    target,
-                    classLoader,
-                    "positionClockAndNotifications",
-                    Boolean::class.java,
-                    object : XC_MethodHook() {
-                        override fun afterHookedMethod(param: MethodHookParam) {
-                            if (!FocusPinState.shouldPin()) return
-                            try {
-                                val view = XposedHelpers.getObjectField(param.thisObject, "mView") as? View
-                                    ?: XposedHelpers.getObjectField(param.thisObject, "mNotificationContainerParent") as? View
-                                if (view is ViewGroup) {
-                                    view.post { demoteCountdownViewsAboveLyric(view) }
-                                }
-                            } catch (_: Throwable) {
-                            }
+                val method = ReflectUtil.findMethod(target, classLoader, "positionClockAndNotifications", Boolean::class.java)
+                module.hook(method).intercept { chain ->
+                    val result = chain.proceed()
+                    if (!FocusPinState.shouldPin()) return@intercept result
+                    try {
+                        val view = ReflectUtil.getField(chain.thisObject, "mView") as? View
+                            ?: ReflectUtil.getField(chain.thisObject, "mNotificationContainerParent") as? View
+                        if (view is ViewGroup) {
+                            view.post { demoteCountdownViewsAboveLyric(view) }
                         }
+                    } catch (_: Throwable) {
                     }
-                )
-                XposedBridge.log("$tag: FocusPin hooked panel reflow on $target")
+                    result
+                }
+                module.log(Log.INFO, tag, "FocusPin hooked panel reflow on $target")
                 break
             } catch (_: Throwable) {
             }
         }
     }
 
-    private fun hookShadeListBuilder(classLoader: ClassLoader, tag: String) {
-        val shadeBuilder = "com.android.systemui.statusbar.notification.collection.ShadeListBuilder"
-        val hook = object : XC_MethodHook() {
-            override fun beforeHookedMethod(param: MethodHookParam) {
-                if (!FocusPinState.shouldPin()) return
-                @Suppress("UNCHECKED_CAST")
-                val list = param.args.getOrNull(0) as? MutableList<Any?> ?: return
-                safePinLyricEntryToFront(list)
-            }
-        }
-        try {
-            XposedHelpers.findAndHookMethod(
-                shadeBuilder,
-                classLoader,
-                "dispatchOnBeforeSort",
-                List::class.java,
-                hook
-            )
-            XposedBridge.log("$tag: FocusPin hooked ShadeListBuilder.dispatchOnBeforeSort")
-        } catch (e: Throwable) {
-            XposedBridge.log("$tag: ShadeListBuilder.dispatchOnBeforeSort skipped: ${e.message}")
-        }
-
-        try {
-            XposedHelpers.findAndHookMethod(
-                shadeBuilder,
-                classLoader,
-                "sortListAndGroups",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        if (!FocusPinState.shouldPin()) return
+    private fun hookNotifEntryChangeListeners(classLoader: ClassLoader, module: XposedModule, tag: String) {
+        val notifCollectionCandidates = listOf(
+            "com.android.systemui.statusbar.notification.collection.NotifCollection",
+            "com.android.systemui.statusbar.notification.NotifCollection"
+        )
+        for (className in notifCollectionCandidates) {
+            try {
+                val clazz = classLoader.loadClass(className)
+                for (methodName in listOf("addEntry", "removeEntry", "updateEntry",
+                    "onEntryAdded", "onEntryUpdated", "onEntryRemoved"))
+                {
+                    val methods = ReflectUtil.findMethodsByName(clazz, methodName)
+                    for (method in methods) {
                         try {
-                            @Suppress("UNCHECKED_CAST")
-                            val list = XposedHelpers.getObjectField(param.thisObject, "mNotifList")
-                                as? MutableList<Any?> ?: return
-                            safePinLyricEntryToFront(list)
+                            module.hook(method).intercept { chain ->
+                                val result = chain.proceed()
+                                if (FocusPinState.shouldPin()) {
+                                    runPinSafely {
+                                        pinAnyListArg(chain.args.toTypedArray())
+                                        pinAnyListResult(result)
+                                        pinControllerLists(chain.thisObject)
+                                    }
+                                }
+                                result
+                            }
                         } catch (_: Throwable) {
                         }
                     }
                 }
-            )
-            XposedBridge.log("$tag: FocusPin hooked ShadeListBuilder.sortListAndGroups")
-        } catch (e: Throwable) {
-            XposedBridge.log("$tag: ShadeListBuilder.sortListAndGroups skipped: ${e.message}")
+                for (method in clazz.declaredMethods) {
+                    if (Modifier.isStatic(method.modifiers)) continue
+                    val name = method.name.lowercase()
+                    if ((name.contains("add") && name.contains("entry")) ||
+                        (name.contains("remove") && name.contains("entry")) ||
+                        (name.contains("update") && name.contains("entry")) ||
+                        name.contains("onentry") ||
+                        name.contains("notifchange")
+                    ) {
+                        try {
+                            module.hook(method).intercept { chain ->
+                                val result = chain.proceed()
+                                if (FocusPinState.shouldPin()) {
+                                    runPinSafely {
+                                        pinAnyListArg(chain.args.toTypedArray())
+                                        pinAnyListResult(result)
+                                        pinControllerLists(chain.thisObject)
+                                    }
+                                }
+                                result
+                            }
+                        } catch (_: Throwable) {
+                        }
+                    }
+                }
+                module.log(Log.INFO, tag, "FocusPin hooked NotifCollection $className")
+            } catch (_: Throwable) {
+            }
+        }
+        val pipelineCandidates = listOf(
+            "com.android.systemui.statusbar.notification.collection.NotifPipeline",
+            "com.android.systemui.statusbar.notification.NotificationEntryManager",
+            "com.android.systemui.statusbar.notification.collection.listbuilder.NotifListBuilder"
+        )
+        for (className in pipelineCandidates) {
+            try {
+                val clazz = classLoader.loadClass(className)
+                for (methodName in listOf("onBeforeRenderEntry", "onEntryAdded", "onEntryUpdated",
+                    "onEntryRemoved", "addEntry", "removeEntry", "updateEntry", "renderPipeline"))
+                {
+                    val methods = ReflectUtil.findMethodsByName(clazz, methodName)
+                    for (method in methods) {
+                        try {
+                            module.hook(method).intercept { chain ->
+                                val result = chain.proceed()
+                                if (FocusPinState.shouldPin()) {
+                                    runPinSafely {
+                                        pinAnyListArg(chain.args.toTypedArray())
+                                        pinAnyListResult(result)
+                                        pinControllerLists(chain.thisObject)
+                                    }
+                                }
+                                result
+                            }
+                        } catch (_: Throwable) {
+                        }
+                    }
+                }
+                for (method in clazz.declaredMethods) {
+                    if (Modifier.isStatic(method.modifiers)) continue
+                    val name = method.name.lowercase()
+                    if (name.contains("entry") || (
+                            name.contains("notif") && (
+                                name.contains("add") || name.contains("remove") ||
+                                name.contains("update") || name.contains("change"))
+                            ))
+                    {
+                        try {
+                            module.hook(method).intercept { chain ->
+                                val result = chain.proceed()
+                                if (FocusPinState.shouldPin()) {
+                                    runPinSafely {
+                                        pinAnyListArg(chain.args.toTypedArray())
+                                        pinAnyListResult(result)
+                                        pinControllerLists(chain.thisObject)
+                                    }
+                                }
+                                result
+                            }
+                        } catch (_: Throwable) {
+                        }
+                    }
+                }
+                module.log(Log.INFO, tag, "FocusPin hooked pipeline $className")
+            } catch (_: Throwable) {
+            }
         }
     }
 
-    private fun hookFocusedNotifPromptController(classLoader: ClassLoader, tag: String) {
+    private fun hookShadeListBuilder(classLoader: ClassLoader, module: XposedModule, tag: String) {
+        val shadeBuilder = "com.android.systemui.statusbar.notification.collection.ShadeListBuilder"
         try {
-            val clazz = XposedHelpers.findClass(FOCUSED_NOTIF_CONTROLLER, classLoader)
-            val afterHook = object : XC_MethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    if (!FocusPinState.shouldPin()) return
-                    runPinSafely {
-                        pinControllerLists(param.thisObject)
-                        pinAnyListArg(param.args)
-                        pinAnyListResult(param.result)
+            val dispatchMethod = ReflectUtil.findMethod(shadeBuilder, classLoader, "dispatchOnBeforeSort", List::class.java)
+            module.hook(dispatchMethod).intercept { chain ->
+                if (FocusPinState.shouldPin()) {
+                    @Suppress("UNCHECKED_CAST")
+                    val list = chain.args.getOrNull(0) as? MutableList<Any?>
+                    if (list != null) {
+                        safePinLyricEntryToFront(list)
+                    }
+                }
+                val result = chain.proceed()
+                if (FocusPinState.shouldPin()) {
+                    @Suppress("UNCHECKED_CAST")
+                    val list = chain.args.getOrNull(0) as? MutableList<Any?>
+                    if (list != null) {
+                        safePinLyricEntryToFront(list)
+                    }
+                }
+                result
+            }
+            module.log(Log.INFO, tag, "FocusPin hooked ShadeListBuilder.dispatchOnBeforeSort")
+        } catch (e: Throwable) {
+            module.log(Log.INFO, tag, "ShadeListBuilder.dispatchOnBeforeSort skipped: ${e.message}")
+        }
+
+        try {
+            val clazz = ReflectUtil.findClass(shadeBuilder, classLoader)
+            val sortMethods = ReflectUtil.findMethodsByName(clazz, "sortListAndGroups")
+            for (method in sortMethods) {
+                module.hook(method).intercept { chain ->
+                    val result = chain.proceed()
+                    if (!FocusPinState.shouldPin()) return@intercept result
+                    try {
+                        @Suppress("UNCHECKED_CAST")
+                        val list = ReflectUtil.getField(chain.thisObject, "mNotifList")
+                            as? MutableList<Any?>
+                        if (list != null) {
+                            safePinLyricEntryToFront(list)
+                        }
+                    } catch (_: Throwable) {
+                    }
+                    result
+                }
+            }
+            for (methodName in listOf("onEntryAdded", "onEntryUpdated", "onEntryRemoved")) {
+                val entryMethods = ReflectUtil.findMethodsByName(clazz, methodName)
+                for (method in entryMethods) {
+                    try {
+                        module.hook(method).intercept { chain ->
+                            val result = chain.proceed()
+                            if (FocusPinState.shouldPin()) {
+                                runPinSafely {
+                                    pinAnyListArg(chain.args.toTypedArray())
+                                    pinAnyListResult(result)
+                                    try {
+                                        @Suppress("UNCHECKED_CAST")
+                                        val list = ReflectUtil.getField(chain.thisObject, "mNotifList")
+                                            as? MutableList<Any?>
+                                        if (list != null) {
+                                            safePinLyricEntryToFront(list)
+                                        }
+                                    } catch (_: Throwable) {
+                                    }
+                                }
+                            }
+                            result
+                        }
+                    } catch (_: Throwable) {
                     }
                 }
             }
-            val beforeHook = object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    if (!FocusPinState.shouldPin()) return
-                    runPinSafely {
-                        pinAnyListArg(param.args)
+            for (method in clazz.declaredMethods) {
+                if (Modifier.isStatic(method.modifiers)) continue
+                val name = method.name.lowercase()
+                if (name.contains("entry") || name.contains("notif") && (
+                            name.contains("change") || name.contains("added") || name.contains("removed"))
+                ) {
+                    try {
+                        module.hook(method).intercept { chain ->
+                            val result = chain.proceed()
+                            if (FocusPinState.shouldPin()) {
+                                runPinSafely {
+                                    pinAnyListArg(chain.args.toTypedArray())
+                                    pinAnyListResult(result)
+                                    try {
+                                        @Suppress("UNCHECKED_CAST")
+                                        val list = ReflectUtil.getField(chain.thisObject, "mNotifList")
+                                            as? MutableList<Any?>
+                                        if (list != null) {
+                                            safePinLyricEntryToFront(list)
+                                        }
+                                    } catch (_: Throwable) {
+                                    }
+                                }
+                            }
+                            result
+                        }
+                    } catch (_: Throwable) {
                     }
                 }
             }
+            module.log(Log.INFO, tag, "FocusPin hooked ShadeListBuilder.sortListAndGroups")
+        } catch (e: Throwable) {
+            module.log(Log.INFO, tag, "ShadeListBuilder.sortListAndGroups skipped: ${e.message}")
+        }
+    }
+
+    private fun hookFocusedNotifPromptController(classLoader: ClassLoader, module: XposedModule, tag: String) {
+        try {
+            val clazz = ReflectUtil.findClass(FOCUSED_NOTIF_CONTROLLER, classLoader)
             var hooked = 0
             for (method in clazz.declaredMethods) {
                 if (!shouldHookControllerMethod(method)) continue
                 try {
                     val name = method.name.lowercase()
                     if (name.contains("sort") || name.contains("list") || name.contains("bean")) {
-                        XposedBridge.hookMethod(method, beforeHook)
+                        module.hook(method).intercept { chain ->
+                            if (FocusPinState.shouldPin()) {
+                                runPinSafely {
+                                    pinAnyListArg(chain.args.toTypedArray())
+                                }
+                            }
+                            chain.proceed()
+                        }
                     } else {
-                        XposedBridge.hookMethod(method, afterHook)
+                        module.hook(method).intercept { chain ->
+                            val result = chain.proceed()
+                            if (FocusPinState.shouldPin()) {
+                                runPinSafely {
+                                    pinControllerLists(chain.thisObject)
+                                    pinAnyListArg(chain.args.toTypedArray())
+                                    pinAnyListResult(result)
+                                }
+                            }
+                            result
+                        }
                     }
                     hooked++
                 } catch (_: Throwable) {
                 }
             }
-            XposedBridge.log("$tag: FocusPin hooked $FOCUSED_NOTIF_CONTROLLER ($hooked methods)")
+            module.log(Log.INFO, tag, "FocusPin hooked $FOCUSED_NOTIF_CONTROLLER ($hooked methods)")
         } catch (e: Throwable) {
-            XposedBridge.log("$tag: FocusedNotifPromptController skipped: ${e.message}")
+            module.log(Log.INFO, tag, "FocusedNotifPromptController skipped: ${e.message}")
+        }
+        // sortList 是关键的排序入口，必须在排序后重新 pin
+        hookSortList(classLoader, module, tag)
+    }
+
+    private fun hookSortList(classLoader: ClassLoader, module: XposedModule, tag: String) {
+        try {
+            val clazz = ReflectUtil.findClass(FOCUSED_NOTIF_CONTROLLER, classLoader)
+            val methods = ReflectUtil.findMethodsByName(clazz, "sortList")
+            for (method in methods) {
+                module.hook(method).intercept { chain ->
+                    val result = chain.proceed()
+                    if (FocusPinState.shouldPin()) {
+                        runPinSafely {
+                            pinControllerLists(chain.thisObject)
+                            pinAnyListArg(chain.args.toTypedArray())
+                            pinAnyListResult(result)
+                        }
+                    }
+                    result
+                }
+            }
+            module.log(Log.INFO, tag, "FocusPin hooked sortList")
+        } catch (e: Throwable) {
+            module.log(Log.INFO, tag, "sortList hook skipped: ${e.message}")
         }
     }
 
-    private fun hookFocusedNotifPromptView(classLoader: ClassLoader, tag: String) {
-        val listHook = object : XC_MethodHook() {
-            override fun beforeHookedMethod(param: MethodHookParam) {
-                if (!FocusPinState.shouldPin()) return
-                pinAnyListArg(param.args)
-                for (arg in param.args) {
-                    if (arg is Array<*>) {
-                        @Suppress("UNCHECKED_CAST")
-                        pinArrayItems(arg as Array<Any?>)
-                    }
-                }
-            }
-
-            override fun afterHookedMethod(param: MethodHookParam) {
-                if (!FocusPinState.shouldPin()) return
-                val view = param.thisObject as? ViewGroup ?: return
-                scheduleRepeatedViewReorder(view)
-            }
-        }
+    private fun hookFocusedNotifPromptView(classLoader: ClassLoader, module: XposedModule, tag: String) {
         try {
-            val clazz = XposedHelpers.findClass(FOCUSED_NOTIF_VIEW, classLoader)
+            val clazz = ReflectUtil.findClass(FOCUSED_NOTIF_VIEW, classLoader)
             for (methodName in listOf("setData", "bind", "update", "refresh", "show", "onDataChanged")) {
                 try {
-                    XposedBridge.hookAllMethods(clazz, methodName, listHook)
+                    val methods = ReflectUtil.findMethodsByName(clazz, methodName)
+                    for (method in methods) {
+                        module.hook(method).intercept { chain ->
+                            if (FocusPinState.shouldPin()) {
+                                pinAnyListArg(chain.args.toTypedArray())
+                                for (arg in chain.args) {
+                                    if (arg is Array<*>) {
+                                        @Suppress("UNCHECKED_CAST")
+                                        pinArrayItems(arg as Array<Any?>)
+                                    }
+                                }
+                            }
+                            val result = chain.proceed()
+                            if (FocusPinState.shouldPin()) {
+                                pinAnyListArg(chain.args.toTypedArray())
+                                for (arg in chain.args) {
+                                    if (arg is Array<*>) {
+                                        @Suppress("UNCHECKED_CAST")
+                                        pinArrayItems(arg as Array<Any?>)
+                                    }
+                                }
+                                val view = chain.thisObject as? ViewGroup ?: return@intercept result
+                                scheduleRepeatedViewReorder(view)
+                            }
+                            result
+                        }
+                    }
                 } catch (_: Throwable) {
                 }
             }
-            XposedBridge.log("$tag: FocusPin hooked $FOCUSED_NOTIF_VIEW")
+            module.log(Log.INFO, tag, "FocusPin hooked $FOCUSED_NOTIF_VIEW")
         } catch (e: Throwable) {
-            XposedBridge.log("$tag: FocusedNotifPromptView skipped: ${e.message}")
+            module.log(Log.INFO, tag, "FocusedNotifPromptView skipped: ${e.message}")
         }
     }
 
-    private fun hookFocusPluginImpl(classLoader: ClassLoader, tag: String) {
-        val hook = object : XC_MethodHook() {
-            override fun afterHookedMethod(param: MethodHookParam) {
-                if (!FocusPinState.shouldPin()) return
-                pinAnyListArg(param.args)
-                pinAnyListResult(param.result)
-                pinControllerLists(param.thisObject)
-            }
-        }
+    private fun hookFocusPluginImpl(classLoader: ClassLoader, module: XposedModule, tag: String) {
         for (className in focusPluginCandidates) {
             try {
                 val clazz = classLoader.loadClass(className)
@@ -322,62 +576,80 @@ object FocusPinAboveHook {
                         name.contains("bind") || name.contains("update")
                     ) {
                         try {
-                            XposedBridge.hookMethod(method, hook)
+                            module.hook(method).intercept { chain ->
+                                val result = chain.proceed()
+                                if (FocusPinState.shouldPin()) {
+                                    pinAnyListArg(chain.args.toTypedArray())
+                                    pinAnyListResult(result)
+                                    pinControllerLists(chain.thisObject)
+                                }
+                                result
+                            }
                         } catch (_: Throwable) {
                         }
                     }
                 }
-                XposedBridge.log("$tag: FocusPin hooked focus plugin $className")
+                module.log(Log.INFO, tag, "FocusPin hooked focus plugin $className")
             } catch (_: Throwable) {
             }
         }
     }
 
-    private fun hookCountdownFocusCandidates(classLoader: ClassLoader, tag: String) {
-        val hook = object : XC_MethodHook() {
-            override fun afterHookedMethod(param: MethodHookParam) {
-                if (!FocusPinState.shouldPin()) return
-                pinAnyListArg(param.args)
-                pinAnyListResult(param.result)
-                pinControllerLists(param.thisObject)
-                val view = param.thisObject as? ViewGroup
-                if (view != null) {
-                    view.post { demoteCountdownViewsAboveLyric(view) }
-                }
-            }
-        }
+    private fun hookCountdownFocusCandidates(classLoader: ClassLoader, module: XposedModule, tag: String) {
         for (className in countdownCoordinatorCandidates + countdownContainerCandidates) {
             try {
                 val clazz = classLoader.loadClass(className)
-                XposedBridge.hookAllMethods(clazz, "addView", hook)
-                XposedBridge.hookAllMethods(clazz, "setData", hook)
-                XposedBridge.hookAllMethods(clazz, "update", hook)
+                for (hookName in listOf("addView", "setData", "update")) {
+                    val methods = ReflectUtil.findMethodsByName(clazz, hookName)
+                    for (method in methods) {
+                        try {
+                            module.hook(method).intercept { chain ->
+                                val result = chain.proceed()
+                                if (FocusPinState.shouldPin()) {
+                                    pinAnyListArg(chain.args.toTypedArray())
+                                    pinAnyListResult(result)
+                                    pinControllerLists(chain.thisObject)
+                                    val view = chain.thisObject as? ViewGroup
+                                    if (view != null) {
+                                        view.post { demoteCountdownViewsAboveLyric(view) }
+                                    }
+                                }
+                                result
+                            }
+                        } catch (_: Throwable) {
+                        }
+                    }
+                }
                 for (method in clazz.declaredMethods) {
                     val name = method.name.lowercase()
                     if (name.contains("sort") || name.contains("list") ||
                         name.contains("count") || name.contains("timer")
                     ) {
                         try {
-                            XposedBridge.hookMethod(method, hook)
+                            module.hook(method).intercept { chain ->
+                                val result = chain.proceed()
+                                if (FocusPinState.shouldPin()) {
+                                    pinAnyListArg(chain.args.toTypedArray())
+                                    pinAnyListResult(result)
+                                    pinControllerLists(chain.thisObject)
+                                    val view = chain.thisObject as? ViewGroup
+                                    if (view != null) {
+                                        view.post { demoteCountdownViewsAboveLyric(view) }
+                                    }
+                                }
+                                result
+                            }
                         } catch (_: Throwable) {
                         }
                     }
                 }
-                XposedBridge.log("$tag: FocusPin hooked countdown focus $className")
+                module.log(Log.INFO, tag, "FocusPin hooked countdown focus $className")
             } catch (_: Throwable) {
             }
         }
     }
 
-    private fun hookFocusCoordinatorCandidates(classLoader: ClassLoader, tag: String) {
-        val hook = object : XC_MethodHook() {
-            override fun afterHookedMethod(param: MethodHookParam) {
-                if (!FocusPinState.shouldPin()) return
-                pinAnyListArg(param.args)
-                pinAnyListResult(param.result)
-                pinControllerLists(param.thisObject)
-            }
-        }
+    private fun hookFocusCoordinatorCandidates(classLoader: ClassLoader, module: XposedModule, tag: String) {
         for (className in focusCoordinatorCandidates) {
             try {
                 val clazz = classLoader.loadClass(className)
@@ -388,59 +660,81 @@ object FocusPinAboveHook {
                         name.contains("update") || name.contains("build")
                     ) {
                         try {
-                            XposedBridge.hookMethod(method, hook)
+                            module.hook(method).intercept { chain ->
+                                val result = chain.proceed()
+                                if (FocusPinState.shouldPin()) {
+                                    pinAnyListArg(chain.args.toTypedArray())
+                                    pinAnyListResult(result)
+                                    pinControllerLists(chain.thisObject)
+                                }
+                                result
+                            }
                         } catch (_: Throwable) {
                         }
                     }
                 }
-                XposedBridge.log("$tag: FocusPin hooked focus coordinator $className")
+                module.log(Log.INFO, tag, "FocusPin hooked focus coordinator $className")
             } catch (_: Throwable) {
             }
         }
     }
 
-    private fun hookFocusViewContainers(classLoader: ClassLoader, tag: String) {
-        val hook = object : XC_MethodHook() {
-            override fun afterHookedMethod(param: MethodHookParam) {
-                if (!FocusPinState.shouldPin()) return
-                val container = param.thisObject as? ViewGroup ?: return
-                container.post { demoteCountdownViewsAboveLyric(container) }
-            }
-        }
+    private fun hookFocusViewContainers(classLoader: ClassLoader, module: XposedModule, tag: String) {
         for (className in focusContainerCandidates) {
             try {
                 val clazz = classLoader.loadClass(className)
                 if (!ViewGroup::class.java.isAssignableFrom(clazz)) continue
-                XposedBridge.hookAllMethods(clazz, "addView", hook)
-                XposedBridge.hookAllMethods(clazz, "addViewInLayout", hook)
-                XposedBridge.hookAllMethods(clazz, "removeView", hook)
-                XposedBridge.hookAllMethods(clazz, "setData", hook)
-                XposedBridge.hookAllMethods(clazz, "update", hook)
-                XposedBridge.log("$tag: FocusPin hooked focus container $className")
+                for (hookName in listOf("addView", "addViewInLayout", "removeView", "setData", "update")) {
+                    val methods = ReflectUtil.findMethodsByName(clazz, hookName)
+                    for (method in methods) {
+                        try {
+                            module.hook(method).intercept { chain ->
+                                val result = chain.proceed()
+                                if (FocusPinState.shouldPin()) {
+                                    val container = chain.thisObject as? ViewGroup
+                                    if (container != null) {
+                                        container.post { demoteCountdownViewsAboveLyric(container) }
+                                    }
+                                }
+                                result
+                            }
+                        } catch (_: Throwable) {
+                        }
+                    }
+                }
+                module.log(Log.INFO, tag, "FocusPin hooked focus container $className")
             } catch (_: Throwable) {
             }
         }
     }
 
-    private fun hookNotificationStackScrollLayout(classLoader: ClassLoader, tag: String) {
+    private fun hookNotificationStackScrollLayout(classLoader: ClassLoader, module: XposedModule, tag: String) {
         try {
-            val stackClass = XposedHelpers.findClass(
+            val stackClass = ReflectUtil.findClass(
                 "com.android.systemui.statusbar.stack.NotificationStackScrollLayout",
                 classLoader
             )
-            val hook = object : XC_MethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    if (!FocusPinState.shouldPin()) return
-                    val stack = param.thisObject as? ViewGroup ?: return
-                    stack.post { demoteCountdownViewsAboveLyric(stack) }
+            for (hookName in listOf("addView", "removeView", "updateNotificationStack")) {
+                val methods = ReflectUtil.findMethodsByName(stackClass, hookName)
+                for (method in methods) {
+                    try {
+                        module.hook(method).intercept { chain ->
+                            val result = chain.proceed()
+                            if (FocusPinState.shouldPin()) {
+                                val stack = chain.thisObject as? ViewGroup
+                                if (stack != null) {
+                                    stack.post { demoteCountdownViewsAboveLyric(stack) }
+                                }
+                            }
+                            result
+                        }
+                    } catch (_: Throwable) {
+                    }
                 }
             }
-            XposedBridge.hookAllMethods(stackClass, "addView", hook)
-            XposedBridge.hookAllMethods(stackClass, "removeView", hook)
-            XposedBridge.hookAllMethods(stackClass, "updateNotificationStack", hook)
-            XposedBridge.log("$tag: FocusPin hooked NotificationStackScrollLayout")
+            module.log(Log.INFO, tag, "FocusPin hooked NotificationStackScrollLayout")
         } catch (e: Throwable) {
-            XposedBridge.log("$tag: NotificationStackScrollLayout pin skipped: ${e.message}")
+            module.log(Log.INFO, tag, "NotificationStackScrollLayout pin skipped: ${e.message}")
         }
     }
 
@@ -489,7 +783,7 @@ object FocusPinAboveHook {
         for (fieldName in controllerListFields) {
             try {
                 @Suppress("UNCHECKED_CAST")
-                val list = XposedHelpers.getObjectField(target, fieldName) as? MutableList<Any?>
+                val list = ReflectUtil.getField(target, fieldName) as? MutableList<Any?>
                 if (list != null && list !in result) result.add(list)
             } catch (_: Throwable) {
             }
@@ -574,7 +868,21 @@ object FocusPinAboveHook {
             list.add(0, lyric)
             changed = true
         }
-        // 倒计时类焦点通知有系统级优先权，强制排到歌词之后
+        // 所有非歌词条目强制排到歌词之后
+        val nonLyricAfter = ArrayList<Any?>()
+        val iter = list.listIterator(1)
+        while (iter.hasNext()) {
+            val item = iter.next()
+            if (!isLyricListItem(item) && !isCountdownListItem(item)) {
+                nonLyricAfter.add(item)
+                iter.remove()
+                changed = true
+            }
+        }
+        if (nonLyricAfter.isNotEmpty()) {
+            list.addAll(nonLyricAfter)
+        }
+        // 倒计时类焦点通知强制排到非歌词条目之后
         val countdownItems = list.filterIndexed { index, item ->
             index > 0 && isCountdownListItem(item)
         }
@@ -582,8 +890,7 @@ object FocusPinAboveHook {
             for (item in countdownItems) {
                 list.remove(item)
             }
-            val insertAt = list.indexOfFirst { isLyricListItem(it) }.let { if (it >= 0) it + 1 else 1 }
-            list.addAll(insertAt.coerceAtMost(list.size), countdownItems)
+            list.addAll(countdownItems)
             changed = true
         }
         return changed
@@ -598,7 +905,7 @@ object FocusPinAboveHook {
     private fun isLyricNotifKey(item: Any): Boolean {
         for (fieldName in listOf("mKey", "key", "mNotificationKey", "notificationKey")) {
             try {
-                val key = XposedHelpers.getObjectField(item, fieldName)?.toString() ?: continue
+                val key = ReflectUtil.getField(item, fieldName)?.toString() ?: continue
                 if (key.contains(HyperFocusLyricStyle.CHANNEL_ID) ||
                     key.contains("focusNotifLyrics")
                 ) {
@@ -608,12 +915,12 @@ object FocusPinAboveHook {
             }
         }
         try {
-            val id = XposedHelpers.getIntField(item, "mId")
+            val id = ReflectUtil.getField(item, "mId") as? Int
             if (id == HyperFocusLyricStyle.CHANNEL_ID.hashCode()) return true
         } catch (_: Throwable) {
         }
         try {
-            val id = XposedHelpers.getIntField(item, "id")
+            val id = ReflectUtil.getField(item, "id") as? Int
             if (id == HyperFocusLyricStyle.CHANNEL_ID.hashCode()) return true
         } catch (_: Throwable) {
         }
@@ -642,7 +949,7 @@ object FocusPinAboveHook {
     private fun isCountdownNotifKey(item: Any): Boolean {
         for (fieldName in listOf("mType", "type", "mScene", "scene", "mBusiness", "business")) {
             try {
-                val value = XposedHelpers.getObjectField(item, fieldName)?.toString()?.lowercase()
+                val value = ReflectUtil.getField(item, fieldName)?.toString()?.lowercase()
                     ?: continue
                 if (value.contains("count") || value.contains("timer") || value.contains("倒计时")) {
                     return true
@@ -679,19 +986,19 @@ object FocusPinAboveHook {
     private fun extractStatusBarNotification(item: Any): StatusBarNotification? {
         if (item is StatusBarNotification) return item
         try {
-            val direct = XposedHelpers.callMethod(item, "getSbn") as? StatusBarNotification
+            val direct = ReflectUtil.callMethod(item, "getSbn") as? StatusBarNotification
             if (direct != null) return direct
         } catch (_: Throwable) {
         }
         try {
-            val entry = XposedHelpers.callMethod(item, "getEntry") ?: return null
-            return XposedHelpers.getObjectField(entry, "mSbn") as? StatusBarNotification
+            val entry = ReflectUtil.callMethod(item, "getEntry") ?: return null
+            return ReflectUtil.getField(entry, "mSbn") as? StatusBarNotification
         } catch (_: Throwable) {
         }
         for (fieldName in listOf("mEntry", "entry", "mNotificationEntry")) {
             try {
-                val entry = XposedHelpers.getObjectField(item, fieldName) ?: continue
-                val sbn = XposedHelpers.getObjectField(entry, "mSbn") as? StatusBarNotification
+                val entry = ReflectUtil.getField(item, fieldName) ?: continue
+                val sbn = ReflectUtil.getField(entry, "mSbn") as? StatusBarNotification
                 if (sbn != null) return sbn
             } catch (_: Throwable) {
             }
@@ -830,8 +1137,8 @@ object FocusPinAboveHook {
 
     private fun extractSbnFromView(view: View): StatusBarNotification? {
         return try {
-            val entry = XposedHelpers.callMethod(view, "getEntry") ?: return null
-            XposedHelpers.getObjectField(entry, "mSbn") as? StatusBarNotification
+            val entry = ReflectUtil.callMethod(view, "getEntry") ?: return null
+            ReflectUtil.getField(entry, "mSbn") as? StatusBarNotification
         } catch (_: Throwable) {
             null
         }

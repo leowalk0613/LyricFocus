@@ -1,12 +1,13 @@
 package com.leowalk.LyricFocus
 
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.Color
-import de.robv.android.xposed.XSharedPreferences
+import io.github.libxposed.api.XposedModule
 
 /**
  * SystemUI 进程内可用的样式快照。
- * 普通 SharedPreferences 无法跨进程及时同步，需结合 XSharedPreferences 读盘 + 广播 extras 更新。
+ * 普通 SharedPreferences 无法跨进程及时同步，通过 Modern API RemotePreferences 或广播 extras 更新。
  */
 object FocusStyleSnapshot {
 
@@ -164,9 +165,15 @@ object FocusStyleSnapshot {
     var extractedAccentColor: Int? = null
         private set
 
+    @Volatile
+    private var remotePrefs: SharedPreferences? = null
+
+    fun attachModule(module: XposedModule) {
+        remotePrefs = module.getRemotePreferences(FocusPreferences.PREFS_NAME)
+    }
+
     fun reloadFromDisk() {
         val prefs = crossProcessPrefs() ?: return
-        if (!prefs.file.canRead()) return
         textSizeSp = prefs.getFloat(
             FocusPreferences.PREF_LYRIC_TEXT_SIZE,
             FocusPreferences.DEFAULT_LYRIC_TEXT_SIZE_SP
@@ -479,14 +486,7 @@ object FocusStyleSnapshot {
         }
     }
 
-    private fun crossProcessPrefs(): XSharedPreferences? {
-        return try {
-            XSharedPreferences(
-                FocusPreferences.MODULE_PACKAGE,
-                "${FocusPreferences.PREFS_NAME}.xml"
-            ).apply { reload() }
-        } catch (_: Throwable) {
-            null
-        }
+    private fun crossProcessPrefs(): SharedPreferences? {
+        return remotePrefs
     }
 }

@@ -4,14 +4,9 @@ import android.content.Context
 import android.service.notification.StatusBarNotification
 import com.leowalk.LyricFocus.FocusPreferences
 import com.leowalk.LyricFocus.notification.HyperFocusLyricStyle
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
+import com.leowalk.LyricFocus.xposed.ReflectUtil
+import io.github.libxposed.api.XposedModule
 
-/**
- * HyperOS 3 在未传 param_island 时仍可能用通知来源 App 图标（SystemUI）生成默认小岛。
- * 在 SystemUI 侧对焦点歌词渠道做兜底拦截。
- */
 object FocusIslandSuppressHook {
 
     private val islandGateMethods = listOf(
@@ -32,42 +27,39 @@ object FocusIslandSuppressHook {
         "com.android.systemui.statusbar.island.IslandCoordinator"
     )
 
-    fun install(classLoader: ClassLoader, tag: String, contextProvider: () -> Context?) {
+    fun install(classLoader: ClassLoader, module: XposedModule, tag: String, contextProvider: () -> Context?) {
         var hooked = 0
         for (className in islandGateClasses) {
             for ((methodName, returnsBoolean) in islandGateMethods) {
-                if (tryHookIslandGate(classLoader, className, methodName, returnsBoolean, contextProvider)) {
+                if (tryHookIslandGate(classLoader, module, className, methodName, returnsBoolean, contextProvider)) {
                     hooked++
-                    XposedBridge.log("$tag: island suppress $className#$methodName")
+                    module.log(android.util.Log.INFO, tag, "island suppress $className#$methodName")
                 }
             }
         }
         if (hooked == 0) {
-            XposedBridge.log("$tag: island suppress hooks skipped (no matching methods)")
+            module.log(android.util.Log.INFO, tag, "island suppress hooks skipped (no matching methods)")
         }
     }
 
     private fun tryHookIslandGate(
         classLoader: ClassLoader,
+        module: XposedModule,
         className: String,
         methodName: String,
         returnsBoolean: Boolean,
         contextProvider: () -> Context?
     ): Boolean {
         return try {
-            val clazz = XposedHelpers.findClass(className, classLoader)
-            val methods = clazz.declaredMethods.filter { it.name == methodName }
+            val clazz = ReflectUtil.findClass(className, classLoader)
+            val methods = ReflectUtil.findMethodsByName(clazz, methodName)
             if (methods.isEmpty()) return false
             for (method in methods) {
-                XposedBridge.hookMethod(method, object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        val sbn = findStatusBarNotification(param.args) ?: return
-                        if (!shouldSuppressIsland(sbn, contextProvider())) return
-                        if (returnsBoolean) {
-                            param.result = false
-                        }
-                    }
-                })
+                module.hook(method).intercept { chain ->
+                    val sbn = findStatusBarNotification(chain.args) ?: return@intercept chain.proceed()
+                    if (!shouldSuppressIsland(sbn, contextProvider())) return@intercept chain.proceed()
+                    if (returnsBoolean) false else chain.proceed()
+                }
             }
             true
         } catch (_: Throwable) {
@@ -75,15 +67,16 @@ object FocusIslandSuppressHook {
         }
     }
 
-    private fun findStatusBarNotification(args: Array<Any?>): StatusBarNotification? {
+    private fun findStatusBarNotification(args: List<Any?>): StatusBarNotification? {
         for (arg in args) {
             when (arg) {
                 is StatusBarNotification -> return arg
                 else -> {
-                    val nested = runCatching {
-                        XposedHelpers.callMethod(arg, "getSbn") as? StatusBarNotification
-                    }.getOrNull()
-                    if (nested != null) return nested
+                    try {
+                        val nested = ReflectUtil.callMethod(arg!!, "getSbn") as? StatusBarNotification
+                        if (nested != null) return nested
+                    } catch (_: Throwable) {
+                    }
                 }
             }
         }

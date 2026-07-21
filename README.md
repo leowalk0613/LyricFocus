@@ -76,7 +76,7 @@
 |------|------|
 | 系统 | **小米 HyperOS 3.0+ **（验证环境：HyperOS 3.0.x，如 `3.0.302.0.WNCCNXM`） |
 | Android | API **31+**，`targetSdk 34` |
-| 框架 | **LSPosed**（或兼容 Xposed 实现），API 82+ |
+| 框架 | **LSPosed 2.0**（API 102），旧版 LSPosed (API 82) 不再兼容。**必须更新！** |
 | LSPosed 作用域 | `com.android.systemui`（系统界面）、`com.miui.aod`（息屏与锁屏编辑） |
 | 权限 | 通知访问、发送通知、网络、前台服务、读取应用列表（白名单选应用，Android 11+） |
 | 可选 | Root（Magisk / KernelSU）— 应用内重启 SystemUI、查看 LSPosed 日志 |
@@ -182,7 +182,7 @@ LyricFocus/
 
 ### 方式一：下载 Release APK（推荐）
 
-1. 在 [Releases](../../releases) 页面下载最新 `LyricFocus.v*.apk`（如 `LyricFocus.v1.7.0.apk`）
+1. 在 [Releases](../../releases) 页面下载最新 `LyricFocus.v*.apk`（如 `LyricFocus.v1.8.0.apk`）
 2. 将 APK 传到手机，在系统设置中允许「安装未知来源应用」
 3. 点击 APK 完成安装
 4. 继续下方 [LSPosed 配置](#lsposed-配置) 与 [应用权限](#应用权限)
@@ -406,6 +406,8 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 
 入口：`com.leowalk.LyricFocus.xposed.FocusMainHook`
 
+> **已完整迁移至 Modern Xposed API**（LSPosed 2.0 / API 102）。入口继承 `XposedModule`，使用 `module.hook(method).intercept { chain -> }` 拦截器链，`getRemotePreferences()` 替代 `XSharedPreferences`，不再依赖 legacy `de.robv.android.xposed`。
+
 | 作用域 | 主要类 | 职责 |
 |--------|--------|------|
 | `com.android.systemui` | `SystemUIHyperFocusHook` | 广播、焦点通知、权限 bypass |
@@ -423,7 +425,7 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 | 依赖 | 版本 | 用途 |
 |------|------|------|
 | [HyperFocusApi](https://github.com/ghhccghk/HyperFocusApi) | 2.0 | `miui.focus` 参数封装 |
-| [Xposed API](https://api.xposed.info/) | 82 | LSPosed Hook 接口 |
+| [libxposed API](https://github.com/libxposed/api) | 102 (via module.prop) | LSPosed 2.0 Modern Xposed API 声明 |
 | OkHttp | 4.12.0 | 歌词 HTTP、版本更新检测 |
 | AndroidX Palette | 1.0.0 | 专辑封面取色 |
 | AndroidX / Material / Coroutines | 见 `focus/build.gradle` | UI、MediaSession |
@@ -431,6 +433,30 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 ---
 
 ## 版本更新
+
+### v1.8.0
+
+#### ⚠️ 重要：LSPosed API 升级至 102
+此版本完整迁移至 **Modern Xposed API**（LSPosed 2.0 / API 102），**必须更新 LSPosed 至 2.0 版本**。旧版 LSPosed (API 82) 无法加载此模块。
+
+- 入口继承 `XposedModule`，使用 `module.hook(method).intercept { chain -> }` 拦截器链
+- `XSharedPreferences` 替换为 `getRemotePreferences()`
+- 移除所有 `de.robv.android.xposed` legacy 依赖
+- 使用 `META-INF/xposed/module.prop` 声明 API 版本
+
+#### 新功能
+
+- **万象息屏仅显示歌词**：开启万象息屏模式后播放音乐时，AOD 自动隐藏其他焦点通知和普通通知，仅展示歌词通知
+- **AOD 过渡动画保护**：Hook MiuiFocusNotification2 过渡状态，锁屏↔AOD 切换时保护歌词视图不被清除
+- **Monet 图标适配**：应用图标背景随壁纸 Monet 动态取色（Android 13+）
+
+#### 优化
+
+- **通知刷新统一**：万象息屏和锁屏 AOD 统一使用 updatable notify-only 模式，不再 cancel+notify
+- **窗口高度调整**：修复主页和样式设置底部按钮需滑至最底端的问题
+- **歌词置顶增强**：Hook FocusedNotifPromptView 数据方法 + ShadeListBuilder 通知变更入口，播放时歌词通知确保第一位
+
+- **版本号**：`1.8.0`（versionCode 20）
 
 ### v1.7.0
 

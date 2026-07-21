@@ -17,8 +17,8 @@ android {
         applicationId "com.leowalk.LyricFocus"
         minSdk 31
         targetSdk 34
-        versionCode 19
-        versionName "1.7.0"
+        versionCode 20
+        versionName "1.8.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -76,8 +76,7 @@ dependencies {
     implementation 'com.github.ghhccghk:HyperFocusApi:2.0'
     implementation 'androidx.palette:palette-ktx:1.0.0'
 
-    compileOnly 'de.robv.android.xposed:api:82'
-    compileOnly 'de.robv.android.xposed:api:82:sources'
+    compileOnly 'io.github.libxposed:api:102.0.0'
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'

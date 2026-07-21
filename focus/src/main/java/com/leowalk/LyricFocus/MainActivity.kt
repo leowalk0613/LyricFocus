@@ -251,7 +251,7 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
             .setView(content)
             .create()
         dialog.setCanceledOnTouchOutside(false)
-        dialog.setCancelable(true)
+        dialog.setCancelable(false)
         dialog.setOnDismissListener {
             if (updateDialog === dialog) updateDialog = null
         }
