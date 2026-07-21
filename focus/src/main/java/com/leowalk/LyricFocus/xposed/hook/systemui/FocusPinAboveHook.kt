@@ -125,10 +125,7 @@ object FocusPinAboveHook {
         hookCountdownFocusCandidates(classLoader, module, tag)
         hookFocusComparator(classLoader, module, tag)
         hookNotificationPanelReflow(classLoader, module, tag)
-        hookNotifEntryChangeListeners(classLoader, module, tag)
     }
-
-    private var topLevelComparatorHooked = false
 
     private fun hookFocusComparator(classLoader: ClassLoader, module: XposedModule, tag: String) {
         try {
@@ -156,54 +153,6 @@ object FocusPinAboveHook {
             }
         } catch (e: Throwable) {
             module.log(Log.INFO, tag, "Focus comparator hook skipped: ${e.message}")
-        }
-        // Also hook ShadeListBuilder.mTopLevelComparator which is the REAL comparator used by sortList
-        hookTopLevelComparator(classLoader, module, tag)
-    }
-
-    private fun hookTopLevelComparator(classLoader: ClassLoader, module: XposedModule, tag: String) {
-        try {
-            val controllerClazz = ReflectUtil.findClass(FOCUSED_NOTIF_CONTROLLER, classLoader)
-            // Hook any method that gives us access to the controller instance so we can chain to ShadeListBuilder
-            for (method in controllerClazz.declaredMethods) {
-                if (Modifier.isStatic(method.modifiers)) continue
-                try {
-                    module.hook(method).intercept { chain ->
-                        val result = chain.proceed()
-                        if (topLevelComparatorHooked) return@intercept result
-                        try {
-                            val controller = chain.thisObject
-                            val focusCoordinator = ReflectUtil.getField(controller, "mFocusCoordinator")
-                            val pipeline = ReflectUtil.getField(focusCoordinator!!, "mPipeline")
-                            val shadeListBuilder = ReflectUtil.getField(pipeline!!, "mShadeListBuilder")
-                            val comparator = ReflectUtil.getField(shadeListBuilder!!, "mTopLevelComparator") as? Comparator<*>
-                            if (comparator != null) {
-                                val compareMethod = comparator.javaClass.getDeclaredMethod("compare", Object::class.java, Object::class.java)
-                                compareMethod.isAccessible = true
-                                module.hook(compareMethod).intercept { compChain ->
-                                    if (!FocusPinState.shouldPin()) return@intercept compChain.proceed()
-                                    val left = compChain.args.getOrNull(0)
-                                    val right = compChain.args.getOrNull(1)
-                                    val lk = isLyricListItem(left)
-                                    val rk = isLyricListItem(right)
-                                    when {
-                                        lk && !rk -> return@intercept -1
-                                        !lk && rk -> return@intercept 1
-                                        lk && isCountdownListItem(right) -> return@intercept -1
-                                        isCountdownListItem(left) && rk -> return@intercept 1
-                                    }
-                                    compChain.proceed()
-                                }
-                                topLevelComparatorHooked = true
-                                module.log(Log.INFO, tag, "FocusPin hooked ShadeListBuilder.mTopLevelComparator")
-                            }
-                        } catch (_: Throwable) {}
-                        result
-                    }
-                } catch (_: Throwable) {}
-            }
-        } catch (e: Throwable) {
-            module.log(Log.INFO, tag, "TopLevelComparator hook skipped: ${e.message}")
         }
     }
 
@@ -501,31 +450,6 @@ object FocusPinAboveHook {
             module.log(Log.INFO, tag, "FocusPin hooked $FOCUSED_NOTIF_CONTROLLER ($hooked methods)")
         } catch (e: Throwable) {
             module.log(Log.INFO, tag, "FocusedNotifPromptController skipped: ${e.message}")
-        }
-        // sortList 是关键的排序入口，必须在排序后重新 pin
-        hookSortList(classLoader, module, tag)
-    }
-
-    private fun hookSortList(classLoader: ClassLoader, module: XposedModule, tag: String) {
-        try {
-            val clazz = ReflectUtil.findClass(FOCUSED_NOTIF_CONTROLLER, classLoader)
-            val methods = ReflectUtil.findMethodsByName(clazz, "sortList")
-            for (method in methods) {
-                module.hook(method).intercept { chain ->
-                    val result = chain.proceed()
-                    if (FocusPinState.shouldPin()) {
-                        runPinSafely {
-                            pinControllerLists(chain.thisObject)
-                            pinAnyListArg(chain.args.toTypedArray())
-                            pinAnyListResult(result)
-                        }
-                    }
-                    result
-                }
-            }
-            module.log(Log.INFO, tag, "FocusPin hooked sortList")
-        } catch (e: Throwable) {
-            module.log(Log.INFO, tag, "sortList hook skipped: ${e.message}")
         }
     }
 
@@ -877,29 +801,13 @@ object FocusPinAboveHook {
             list.add(0, lyric)
             changed = true
         }
-        // 所有非歌词条目强制排到歌词之后
-        val nonLyricAfter = ArrayList<Any?>()
-        val iter = list.listIterator(1)
-        while (iter.hasNext()) {
-            val item = iter.next()
-            if (!isLyricListItem(item) && !isCountdownListItem(item)) {
-                nonLyricAfter.add(item)
-                iter.remove()
-                changed = true
-            }
-        }
-        if (nonLyricAfter.isNotEmpty()) {
-            list.addAll(nonLyricAfter)
-        }
-        // 倒计时类焦点通知强制排到非歌词条目之后
         val countdownItems = list.filterIndexed { index, item ->
             index > 0 && isCountdownListItem(item)
         }
         if (countdownItems.isNotEmpty()) {
-            for (item in countdownItems) {
-                list.remove(item)
-            }
-            list.addAll(countdownItems)
+            for (item in countdownItems) { list.remove(item) }
+            val insertAt = list.indexOfFirst { isLyricListItem(it) }.let { if (it >= 0) it + 1 else 1 }
+            list.addAll(insertAt.coerceAtMost(list.size), countdownItems)
             changed = true
         }
         return changed
