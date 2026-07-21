@@ -1290,7 +1290,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                     val notification = ReflectUtil.callMethod(sbn!!, "getNotification") as? Notification
                     if (notification?.channelId == HyperFocusLyricStyle.CHANNEL_ID) {
                         notification.extras.putBoolean("miui.focus.enableAlert", true)
-                    } else if (FocusStyleSnapshot.customAodLayout && isPlaying && isAodActive()) {
+                    } else if (isCustomAodActive() && isPlaying && isAodActive()) {
                         return@intercept null
                     }
                 } catch (_: Throwable) {
@@ -1304,12 +1304,28 @@ class SystemUIHyperFocusHook : BaseHook() {
     }
 
     /** 万象息屏时 Hook shouldHideNotification：仅隐藏非歌词通知 */
+    private var cachedCustomAod = false
+    private var cachedCustomAodTime = 0L
+
+    private fun isCustomAodActive(): Boolean {
+        val now = System.currentTimeMillis()
+        if (now - cachedCustomAodTime > 1000L) {
+            cachedCustomAod = FocusStyleSnapshot.customAodLayout
+            if (!cachedCustomAod) {
+                // 兜底：广播可能未及时同步，尝试直接读
+                systemUIContext?.let { cachedCustomAod = FocusPreferences.readCustomAodLayout(it) }
+            }
+            cachedCustomAodTime = now
+        }
+        return cachedCustomAod
+    }
+
     private fun hookHideOtherNotificationsInAod(classLoader: ClassLoader, module: XposedModule) {
         try {
             val entryClass = classLoader.loadClass("com.android.systemui.statusbar.notification.collection.NotificationEntry")
             val method = ReflectUtil.findMethod("com.android.systemui.statusbar.notification.interruption.KeyguardNotificationVisibilityProviderImpl", classLoader, "shouldHideNotification", entryClass)
             module.hook(method).intercept { chain ->
-                if (!FocusStyleSnapshot.customAodLayout || !isPlaying || !isAodActive()) return@intercept chain.proceed()
+                if (!isCustomAodActive() || !isPlaying || !isAodActive()) return@intercept chain.proceed()
                 val entry = chain.args.getOrNull(0) ?: return@intercept chain.proceed()
                 val sbn = ReflectUtil.getField(entry, "mSbn")
                 val n = ReflectUtil.callMethod(sbn!!, "getNotification") as? Notification
@@ -1330,7 +1346,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                     val clazz = ReflectUtil.findClass(cn, classLoader)
                     for (m in ReflectUtil.findMethodsByName(clazz, mn)) {
                         module.hook(m).intercept { chain ->
-                            if (!FocusStyleSnapshot.customAodLayout || !isPlaying || !isAodActive()) return@intercept chain.proceed()
+                            if (!isCustomAodActive() || !isPlaying || !isAodActive()) return@intercept chain.proceed()
                             for (i in 0 until chain.args.size) {
                                 (chain.args[i] as? java.util.ArrayList<*>)?.let { list ->
                                     val iter = list.iterator()
