@@ -949,6 +949,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     private lateinit var previewLyric: TextView
     private lateinit var previewSecond: TextView
     private lateinit var previewMultiLines: View
+    private lateinit var previewIcon: ImageView
     private val previewMultiTextViews = mutableListOf<TextView>()
     private var previewBound = false
     private var previewExpanded = true
@@ -964,6 +965,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         previewLyric = view.findViewById(R.id.preview_lyric)
         previewSecond = view.findViewById(R.id.preview_second)
         previewMultiLines = view.findViewById(R.id.preview_multi_lines)
+        previewIcon = view.findViewById(R.id.preview_icon)
         for (id in intArrayOf(
             R.id.preview_ml_0, R.id.preview_ml_1, R.id.preview_ml_2, R.id.preview_ml_3,
             R.id.preview_ml_4, R.id.preview_ml_5, R.id.preview_ml_6, R.id.preview_ml_7
@@ -1004,6 +1006,29 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         }
     }
 
+    /**
+     * @return Triple(primaryColor, secondaryColor, backgroundColorOrNull)
+     */
+    private fun resolvePreviewColors(ctx: android.content.Context): Triple<Int, Int, Int?> {
+        val monet = FocusPreferences.isMonetDynamicColorEnabled(ctx)
+        val extraction = FocusPreferences.isTextColorExtractionEnabled(ctx)
+        if (monet || extraction) {
+            val extracted = FocusPreferences.getExtractedTextColor(ctx)
+            val extractedBg = FocusPreferences.getExtractedBgColor(ctx)
+            if (extracted != null) {
+                val secondary = blendSecondary(extracted)
+                return Triple(extracted, secondary, if (monet && extractedBg != null) extractedBg else null)
+            }
+        }
+        val textColor = FocusPreferences.getLyricTextColor(ctx)
+        val (primary, secondary) = if (textColor == "black") {
+            Pair(android.graphics.Color.BLACK, 0xFF333333.toInt())
+        } else {
+            Pair(android.graphics.Color.WHITE, 0xFFE0E0E0.toInt())
+        }
+        return Triple(primary, secondary, null)
+    }
+
     private fun refreshAodPreview(ctx: android.content.Context, state: LyricService.PreviewState, hasLyric: Boolean) {
         previewRoot.setBackgroundColor(android.graphics.Color.BLACK)
         previewMultiLines.visibility = View.GONE
@@ -1027,8 +1052,9 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                 secondaryColor = blendSecondary(preset)
             }
             FocusPreferences.CUSTOM_AOD_COLOR_ALBUM -> {
-                primaryColor = android.graphics.Color.WHITE
-                secondaryColor = 0xFFE0E0E0.toInt()
+                val (p, s) = resolvePreviewColors(ctx)
+                primaryColor = p
+                secondaryColor = s
             }
             else -> {
                 primaryColor = android.graphics.Color.WHITE
@@ -1045,6 +1071,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
 
         previewSongRow.visibility = if (hideAll) View.GONE else View.VISIBLE
         if (!hideAll) {
+            previewIcon.visibility = if (FocusPreferences.isCustomAodTitleIconEnabled(ctx)) View.VISIBLE else View.GONE
             val parts = mutableListOf<String>()
             if (showTitle && state.title.isNotBlank()) parts += state.title
             if (showArtist && state.artist.isNotBlank()) parts += state.artist
@@ -1071,61 +1098,40 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         previewLyric.textSize = textSize
         previewLyric.setTextColor(primaryColor)
         previewLyric.gravity = gravity
+        previewLyric.minLines = lyricMaxLines
         previewLyric.maxLines = lyricMaxLines
-        previewLyric.typeface = null
-        previewLyric.setPadding(padPx, previewLyric.paddingTop, padPx, previewLyric.paddingBottom)
 
         previewSecond.text = secondText
         previewSecond.textSize = textSize * 0.78f
         previewSecond.setTextColor(secondaryColor)
         previewSecond.gravity = gravity
+        previewSecond.minLines = translationMaxLines
         previewSecond.maxLines = translationMaxLines
-        previewSecond.setPadding(padPx, previewSecond.paddingTop, padPx, previewSecond.paddingBottom)
     }
 
     private fun refreshLockScreenPreview(ctx: android.content.Context, state: LyricService.PreviewState, hasLyric: Boolean) {
+        // 锁屏样式不显示歌曲信息
+        previewSongRow.visibility = View.GONE
+
         val multiLine = FocusPreferences.isMultiLineLyrics(ctx)
         val singleLineOnly = FocusPreferences.isSingleLineOnly(ctx)
         val swapLyricTranslation = FocusPreferences.isSwapLyricTranslation(ctx)
-
         val textSize = FocusPreferences.getLyricTextSize(ctx)
-        val textColor = FocusPreferences.getLyricTextColor(ctx)
         val gravity = gravityToInt(FocusPreferences.getLyricGravity(ctx))
         val lyricMaxLines = FocusPreferences.getLyricMaxLines(ctx)
         val translationMaxLines = FocusPreferences.getTranslationMaxLines(ctx)
         val background = FocusPreferences.getFocusBackground(ctx)
+        val (primaryColor, secondaryColor, extractedBg) = resolvePreviewColors(ctx)
 
-        val primaryColor = when (textColor) {
-            "black" -> android.graphics.Color.BLACK
-            else -> android.graphics.Color.WHITE
-        }
-        val secondaryColor = when (textColor) {
-            "black" -> 0xFF333333.toInt()
-            else -> 0xFFE0E0E0.toInt()
-        }
-
-        // 背景
+        // 背景：Monet 取色时优先用提取的背景色，否则用手动设置
         previewRoot.setBackgroundColor(
-            when (background) {
+            if (extractedBg != null) extractedBg
+            else when (background) {
                 FocusPreferences.BACKGROUND_BLACK -> android.graphics.Color.BLACK
                 FocusPreferences.BACKGROUND_WHITE -> android.graphics.Color.WHITE
                 else -> 0xFF2A2A2A.toInt()
             }
         )
-
-        // 歌名行
-        val showSongRow = !hasLyric || (state.title.isNotBlank() || state.artist.isNotBlank())
-        previewSongRow.visibility = if (showSongRow) View.VISIBLE else View.GONE
-        if (showSongRow) {
-            val label = if (state.title.isNotBlank() && state.artist.isNotBlank()) {
-                "${state.title} - ${state.artist}"
-            } else {
-                state.title.ifBlank { state.artist.ifBlank { "\u6b4c\u66f2" } }
-            }
-            previewSongTitle.text = label
-            previewSongTitle.setTextColor(secondaryColor)
-            previewSongTitle.textSize = textSize * 0.78f
-        }
 
         // 重置 padding
         previewLyric.setPadding(0, previewLyric.paddingTop, 0, previewLyric.paddingBottom)
@@ -1138,19 +1144,30 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
 
             val count = FocusPreferences.getMultiLineLineCount(ctx)
             val mlTextSize = FocusPreferences.getMultiLineTextSize(ctx)
-            val placeholderLines = listOf(
-                "\u97f3\u4e50 \u266A", "\u6b4c\u624b", "\u4e3b\u6b4c\u8bcd \u7b2c\u4e8c\u53e5",
-                "\u7ffb\u8bd1\u5185\u5bb9 \u7b2c\u4e09\u53e5", "\u6b4c\u8bcd \u7b2c\u56db\u53e5",
-                "\u7ffb\u8bd1\u5185\u5bb9 \u7b2c\u4e94\u53e5", "\u6b4c\u8bcd \u7b2c\u516d\u53e5",
-                "\u7ffb\u8bd1\u5185\u5bb9 \u7b2c\u4e03\u53e5"
+            val showTranslation = FocusPreferences.isMultiLineShowTranslation(ctx)
+            val origins = if (hasLyric) {
+                listOf(state.lyricText, state.secondLine.ifBlank { state.title }, "\u6b4c\u8bcd \u7b2c\u4e09\u53e5", "\u6b4c\u8bcd \u7b2c\u56db\u53e5")
+            } else {
+                listOf("\u6b4c\u8bcd \u7b2c\u4e00\u53e5", "\u6b4c\u8bcd \u7b2c\u4e8c\u53e5", "\u6b4c\u8bcd \u7b2c\u4e09\u53e5", "\u6b4c\u8bcd \u7b2c\u56db\u53e5")
+            }
+            val trans = listOf(
+                "\u7ffb\u8bd1 \u7b2c\u4e00\u53e5", "\u7ffb\u8bd1 \u7b2c\u4e8c\u53e5",
+                "\u7ffb\u8bd1 \u7b2c\u4e09\u53e5", "\u7ffb\u8bd1 \u7b2c\u56db\u53e5"
             )
             for (i in 0 until 8) {
                 val tv = previewMultiTextViews[i]
                 if (i < count) {
                     tv.visibility = View.VISIBLE
-                    tv.text = placeholderLines[i]
+                    val isTranslationSlot = showTranslation && i % 2 == 1
+                    val pairIdx = i / 2
+                    val swapped = showTranslation && swapLyricTranslation
+                    tv.text = if (isTranslationSlot) {
+                        if (swapped) origins[pairIdx.coerceAtMost(3)] else trans[pairIdx.coerceAtMost(3)]
+                    } else {
+                        if (swapped && showTranslation) trans[pairIdx.coerceAtMost(3)] else origins[pairIdx.coerceAtMost(3)]
+                    }
                     tv.textSize = mlTextSize
-                    tv.setTextColor(if (i % 2 == 0) primaryColor else secondaryColor)
+                    tv.setTextColor(if (isTranslationSlot) secondaryColor else primaryColor)
                     tv.gravity = gravity
                 } else {
                     tv.visibility = View.GONE
@@ -1180,6 +1197,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             previewLyric.textSize = textSize
             previewLyric.setTextColor(primaryColor)
             previewLyric.gravity = gravity
+            previewLyric.minLines = lyricMaxLines
             previewLyric.maxLines = lyricMaxLines
 
             if (!singleLineOnly) {
@@ -1187,6 +1205,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                 previewSecond.textSize = textSize * 0.78f
                 previewSecond.setTextColor(secondaryColor)
                 previewSecond.gravity = gravity
+                previewSecond.minLines = translationMaxLines
                 previewSecond.maxLines = translationMaxLines
             }
         }
