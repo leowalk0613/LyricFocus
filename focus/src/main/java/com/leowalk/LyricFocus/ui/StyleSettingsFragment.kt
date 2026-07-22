@@ -1275,8 +1275,8 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                         })
                         tv.textSize = when {
                             i == currentSlot -> mlTextSize
-                            inCurrentPair && isTranslationSlot -> mlTextSize * 0.8f
-                            isTranslationSlot -> mlTextSize * 0.65f + 2f
+                            inCurrentPair && isTranslationSlot -> mlTextSize * 0.65f + 2f
+                            isTranslationSlot -> mlTextSize * 0.5f
                             else -> mlTextSize * 0.65f
                         }
                         tv.gravity = gravity

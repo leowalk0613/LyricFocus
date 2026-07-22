@@ -1232,15 +1232,16 @@ object HyperFocusLyricStyle {
             val inCurrentPair = isCurrentPair(i)
             if (inCurrentPair) {
                 views.setTextColor(viewId, currentLineColor)
-                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp)
                 if (i == currentLineSlot) {
+                    views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp)
                     views.setViewPadding(viewId, 0, 12, 0, 0)
                 } else {
+                    views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.65f + 2f)
                     views.setViewPadding(viewId, 0, 0, 0, 12)
                 }
             } else if (isTranslation) {
                 views.setTextColor(viewId, nonCurrentTransColor)
-                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.65f + 2f)
+                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.5f)
             } else {
                 views.setTextColor(viewId, defaultLineColor)
                 views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.65f)
