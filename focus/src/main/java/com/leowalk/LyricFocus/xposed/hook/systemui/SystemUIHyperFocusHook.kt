@@ -625,8 +625,8 @@ class SystemUIHyperFocusHook : BaseHook() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
                     Intent.ACTION_SCREEN_OFF -> {
-                        // 锁屏→息屏时 PowerManager.isInteractive 可能仍返回 true，延迟到 AOD 完全启动后再触发
-                        handler.postDelayed({ repostFocusIfNeeded() }, 600L)
+                        // 进入 AOD：cancel+repost 将歌词通知推到顶部
+                        handler.postDelayed({ forceCancelAndRepostForAod() }, 600L)
                     }
                     Intent.ACTION_SCREEN_ON -> {
                         handler.postDelayed({ repostFocusIfNeeded() }, SCREEN_REPOST_DELAY_MS)
@@ -844,13 +844,17 @@ class SystemUIHyperFocusHook : BaseHook() {
                     val needsPost = forceResync || songChanged || leavingPlaceholder ||
                         lastNotifiedLyric.isBlank() || styleChanged
                     if (needsPost) {
-                        postFocusWithOptionalRecreate(
-                            songChanged = songChanged,
-                            leavingPlaceholder = leavingPlaceholder,
-                            forceRecreate = forceResync || styleChanged,
-                            forcePost = forceResync || lastNotifiedLyric.isBlank() ||
-                                songChanged || leavingPlaceholder || styleChanged
-                        )
+                        if (songChanged) {
+                            forceCancelAndRepostForAod()
+                        } else {
+                            postFocusWithOptionalRecreate(
+                                songChanged = false,
+                                leavingPlaceholder = leavingPlaceholder,
+                                forceRecreate = forceResync || styleChanged,
+                                forcePost = forceResync || lastNotifiedLyric.isBlank() ||
+                                    leavingPlaceholder || styleChanged
+                            )
+                        }
                     }
                 }
                 scheduleNextUpdate()
@@ -916,13 +920,17 @@ class SystemUIHyperFocusHook : BaseHook() {
                 lastNotifiedLyric.isBlank() || styleChanged
 
             if (needsPost && lyric.isNotBlank() && isPlaying) {
-                postFocusWithOptionalRecreate(
-                    songChanged = songChanged,
-                    leavingPlaceholder = leavingPlaceholder,
-                    forceRecreate = forceResync || songChanged || leavingPlaceholder || styleChanged,
-                    forcePost = forceResync || lastNotifiedLyric.isBlank() ||
-                        songChanged || leavingPlaceholder || contentChanged || styleChanged
-                )
+                if (songChanged) {
+                    forceCancelAndRepostForAod()
+                } else {
+                    postFocusWithOptionalRecreate(
+                        songChanged = false,
+                        leavingPlaceholder = leavingPlaceholder,
+                        forceRecreate = forceResync || leavingPlaceholder || styleChanged,
+                        forcePost = forceResync || lastNotifiedLyric.isBlank() ||
+                            leavingPlaceholder || contentChanged || styleChanged
+                    )
+                }
             } else if (!isPlaying) {
                 cancelFocusNotification()
             }
@@ -1289,6 +1297,17 @@ class SystemUIHyperFocusHook : BaseHook() {
             notificationManager?.let { HyperFocusLyricStyle.cancelFocusNotification(it) }
         } catch (_: Throwable) {
         }
+    }
+
+    /** AOD 进入 / 切歌时 cancel + repost，确保焦点通知置顶。通知中心正常操作时不调用。 */
+    private fun forceCancelAndRepostForAod() {
+        if (!focusEnabled || !isPlaying || currentLyricText.isBlank()) return
+        log("forceCancelAndRepostForAod: cancel + repost for pin-to-top")
+        cancelFocusNotification()
+        HyperFocusLyricStyle.resetPostedCache()
+        clearNotifiedLyricContent()
+        postFocusUpdate(FocusRefreshMode.LINE_CHANGE, force = true)
+        scheduleNextUpdate()
     }
 
     private fun parseLyricJson(json: String?): List<LyricLineData> {
