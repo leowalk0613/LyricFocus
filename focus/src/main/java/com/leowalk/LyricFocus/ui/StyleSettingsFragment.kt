@@ -1072,6 +1072,18 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         previewSongRow.visibility = if (hideAll) View.GONE else View.VISIBLE
         if (!hideAll) {
             previewIcon.visibility = if (FocusPreferences.isCustomAodTitleIconEnabled(ctx)) View.VISIBLE else View.GONE
+            if (previewIcon.visibility == View.VISIBLE) {
+                val iconRes = iconPresetToResId(FocusPreferences.resolvePackageToIconPreset(state.musicPackage))
+                previewIcon.setImageResource(iconRes)
+                val iconSizePercent = FocusPreferences.getCustomAodTitleIconSize(ctx) / 100f
+                val iconSizeSp = textSize * iconSizePercent
+                val px = (iconSizeSp * ctx.resources.displayMetrics.scaledDensity).toInt()
+                previewIcon.layoutParams = previewIcon.layoutParams.apply {
+                    width = px
+                    height = px
+                }
+                previewIcon.requestLayout()
+            }
             val parts = mutableListOf<String>()
             if (showTitle && state.title.isNotBlank()) parts += state.title
             if (showArtist && state.artist.isNotBlank()) parts += state.artist
@@ -1145,8 +1157,12 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             val count = FocusPreferences.getMultiLineLineCount(ctx)
             val mlTextSize = FocusPreferences.getMultiLineTextSize(ctx)
             val showTranslation = FocusPreferences.isMultiLineShowTranslation(ctx)
-            val origins = if (hasLyric) {
-                listOf(state.lyricText, state.secondLine.ifBlank { state.title }, "\u6b4c\u8bcd \u7b2c\u4e09\u53e5", "\u6b4c\u8bcd \u7b2c\u56db\u53e5")
+            val realLines = if (hasLyric && state.nextLyricLines.isNotEmpty()) state.nextLyricLines else emptyList()
+            val origins = if (realLines.size >= 4) {
+                realLines.take(4)
+            } else if (realLines.isNotEmpty()) {
+                // 补齐到 4 行
+                (realLines + List(4 - realLines.size) { "\u6b4c\u8bcd \u7b2c${realLines.size + it + 1}\u53e5" }).take(4)
             } else {
                 listOf("\u6b4c\u8bcd \u7b2c\u4e00\u53e5", "\u6b4c\u8bcd \u7b2c\u4e8c\u53e5", "\u6b4c\u8bcd \u7b2c\u4e09\u53e5", "\u6b4c\u8bcd \u7b2c\u56db\u53e5")
             }
@@ -1223,6 +1239,20 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             FocusPreferences.GRAVITY_LEFT -> android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
             FocusPreferences.GRAVITY_RIGHT -> android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL
             else -> android.view.Gravity.CENTER
+        }
+    }
+
+    private fun iconPresetToResId(preset: String): Int {
+        return when (preset) {
+            FocusPreferences.CUSTOM_AOD_TITLE_ICON_NETEASE -> R.drawable.ic_app_icon_netease
+            FocusPreferences.CUSTOM_AOD_TITLE_ICON_QQ -> R.drawable.ic_app_icon_qq
+            FocusPreferences.CUSTOM_AOD_TITLE_ICON_KUGOU -> R.drawable.ic_app_icon_kugou
+            FocusPreferences.CUSTOM_AOD_TITLE_ICON_KUWO -> R.drawable.ic_app_icon_kuwo
+            FocusPreferences.CUSTOM_AOD_TITLE_ICON_QISHUI -> R.drawable.ic_app_icon_qishui
+            FocusPreferences.CUSTOM_AOD_TITLE_ICON_BODIAN -> R.drawable.ic_app_icon_bodian
+            FocusPreferences.CUSTOM_AOD_TITLE_ICON_SPOTIFY -> R.drawable.ic_app_icon_spotify
+            FocusPreferences.CUSTOM_AOD_TITLE_ICON_APPLE -> R.drawable.ic_app_icon_apple
+            else -> R.drawable.ic_app_icon_apple
         }
     }
 

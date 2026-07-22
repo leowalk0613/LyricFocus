@@ -43,7 +43,8 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         val title: String = "",
         val artist: String = "",
         val isPlaying: Boolean = false,
-        val musicPackage: String = ""
+        val musicPackage: String = "",
+        val nextLyricLines: List<String> = emptyList()
     )
 
     companion object {
@@ -493,9 +494,26 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             title = currentTitle,
             artist = currentArtist,
             isPlaying = isPlaying,
-            musicPackage = currentMusicPackage()
+            musicPackage = currentMusicPackage(),
+            nextLyricLines = collectNextLyricLines(syncAdvanceMs)
         )
         notifyPreviewStateChanged()
+    }
+
+    private fun collectNextLyricLines(syncAdvanceMs: Long): List<String> {
+        if (currentLyricInfo.isEmpty) return emptyList()
+        val idx = currentLyricInfo.getCurrentLineIndex(currentPosition, syncAdvanceMs)
+        val lines = currentLyricInfo.lines
+        if (idx < 0) {
+            // 还没到第一句：返回前 N 行预览
+            return lines.take(8).map { it.text }
+        }
+        // 从当前行开始，取当前行 + 后续行，最多 8 行用于多行预览
+        val result = mutableListOf<String>()
+        for (i in idx until (idx + 8).coerceAtMost(lines.size)) {
+            result += lines[i].text
+        }
+        return result
     }
 
     private fun resyncFocusState() {
