@@ -425,7 +425,7 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 | 依赖 | 版本 | 用途 |
 |------|------|------|
 | [HyperFocusApi](https://github.com/ghhccghk/HyperFocusApi) | 2.0 | `miui.focus` 参数封装 |
-| [SuperLyricApi](https://github.com/HChenX/SuperLyricApi) | 3.4 | 第三方歌词源（AIDL 实时推送） |
+| [SuperLyricApi](https://github.com/HChenX/SuperLyricApi) | 3.4 | 第三方歌词源（AIDL 实时推送，LGPL-2.1） |
 | [Lyricon Subscriber](https://github.com/proify/lyricon) | 0.1.70 | 第三方歌词源（Apache 2.0） |
 | [libxposed API](https://github.com/libxposed/api) | 102 (via module.prop) | LSPosed 2.0 Modern Xposed API 声明 |
 | OkHttp | 4.12.0 | 歌词 HTTP、版本更新检测 |
@@ -803,7 +803,7 @@ LSPosed 日志目录结构：
 ### 同生态
 
 - [Lyric-Getter](https://github.com/xiaowine/Lyric-Getter) / [Lyric-Getter-Api](https://github.com/xiaowine/Lyric-Getter-Api) — FocusNotifLyric 常配合的歌词方案；本仓库歌词走网易云/QQ Provider
-- [SuperLyricApi](https://github.com/HChenX/SuperLyricApi) — SuperLyric 歌词源（AIDL）
+- [SuperLyricApi](https://github.com/HChenX/SuperLyricApi) — SuperLyric 歌词源（LGPL-2.1）
 - [Lyricon](https://github.com/proify/lyricon) — 词幕 Lyricon 歌词源（Apache 2.0）
 - [LyricInfo](https://github.com/limczhh/LyricInfo) — 通知栏 LRC 注入（Xposed）
 - [HookTool](https://github.com/HChenX/HookTool) · [Cemiuiler](https://github.com/ReChronoRain/Cemiuiler)
