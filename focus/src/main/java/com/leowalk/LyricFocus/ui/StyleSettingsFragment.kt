@@ -1245,7 +1245,9 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                 ""
             }
 
-            if (swapLyricTranslation && hasLyric && secondText.isNotBlank()) {
+            // 互换仅当有实际翻译内容时才生效，与焦点通知行为一致
+            val hasTranslation = state.lineTranslation?.isNotBlank() == true
+            if (swapLyricTranslation && hasLyric && hasTranslation && secondText.isNotBlank()) {
                 val tmp = lyricText
                 lyricText = secondText
                 secondText = tmp

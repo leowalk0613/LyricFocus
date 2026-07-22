@@ -40,6 +40,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     data class PreviewState(
         val lyricText: String = "",
         val secondLine: String = "",
+        val lineTranslation: String? = null,
         val title: String = "",
         val artist: String = "",
         val isPlaying: Boolean = false,
@@ -493,6 +494,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         previewState = PreviewState(
             lyricText = currentLyricText,
             secondLine = secondLineText,
+            lineTranslation = lineTranslation,
             title = currentTitle,
             artist = currentArtist,
             isPlaying = isPlaying,
@@ -856,6 +858,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             previewState = PreviewState(
                 lyricText = title,
                 secondLine = artist,
+                lineTranslation = null,
                 title = title,
                 artist = artist,
                 isPlaying = isPlaying,
