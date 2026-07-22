@@ -951,7 +951,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     private lateinit var previewMultiLines: View
     private val previewMultiTextViews = mutableListOf<TextView>()
     private var previewBound = false
-    private var previewExpanded = false
+    private var previewExpanded = true
 
     private fun bindPreviewViews(view: View) {
         previewHeader = view.findViewById(R.id.preview_header)
@@ -971,6 +971,9 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             previewMultiTextViews += view.findViewById<TextView>(id)
         }
         previewHeader.setOnClickListener { togglePreview() }
+        // 默认展开
+        previewContent.visibility = View.VISIBLE
+        previewExpandIcon.rotation = 180f
         previewBound = true
     }
 
