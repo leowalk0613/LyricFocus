@@ -44,7 +44,8 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         val artist: String = "",
         val isPlaying: Boolean = false,
         val musicPackage: String = "",
-        val nextLyricLines: List<String> = emptyList()
+        val nextLyricLines: List<String> = emptyList(),
+        val nextLyricTranslations: List<String> = emptyList()
     )
 
     companion object {
@@ -488,6 +489,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
         sendLyricBroadcastIfChanged(currentLyricText, secondLineText, lineTranslation)
 
+        val (nextLines, nextTrans) = collectNextLyricLines(syncAdvanceMs)
         previewState = PreviewState(
             lyricText = currentLyricText,
             secondLine = secondLineText,
@@ -495,25 +497,29 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             artist = currentArtist,
             isPlaying = isPlaying,
             musicPackage = currentMusicPackage(),
-            nextLyricLines = collectNextLyricLines(syncAdvanceMs)
+            nextLyricLines = nextLines,
+            nextLyricTranslations = nextTrans
         )
         notifyPreviewStateChanged()
     }
 
-    private fun collectNextLyricLines(syncAdvanceMs: Long): List<String> {
-        if (currentLyricInfo.isEmpty) return emptyList()
+    private fun collectNextLyricLines(syncAdvanceMs: Long): Pair<List<String>, List<String>> {
+        if (currentLyricInfo.isEmpty) return Pair(emptyList(), emptyList())
         val idx = currentLyricInfo.getCurrentLineIndex(currentPosition, syncAdvanceMs)
         val lines = currentLyricInfo.lines
         if (idx < 0) {
-            // 还没到第一句：返回前 N 行预览
-            return lines.take(8).map { it.text }
+            return Pair(
+                lines.take(8).map { it.text },
+                lines.take(8).map { it.translation ?: "" }
+            )
         }
-        // 从当前行开始，取当前行 + 后续行，最多 8 行用于多行预览
-        val result = mutableListOf<String>()
+        val texts = mutableListOf<String>()
+        val trans = mutableListOf<String>()
         for (i in idx until (idx + 8).coerceAtMost(lines.size)) {
-            result += lines[i].text
+            texts += lines[i].text
+            trans += lines[i].translation ?: ""
         }
-        return result
+        return Pair(texts, trans)
     }
 
     private fun resyncFocusState() {

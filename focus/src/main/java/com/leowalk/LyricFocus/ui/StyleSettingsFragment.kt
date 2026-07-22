@@ -1158,33 +1158,41 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             val mlTextSize = FocusPreferences.getMultiLineTextSize(ctx)
             val showTranslation = FocusPreferences.isMultiLineShowTranslation(ctx)
             val realLines = if (hasLyric && state.nextLyricLines.isNotEmpty()) state.nextLyricLines else emptyList()
+            val realTranslations = if (hasLyric && state.nextLyricTranslations.isNotEmpty()) state.nextLyricTranslations else emptyList()
             val origins = if (realLines.size >= 4) {
                 realLines.take(4)
             } else if (realLines.isNotEmpty()) {
-                // 补齐到 4 行
                 (realLines + List(4 - realLines.size) { "\u6b4c\u8bcd \u7b2c${realLines.size + it + 1}\u53e5" }).take(4)
             } else {
                 listOf("\u6b4c\u8bcd \u7b2c\u4e00\u53e5", "\u6b4c\u8bcd \u7b2c\u4e8c\u53e5", "\u6b4c\u8bcd \u7b2c\u4e09\u53e5", "\u6b4c\u8bcd \u7b2c\u56db\u53e5")
             }
-            val trans = listOf(
-                "\u7ffb\u8bd1 \u7b2c\u4e00\u53e5", "\u7ffb\u8bd1 \u7b2c\u4e8c\u53e5",
-                "\u7ffb\u8bd1 \u7b2c\u4e09\u53e5", "\u7ffb\u8bd1 \u7b2c\u56db\u53e5"
-            )
+            val trans = if (realTranslations.size >= 4) {
+                realTranslations.take(4).map { it.ifBlank { "" } }
+            } else if (realTranslations.isNotEmpty()) {
+                (realTranslations + List(4 - realTranslations.size) { "" }).take(4)
+            } else {
+                listOf("\u7ffb\u8bd1 \u7b2c\u4e00\u53e5", "\u7ffb\u8bd1 \u7b2c\u4e8c\u53e5", "\u7ffb\u8bd1 \u7b2c\u4e09\u53e5", "\u7ffb\u8bd1 \u7b2c\u56db\u53e5")
+            }
             for (i in 0 until 8) {
                 val tv = previewMultiTextViews[i]
                 if (i < count) {
-                    tv.visibility = View.VISIBLE
                     val isTranslationSlot = showTranslation && i % 2 == 1
                     val pairIdx = i / 2
                     val swapped = showTranslation && swapLyricTranslation
-                    tv.text = if (isTranslationSlot) {
+                    val text = if (isTranslationSlot) {
                         if (swapped) origins[pairIdx.coerceAtMost(3)] else trans[pairIdx.coerceAtMost(3)]
                     } else {
                         if (swapped && showTranslation) trans[pairIdx.coerceAtMost(3)] else origins[pairIdx.coerceAtMost(3)]
                     }
-                    tv.textSize = mlTextSize
-                    tv.setTextColor(if (isTranslationSlot) secondaryColor else primaryColor)
-                    tv.gravity = gravity
+                    if (text.isBlank()) {
+                        tv.visibility = View.GONE
+                    } else {
+                        tv.visibility = View.VISIBLE
+                        tv.text = text
+                        tv.textSize = mlTextSize
+                        tv.setTextColor(if (isTranslationSlot) secondaryColor else primaryColor)
+                        tv.gravity = gravity
+                    }
                 } else {
                     tv.visibility = View.GONE
                 }
