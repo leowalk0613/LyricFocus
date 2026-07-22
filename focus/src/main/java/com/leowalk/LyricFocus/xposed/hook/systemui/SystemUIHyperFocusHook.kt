@@ -214,7 +214,6 @@ class SystemUIHyperFocusHook : BaseHook() {
                 registerScreenReceiver()
                 refreshSettings()
                 scheduleResyncRequests()
-                registerFocusPinRepostCallback()
                 log("SystemUI context ready for focus lyrics")
                 result
             }
@@ -442,12 +441,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                     ) {
                         return@intercept null
                     }
-                    val result = chain.proceed()
-                    // 面板回流后检测歌词通知视图排位，降低则触发 repost
-                    if (FocusPinState.shouldPin()) {
-                        FocusPinAboveHook.checkPanelAfterReflow(chain.thisObject)
-                    }
-                    result
+                    chain.proceed()
                 }
                 log("Debounced positionClockAndNotifications on $target")
                 break
@@ -465,18 +459,6 @@ class SystemUIHyperFocusHook : BaseHook() {
     private fun scheduleLyricFocusReorder() {
         syncFocusPinState()
         FocusPinAboveHook.scheduleViewReorder(cachedFocusRow)
-    }
-
-    private fun registerFocusPinRepostCallback() {
-        FocusPinState.onRepostRequested = {
-            handler.post {
-                if (!focusEnabled || !isPlaying || currentLyricText.isBlank()) return@post
-                log("FocusPin repost triggered")
-                cancelFocusNotification()
-                postFocusUpdate(FocusRefreshMode.LINE_CHANGE, force = true)
-                scheduleNextUpdate()
-            }
-        }
     }
 
     private fun invalidateLayoutCache() {
