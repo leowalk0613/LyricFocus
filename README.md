@@ -434,6 +434,14 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 
 ## 版本更新
 
+### v1.8.2
+
+- **样式预览**：样式设置页新增固定预览区，标题栏下方始终可见，实时反映所有样式改动（字号/颜色/取色/背景/行数/排版/多行/AOD 等），播放时同步显示真实歌词与翻译
+- **取色统一**：预览区颜色逻辑与焦点通知完全一致，复用 `AlbumColorExtractor` 确保 Monet/文字取色预览与实际效果一致
+- **性能优化**：Handler 轮询 100→250ms、notify 去重、LAYOUT_REFLOW 5000→2000ms
+- **置顶重构**：通知中心仅靠 PRIORITY_MAX+sortKey=0，AOD/切歌时 cancel+repost 置顶，移除全部 ViewGroup/List 操作钩子（-1063 行），彻底消除通知中心卡顿
+- **版本号**：`1.8.2`（versionCode 22）
+
 ### v1.8.0
 
 #### ⚠️ 重要：LSPosed API 升级至 102

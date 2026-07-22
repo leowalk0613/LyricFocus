@@ -26,6 +26,7 @@ import com.google.android.material.slider.Slider
 import com.leowalk.LyricFocus.FocusPreferences
 import com.leowalk.LyricFocus.R
 import com.leowalk.LyricFocus.service.LyricService
+import com.leowalk.LyricFocus.util.AlbumColorExtractor
 import com.leowalk.LyricFocus.util.AodColorPresets
 import kotlin.math.roundToInt
 
@@ -1007,26 +1008,59 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     }
 
     /**
+     * 与 HyperFocusLyricStyle.resolveLyricStyle 保持一致的颜色逻辑。
      * @return Triple(primaryColor, secondaryColor, backgroundColorOrNull)
      */
     private fun resolvePreviewColors(ctx: android.content.Context): Triple<Int, Int, Int?> {
-        val monet = FocusPreferences.isMonetDynamicColorEnabled(ctx)
-        val extraction = FocusPreferences.isTextColorExtractionEnabled(ctx)
-        if (monet || extraction) {
-            val extracted = FocusPreferences.getExtractedTextColor(ctx)
-            val extractedBg = FocusPreferences.getExtractedBgColor(ctx)
-            if (extracted != null) {
-                val secondary = blendSecondary(extracted)
-                return Triple(extracted, secondary, if (monet && extractedBg != null) extractedBg else null)
+        val monetEnabled = FocusPreferences.isMonetDynamicColorEnabled(ctx)
+        val textExtractionEnabled = FocusPreferences.isTextColorExtractionEnabled(ctx)
+        val extractedColor = if (monetEnabled || textExtractionEnabled) {
+            FocusPreferences.getExtractedTextColor(ctx)
+        } else null
+        val extractedBgColor = FocusPreferences.getExtractedBgColor(ctx)
+        val background = FocusPreferences.getFocusBackground(ctx)
+        val textColor = FocusPreferences.getLyricTextColor(ctx)
+
+        when {
+            monetEnabled && extractedColor != null && extractedBgColor != null -> {
+                val primary = extractedColor
+                val secondary = AlbumColorExtractor.ensureContrast(
+                    AlbumColorExtractor.blendSecondary(extractedColor, extractedBgColor),
+                    extractedBgColor,
+                    3.0
+                )
+                return Triple(primary, secondary, extractedBgColor)
+            }
+            textExtractionEnabled && extractedColor != null -> {
+                val (primary, secondary) = AlbumColorExtractor.resolveTextColors(
+                    accent = extractedColor,
+                    backgroundEstimate = extractedBgColor ?: android.graphics.Color.GRAY,
+                    backgroundMode = background
+                )
+                val bg = when (background) {
+                    FocusPreferences.BACKGROUND_BLACK -> android.graphics.Color.BLACK
+                    FocusPreferences.BACKGROUND_WHITE -> android.graphics.Color.WHITE
+                    else -> null
+                }
+                return Triple(primary, secondary, bg)
+            }
+            textColor == "black" -> {
+                val bg = when (background) {
+                    FocusPreferences.BACKGROUND_BLACK -> android.graphics.Color.BLACK
+                    FocusPreferences.BACKGROUND_WHITE -> android.graphics.Color.WHITE
+                    else -> null
+                }
+                return Triple(android.graphics.Color.BLACK, 0xFF333333.toInt(), bg)
+            }
+            else -> {
+                val bg = when (background) {
+                    FocusPreferences.BACKGROUND_BLACK -> android.graphics.Color.BLACK
+                    FocusPreferences.BACKGROUND_WHITE -> android.graphics.Color.WHITE
+                    else -> null
+                }
+                return Triple(android.graphics.Color.WHITE, 0xFFE0E0E0.toInt(), bg)
             }
         }
-        val textColor = FocusPreferences.getLyricTextColor(ctx)
-        val (primary, secondary) = if (textColor == "black") {
-            Pair(android.graphics.Color.BLACK, 0xFF333333.toInt())
-        } else {
-            Pair(android.graphics.Color.WHITE, 0xFFE0E0E0.toInt())
-        }
-        return Triple(primary, secondary, null)
     }
 
     private fun refreshAodPreview(ctx: android.content.Context, state: LyricService.PreviewState, hasLyric: Boolean) {
