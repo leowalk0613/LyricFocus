@@ -33,9 +33,19 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:paddingHorizontal="16dp"
-            android:paddingBottom="80dp">
+            android:orientation="vertical">
+
+            <!-- 样式预览区（固定不滚动，wrap_content 自适应高度） -->
+            <include
+                android:id="@+id/preview_section"
+                layout="@layout/preview_style_card" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingHorizontal="16dp"
+                android:paddingBottom="80dp">
 
             <TextView
                 android:layout_width="match_parent"
@@ -1272,6 +1282,8 @@
             </com.google.android.material.card.MaterialCardView>
 
             </LinearLayout>
+
+        </LinearLayout>
 
         </LinearLayout>
 

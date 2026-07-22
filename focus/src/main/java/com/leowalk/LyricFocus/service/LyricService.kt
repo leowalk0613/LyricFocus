@@ -37,6 +37,15 @@ import kotlinx.coroutines.launch
 
 class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
+    data class PreviewState(
+        val lyricText: String = "",
+        val secondLine: String = "",
+        val title: String = "",
+        val artist: String = "",
+        val isPlaying: Boolean = false,
+        val musicPackage: String = ""
+    )
+
     companion object {
         private const val TAG = "LyricService"
 
@@ -68,6 +77,17 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         @Volatile
         var currentLyricSongLabel: String = ""
             private set
+
+        @Volatile
+        var previewState: PreviewState = PreviewState()
+            private set
+
+        @Volatile
+        var onPreviewStateChanged: (() -> Unit)? = null
+
+        private fun notifyPreviewStateChanged() {
+            onPreviewStateChanged?.invoke()
+        }
 
         fun start(context: Context) {
             val intent = Intent(context, LyricService::class.java)
@@ -466,6 +486,16 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         }
 
         sendLyricBroadcastIfChanged(currentLyricText, secondLineText, lineTranslation)
+
+        previewState = PreviewState(
+            lyricText = currentLyricText,
+            secondLine = secondLineText,
+            title = currentTitle,
+            artist = currentArtist,
+            isPlaying = isPlaying,
+            musicPackage = currentMusicPackage()
+        )
+        notifyPreviewStateChanged()
     }
 
     private fun resyncFocusState() {
@@ -799,6 +829,15 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             resetBroadcastCache()
             clearAlbumColorForNewSong()
             fetchLyric(title, artist)
+            previewState = PreviewState(
+                lyricText = title,
+                secondLine = artist,
+                title = title,
+                artist = artist,
+                isPlaying = isPlaying,
+                musicPackage = currentMusicPackage()
+            )
+            notifyPreviewStateChanged()
             if (isPlaying) {
                 restartLyricTickerIfPlaying()
             }
@@ -829,6 +868,8 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             currentPosition = extrapolatePlaybackPosition(state)
             lastUpdateTime = System.currentTimeMillis()
             isPlaying = state.state == PlaybackState.STATE_PLAYING
+            previewState = previewState.copy(isPlaying = isPlaying)
+            notifyPreviewStateChanged()
 
             // notify SystemUI playback state; pause cancels focus notification
             lyricNotificationManager.sendPlaybackState(isPlaying)
