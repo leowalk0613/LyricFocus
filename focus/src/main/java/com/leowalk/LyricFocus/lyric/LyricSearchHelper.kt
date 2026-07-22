@@ -150,4 +150,15 @@ object LyricSearchHelper {
         }
         return best
     }
+
+    fun scoreAlbumMatch(candidateAlbum: String, inputAlbum: String): Int {
+        if (candidateAlbum.isBlank() || inputAlbum.isBlank()) return 0
+        val c = candidateAlbum.trim()
+        val i = inputAlbum.trim()
+        return when {
+            c.equals(i, ignoreCase = true) -> 10
+            c.contains(i, ignoreCase = true) || i.contains(c, ignoreCase = true) -> 5
+            else -> 0
+        }
+    }
 }

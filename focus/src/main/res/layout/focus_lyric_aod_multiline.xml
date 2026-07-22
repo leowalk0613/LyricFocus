@@ -17,6 +17,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
+        android:minHeight="200dp"
         android:orientation="vertical"
         android:padding="12dp">
 
@@ -36,7 +37,10 @@
             android:includeFontPadding="false"
             android:maxLines="1"
             android:textColor="@color/focus_lyric_aod_primary"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:shadowColor="#40000000"
+            android:shadowRadius="3"
+            android:shadowDy="1" />
 
         <TextView
             android:id="@+id/focus_ml_line_1"
@@ -48,7 +52,10 @@
             android:includeFontPadding="false"
             android:maxLines="1"
             android:textColor="@color/focus_lyric_aod_primary"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:shadowColor="#40000000"
+            android:shadowRadius="3"
+            android:shadowDy="1" />
 
         <TextView
             android:id="@+id/focus_ml_line_2"
@@ -60,7 +67,10 @@
             android:includeFontPadding="false"
             android:maxLines="1"
             android:textColor="@color/focus_lyric_aod_primary"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:shadowColor="#40000000"
+            android:shadowRadius="3"
+            android:shadowDy="1" />
 
         <TextView
             android:id="@+id/focus_ml_line_3"
@@ -72,7 +82,10 @@
             android:includeFontPadding="false"
             android:maxLines="1"
             android:textColor="@color/focus_lyric_aod_primary"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:shadowColor="#40000000"
+            android:shadowRadius="3"
+            android:shadowDy="1" />
 
         <TextView
             android:id="@+id/focus_ml_line_4"
@@ -84,7 +97,10 @@
             android:includeFontPadding="false"
             android:maxLines="1"
             android:textColor="@color/focus_lyric_aod_primary"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:shadowColor="#40000000"
+            android:shadowRadius="3"
+            android:shadowDy="1" />
 
         <TextView
             android:id="@+id/focus_ml_line_5"
@@ -96,7 +112,10 @@
             android:includeFontPadding="false"
             android:maxLines="1"
             android:textColor="@color/focus_lyric_aod_primary"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:shadowColor="#40000000"
+            android:shadowRadius="3"
+            android:shadowDy="1" />
 
         <TextView
             android:id="@+id/focus_ml_line_6"
@@ -108,7 +127,10 @@
             android:includeFontPadding="false"
             android:maxLines="1"
             android:textColor="@color/focus_lyric_aod_primary"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:shadowColor="#40000000"
+            android:shadowRadius="3"
+            android:shadowDy="1" />
 
         <TextView
             android:id="@+id/focus_ml_line_7"
@@ -120,7 +142,10 @@
             android:includeFontPadding="false"
             android:maxLines="1"
             android:textColor="@color/focus_lyric_aod_primary"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:shadowColor="#40000000"
+            android:shadowRadius="3"
+            android:shadowDy="1" />
 
     </LinearLayout>
 

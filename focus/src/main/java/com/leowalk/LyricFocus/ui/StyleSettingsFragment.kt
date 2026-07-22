@@ -402,15 +402,25 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         updateMultiLineDependentUi()
     }
 
+    private fun isRealtimeSource(): Boolean {
+        return FocusPreferences.getLyricSource(requireContext()) == FocusPreferences.LYRIC_SOURCE_SUPERLYRIC
+    }
+
     private fun updateCustomAodSectionState() {
         val customAodEnabled = FocusPreferences.isCustomAodLayout(requireContext())
+        val realtimeSource = isRealtimeSource()
         val alpha = if (customAodEnabled) 1f else 0.38f
 
         customAodSectionHint.visibility = if (customAodEnabled) View.GONE else View.VISIBLE
         customAodStyleCard.alpha = if (customAodEnabled) 1f else 0.72f
         customAodControls.forEach { control ->
-            control.isEnabled = customAodEnabled
-            control.alpha = alpha
+            if (realtimeSource && control == customAodTranslationLinesGroup) {
+                control.isEnabled = false
+                control.alpha = 0.38f
+            } else {
+                control.isEnabled = customAodEnabled
+                control.alpha = alpha
+            }
         }
         colorPresetViews.forEach { chip ->
             chip.isEnabled = customAodEnabled
@@ -422,6 +432,23 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         val multiLineEnabled = FocusPreferences.isMultiLineLyrics(requireContext())
         val customAodEnabled = FocusPreferences.isCustomAodLayout(requireContext())
         val lockScreenInteractive = !customAodEnabled
+        val realtimeSource = isRealtimeSource()
+
+        if (realtimeSource) {
+            multiLineCountRow.visibility = View.GONE
+            multiLineTranslationRow.visibility = View.GONE
+            multiLineTextSizeRow.visibility = View.GONE
+            switchMultiLineLyrics.isEnabled = false
+            switchMultiLineLyrics.alpha = 0.38f
+            switchSwapLyricTranslation.isEnabled = false
+            switchSwapLyricTranslation.alpha = 0.38f
+            setSectionEnabled(section = singleLineOnlyRow, title = singleLineOnlyTitle,
+                hint = singleLineOnlyHint, hintText = "SuperLyric 源不支持",
+                enabled = false, controls = listOf(switchSingleLineOnly))
+            translationLinesGroup.isEnabled = false
+            translationLinesGroup.alpha = 0.38f
+            return
+        }
 
         multiLineCountRow.visibility = if (multiLineEnabled) View.VISIBLE else View.GONE
         multiLineTranslationRow.visibility = if (multiLineEnabled) View.VISIBLE else View.GONE
@@ -1190,41 +1217,68 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
 
             val count = FocusPreferences.getMultiLineLineCount(ctx)
             val mlTextSize = FocusPreferences.getMultiLineTextSize(ctx)
-            val showTranslation = FocusPreferences.isMultiLineShowTranslation(ctx)
-            val realLines = if (hasLyric && state.nextLyricLines.isNotEmpty()) state.nextLyricLines else emptyList()
-            val realTranslations = if (hasLyric && state.nextLyricTranslations.isNotEmpty()) state.nextLyricTranslations else emptyList()
-            val origins = if (realLines.size >= 4) {
-                realLines.take(4)
-            } else if (realLines.isNotEmpty()) {
-                (realLines + List(4 - realLines.size) { "\u6b4c\u8bcd \u7b2c${realLines.size + it + 1}\u53e5" }).take(4)
+            val showTransPref = FocusPreferences.isMultiLineShowTranslation(ctx)
+
+            // Use full lyrics + current position for page logic (mirror buildMultiLineWindow)
+            val lyricInfo = LyricService.currentLyricInfoForPreview
+            val allLines = if (!lyricInfo.isEmpty) lyricInfo.lines else emptyList()
+            val currentIndex = if (allLines.isNotEmpty()) {
+                lyricInfo.getCurrentLineIndex(LyricService.currentPlaybackPositionMs, FocusPreferences.getSyncAdvanceMs(ctx))
+                    .coerceAtLeast(0)
+            } else 0
+
+            val interleaved = showTransPref && allLines.any { it.translation?.isNotBlank() == true }
+            val pairCount = if (interleaved) count / 2 else count
+            val pageStart = (currentIndex / pairCount) * pairCount
+            val currentSlot = if (interleaved) (currentIndex - pageStart) * 2 else currentIndex - pageStart
+
+            val origins: List<String>
+            val trans: List<String>
+            if (allLines.isNotEmpty()) {
+                origins = (0 until pairCount).map { allLines.getOrNull(pageStart + it)?.text ?: "" }
+                trans = if (interleaved) {
+                    (0 until pairCount).map { allLines.getOrNull(pageStart + it)?.translation ?: "" }
+                } else {
+                    List(pairCount) { "" }
+                }
             } else {
-                listOf("\u6b4c\u8bcd \u7b2c\u4e00\u53e5", "\u6b4c\u8bcd \u7b2c\u4e8c\u53e5", "\u6b4c\u8bcd \u7b2c\u4e09\u53e5", "\u6b4c\u8bcd \u7b2c\u56db\u53e5")
+                origins = List(pairCount) { "\u6b4c\u8bcd \u7b2c${it + 1}\u53e5" }
+                trans = if (interleaved) List(pairCount) { "\u7ffb\u8bd1 \u7b2c${it + 1}\u53e5" } else List(pairCount) { "" }
             }
-            val trans = if (realTranslations.size >= 4) {
-                realTranslations.take(4).map { it.ifBlank { "" } }
-            } else if (realTranslations.isNotEmpty()) {
-                (realTranslations + List(4 - realTranslations.size) { "" }).take(4)
-            } else {
-                listOf("\u7ffb\u8bd1 \u7b2c\u4e00\u53e5", "\u7ffb\u8bd1 \u7b2c\u4e8c\u53e5", "\u7ffb\u8bd1 \u7b2c\u4e09\u53e5", "\u7ffb\u8bd1 \u7b2c\u56db\u53e5")
-            }
+            // Mirror applyMultiLineStyle colors and sizes exactly
+            val defaultLineColor = FocusPreferences.getExtractedTextColor(ctx) ?: primaryColor
+            val currentLineColor = if (FocusPreferences.getFocusBackground(ctx) == FocusPreferences.BACKGROUND_WHITE)
+                android.graphics.Color.BLACK else android.graphics.Color.WHITE
+            val nonCurrentTransColor = fadeTextColor(defaultLineColor)
+            val isCurrentPair = { idx: Int -> interleaved && idx >= 0 && (idx == currentSlot || (idx == currentSlot + 1 && currentSlot % 2 == 0)) }
             for (i in 0 until 8) {
                 val tv = previewMultiTextViews[i]
                 if (i < count) {
-                    val isTranslationSlot = showTranslation && i % 2 == 1
+                    val isTranslationSlot = interleaved && i % 2 == 1
                     val pairIdx = i / 2
-                    val swapped = showTranslation && swapLyricTranslation
+                    val swapped = interleaved && swapLyricTranslation
                     val text = if (isTranslationSlot) {
-                        if (swapped) origins[pairIdx.coerceAtMost(3)] else trans[pairIdx.coerceAtMost(3)]
+                        if (swapped) origins[pairIdx.coerceAtMost(origins.size - 1)] else trans[pairIdx.coerceAtMost(trans.size - 1)]
                     } else {
-                        if (swapped && showTranslation) trans[pairIdx.coerceAtMost(3)] else origins[pairIdx.coerceAtMost(3)]
+                        if (swapped && interleaved) trans[pairIdx.coerceAtMost(trans.size - 1)] else origins[pairIdx.coerceAtMost(origins.size - 1)]
                     }
                     if (text.isBlank()) {
                         tv.visibility = View.GONE
                     } else {
+                        val inCurrentPair = isCurrentPair(i)
                         tv.visibility = View.VISIBLE
                         tv.text = text
-                        tv.textSize = mlTextSize
-                        tv.setTextColor(if (isTranslationSlot) secondaryColor else primaryColor)
+                        tv.setTextColor(when {
+                            inCurrentPair -> currentLineColor
+                            isTranslationSlot -> nonCurrentTransColor
+                            else -> defaultLineColor
+                        })
+                        tv.textSize = when {
+                            i == currentSlot -> mlTextSize
+                            inCurrentPair && isTranslationSlot -> mlTextSize * 0.8f
+                            isTranslationSlot -> mlTextSize * 0.65f + 2f
+                            else -> mlTextSize * 0.65f
+                        }
                         tv.gravity = gravity
                     }
                 } else {
@@ -1269,6 +1323,11 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                 previewSecond.maxLines = translationMaxLines
             }
         }
+    }
+
+    private fun fadeTextColor(color: Int, factor: Float = 0.72f): Int {
+        val a = (android.graphics.Color.alpha(color) * factor).toInt().coerceIn(0, 255)
+        return android.graphics.Color.argb(a, android.graphics.Color.red(color), android.graphics.Color.green(color), android.graphics.Color.blue(color))
     }
 
     private fun blendSecondary(primary: Int): Int {

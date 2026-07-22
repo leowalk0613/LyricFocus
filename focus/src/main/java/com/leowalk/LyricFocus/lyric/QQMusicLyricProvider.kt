@@ -12,38 +12,52 @@ class QQMusicLyricProvider : LyricProvider {
 
     private val client = HttpClient.instance
 
+    private data class SongCandidate(
+        val songMid: String,
+        val title: String,
+        val artist: String,
+        val album: String
+    )
+
     override suspend fun searchLyric(title: String, artist: String, album: String): LyricInfo? {
         return try {
-            val songMid = searchSong(title, artist) ?: return null
-            val lyricText = getLyric(songMid) ?: return null
+            val candidate = searchSong(title, artist, album) ?: return null
+            val lyricText = getLyric(candidate.songMid) ?: return null
             val lyricInfo = LrcParser.parse(lyricText)
             if (lyricInfo.lines.size < 3) return null
-            lyricInfo.copy(source = name)
+            lyricInfo.copy(
+                title = candidate.title,
+                artist = candidate.artist,
+                album = candidate.album,
+                source = name
+            )
         } catch (e: Exception) {
             e.printStackTrace()
             null
         }
     }
 
-    private suspend fun searchSong(title: String, artist: String): String? {
-        var bestMid: String? = null
+    private suspend fun searchSong(title: String, artist: String, album: String = ""): SongCandidate? {
+        var bestCandidate: SongCandidate? = null
         var bestScore = Int.MIN_VALUE
         for (keyword in LyricSearchHelper.buildSearchKeywords(title, artist)) {
-            for ((songMid, score) in searchSongsByKeyword(keyword, title, artist)) {
-                if (score > bestScore) {
-                    bestScore = score
-                    bestMid = songMid
+            for ((candidate, score) in searchSongsByKeyword(keyword, title, artist)) {
+                val albumScore = LyricSearchHelper.scoreAlbumMatch(candidate.album, album)
+                val total = score + albumScore
+                if (total > bestScore) {
+                    bestScore = total
+                    bestCandidate = candidate
                 }
             }
         }
-        return bestMid.takeIf { bestScore > 0 }
+        return bestCandidate.takeIf { bestScore > 0 }
     }
 
     private suspend fun searchSongsByKeyword(
         keyword: String,
         title: String,
         artist: String
-    ): List<Pair<String, Int>> {
+    ): List<Pair<SongCandidate, Int>> {
         for (payload in buildSearchPayloads(keyword)) {
             val results = executeSearch(payload, title, artist)
             if (results.isNotEmpty()) return results
@@ -79,7 +93,7 @@ class QQMusicLyricProvider : LyricProvider {
         payload: JSONObject,
         title: String,
         artist: String
-    ): List<Pair<String, Int>> {
+    ): List<Pair<SongCandidate, Int>> {
         val request = Request.Builder()
             .url(SEARCH_URL)
             .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
@@ -95,7 +109,7 @@ class QQMusicLyricProvider : LyricProvider {
             val json = JSONObject(body)
             val list = extractSearchSongList(json) ?: return emptyList()
 
-            val results = mutableListOf<Pair<String, Int>>()
+            val results = mutableListOf<Pair<SongCandidate, Int>>()
             songLoop@ for (i in 0 until list.length()) {
                 val song = list.getJSONObject(i)
                 val songMid = song.optString("mid").ifBlank { song.optString("songmid") }
@@ -125,7 +139,14 @@ class QQMusicLyricProvider : LyricProvider {
                 if (artist.isNotBlank()) {
                     score += LyricSearchHelper.scoreArtistMatch(candidateArtists, artist)
                 }
-                results.add(songMid to score)
+                val candidate = SongCandidate(
+                    songMid = songMid,
+                    title = songName,
+                    artist = candidateArtists.firstOrNull() ?: "",
+                    album = song.optJSONObject("album")?.optString("name", "")
+                        ?: song.optString("albumname", "")
+                )
+                results.add(candidate to score)
             }
             return results
         }

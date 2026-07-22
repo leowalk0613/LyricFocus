@@ -46,6 +46,15 @@ object LocalLrcStore {
     fun findBestMatch(context: Context, title: String, artist: String): LrcFileRef? {
         val refs = listLrcFiles(context)
         if (refs.isEmpty()) return null
+
+        val candidates = LocalLrcMatcher.buildCandidateNames(title, artist)
+        for (candidate in candidates) {
+            val exact = refs.find {
+                it.name.substringBeforeLast('.', it.name).equals(candidate, ignoreCase = true)
+            }
+            if (exact != null) return exact
+        }
+
         var best: LrcFileRef? = null
         var bestScore = Int.MIN_VALUE
         for (ref in refs) {

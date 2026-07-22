@@ -1,6 +1,7 @@
 package com.leowalk.LyricFocus.lyric
 
 import android.content.Context
+import android.util.Log
 import com.leowalk.LyricFocus.FocusPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -29,7 +30,10 @@ class AiLyricTranslator(context: Context) {
     }
 
     suspend fun translateIfNeeded(lyricInfo: LyricInfo, title: String, artist: String): LyricInfo {
-        if (!hasConfiguredApi()) return lyricInfo
+        if (!hasConfiguredApi()) {
+            Log.d("LyricFocusAI", "AI translate skipped: API not configured")
+            return lyricInfo
+        }
         if (lyricInfo.lines.isEmpty()) return lyricInfo
 
         val translateAll = FocusPreferences.isAiTranslateAllLyrics(appContext)
@@ -114,7 +118,10 @@ class AiLyricTranslator(context: Context) {
             .build()
 
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return null
+            if (!response.isSuccessful) {
+                Log.w("LyricFocusAI", "AI translate HTTP ${response.code}: ${response.body?.string()?.take(200)}")
+                return null
+            }
             val body = response.body?.string() ?: return null
             val content = JSONObject(body)
                 .optJSONArray("choices")
@@ -122,8 +129,10 @@ class AiLyricTranslator(context: Context) {
                 ?.optJSONObject("message")
                 ?.optString("content")
                 ?.trim()
-                ?: return null
-            return mergeTranslation(lyricInfo, content)
+                ?: return null.also { Log.w("LyricFocusAI", "AI translate: empty response content") }
+            val result = mergeTranslation(lyricInfo, content)
+            if (result == null) Log.w("LyricFocusAI", "AI translate: mergeTranslation returned null")
+            return result
         }
     }
 

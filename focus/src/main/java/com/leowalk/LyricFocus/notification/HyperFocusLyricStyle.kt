@@ -269,10 +269,7 @@ object HyperFocusLyricStyle {
             multiLine
         )
 
-
-
         val iconsBundle = Bundle().apply {
-
             if (showOnIsland) {
 
                 putParcelable("miui.focus.icon", circularIcon)
@@ -1210,21 +1207,21 @@ object HyperFocusLyricStyle {
         }
 
         val textSizeSp = FocusStyleSnapshot.multiLineTextSizeSp
-        val defaultLineColor = when (style.backgroundColor) {
+        val defaultLineColor = FocusStyleSnapshot.extractedTextColor
+            ?: style.colorPrimary
+        val currentLineColor = when (style.backgroundColor) {
             Color.WHITE -> Color.BLACK
             else -> COLOR_LYRIC_PRIMARY
         }
-        val translationColor = fadeTextColor(defaultLineColor)
-        val currentLineColor = FocusStyleSnapshot.extractedAccentColor
-            ?: FocusStyleSnapshot.extractedTextColor
-            ?: style.colorPrimary
-        val currentLineSize = textSizeSp * 1.2f
+        val nonCurrentTransColor = fadeTextColor(defaultLineColor)
+        val currentLineSlot = multiLine.currentLineSlot.coerceAtLeast(0)
+        val isCurrentPair = { idx: Int -> interleaved && idx >= 0 && (idx == currentLineSlot || (idx == currentLineSlot + 1 && currentLineSlot % 2 == 0)) }
 
         for (i in 0 until MULTI_LINE_MAX_SLOTS) {
             val viewId = MULTI_LINE_IDS[i]
             val displayText = displayLines[i]
             val isTranslation = interleaved && i < visibleCount && i % 2 == 1
-            val isCurrentLine = i == multiLine.currentLineSlot
+            val isCurrentLine = i == currentLineSlot
             if (i >= visibleCount || displayText.isBlank()) {
                 views.setTextViewText(viewId, " ")
                 views.setViewVisibility(viewId, View.GONE)
@@ -1232,18 +1229,28 @@ object HyperFocusLyricStyle {
             }
             views.setViewVisibility(viewId, View.VISIBLE)
             views.setTextViewText(viewId, displayText)
-            if (isCurrentLine) {
+            val inCurrentPair = isCurrentPair(i)
+            if (inCurrentPair) {
                 views.setTextColor(viewId, currentLineColor)
-                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, currentLineSize)
-            } else if (isTranslation) {
-                views.setTextColor(viewId, translationColor)
                 views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp)
+                if (i == currentLineSlot) {
+                    views.setViewPadding(viewId, 0, 12, 0, 0)
+                } else {
+                    views.setViewPadding(viewId, 0, 0, 0, 12)
+                }
+            } else if (isTranslation) {
+                views.setTextColor(viewId, nonCurrentTransColor)
+                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.65f + 2f)
             } else {
                 views.setTextColor(viewId, defaultLineColor)
-                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp)
+                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.65f)
             }
-            views.setInt(viewId, "setMaxLines", 1)
             views.setInt(viewId, "setGravity", style.gravityValue)
+            if (isCurrentLine) {
+                views.setInt(viewId, "setMaxLines", 4)
+            } else {
+                views.setInt(viewId, "setMaxLines", 1)
+            }
         }
 
         if (style.backgroundColor != null) {

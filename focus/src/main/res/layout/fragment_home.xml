@@ -23,6 +23,78 @@
                 android:textColor="?attr/colorOnSurfaceVariant" />
 
             <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_service_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/tv_service_status"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+                        <ImageButton
+                            android:id="@+id/btn_usage_help"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="使用说明"
+                            android:padding="6dp"
+                            android:scaleType="centerInside"
+                            android:src="@drawable/ic_info" />
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tv_status_aod_mode"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="2dp"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/tv_status_song_info"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="2dp"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/tv_status_lyric_source"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:visibility="gone" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
@@ -50,17 +122,6 @@
                             android:layout_weight="1"
                             android:text="显示设置"
                             android:textAppearance="?attr/textAppearanceTitleMedium" />
-
-                        <ImageButton
-                            android:id="@+id/btn_usage_help"
-                            android:layout_width="36dp"
-                            android:layout_height="36dp"
-                            android:background="?attr/selectableItemBackgroundBorderless"
-                            android:contentDescription="使用说明"
-                            android:padding="6dp"
-                            android:scaleType="centerInside"
-                            android:src="@drawable/ic_info"
-                            app:tint="?attr/colorOnSurfaceVariant" />
 
                     </LinearLayout>
 
@@ -212,31 +273,14 @@
                                 android:textAppearance="?attr/textAppearanceBodySmall"
                                 android:textColor="?attr/colorOnSurfaceVariant" />
 
-                            <TextView
-                                android:id="@+id/tv_lyric_source_hit"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:textAppearance="?attr/textAppearanceBodySmall"
-                                android:textColor="?attr/colorOnSurfaceVariant" />
-
                         </LinearLayout>
 
                         <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btn_configure_lyric_source"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginEnd="8dp"
-                            android:text="配置"
-                            android:visibility="gone" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btn_switch_lyric_source"
+                            android:id="@+id/btn_manage_lyric_source"
                             style="@style/Widget.Material3.Button.TonalButton"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="切换" />
+                            android:text="管理" />
 
                     </LinearLayout>
 
@@ -284,28 +328,6 @@
                             android:value="200"
                             android:valueFrom="-1000"
                             android:valueTo="3000" />
-
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="服务状态"
-                            android:textAppearance="?attr/textAppearanceBodyMedium"
-                            android:textColor="?attr/colorOnSurfaceVariant" />
-
-                        <TextView
-                            android:id="@+id/tv_service_status"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textAppearance="?attr/textAppearanceLabelLarge" />
 
                     </LinearLayout>
 

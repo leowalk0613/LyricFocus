@@ -44,8 +44,13 @@ object LrcParser {
         return TIME_LINE_PATTERN.containsMatchIn(line)
     }
 
+    /** 逐字/单词时间码：[word-level] 格式如 <00:16.440>、<00:16:44> */
+    private val WORD_TIME_PATTERN = Regex("<\\d{1,2}:\\d{2}[.:]\\d{2,3}>")
+
     private fun stripTimeTags(line: String): String {
-        return TIME_LINE_PATTERN.replace(line, "").trim()
+        val stripped = TIME_LINE_PATTERN.replace(line, "").trim()
+        val cleaned = WORD_TIME_PATTERN.replace(stripped, "").trim()
+        return cleaned.ifBlank { stripped }
     }
 
     private fun parseTimeTags(line: String): List<Long> {
@@ -279,9 +284,9 @@ object LrcParser {
         val hasHan = HAN_PATTERN.containsMatchIn(trimmed)
 
         return when {
-            latinRatio >= 0.45 -> LineKind.READING
             hasKana -> LineKind.ORIGINAL
             hasHan -> LineKind.TRANSLATION
+            latinRatio >= 0.45 -> LineKind.READING
             latinCount >= 3 -> LineKind.READING
             else -> LineKind.UNKNOWN
         }

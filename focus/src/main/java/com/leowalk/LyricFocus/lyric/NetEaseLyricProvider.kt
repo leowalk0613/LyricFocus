@@ -16,7 +16,7 @@ class NetEaseLyricProvider : LyricProvider {
             findKnownSongId(title, artist)?.let { knownId ->
                 fetchLyricBySongId(knownId)?.let { return it }
             }
-            val candidates = searchSongs(title, artist)
+            val candidates = searchSongs(title, artist, album)
             for (candidate in candidates) {
                 val (lyricText, tlyricText) = getLyricWithTranslation(candidate.id)
                 if (lyricText.isNullOrBlank()) continue
@@ -25,6 +25,7 @@ class NetEaseLyricProvider : LyricProvider {
                 return lyricInfo.copy(
                     title = candidate.title,
                     artist = candidate.artist,
+                    album = candidate.album,
                     source = name
                 )
             }
@@ -49,6 +50,21 @@ class NetEaseLyricProvider : LyricProvider {
             artistMatcher = { artist ->
                 val lower = artist.lowercase()
                 lower.contains("seventhlinks") && lower.contains("v flower")
+            }
+        ),
+        KnownSongEntry(
+            id = 2672796492L,
+            titlePattern = Regex("""それでも僕らは歌うことをやめない"""),
+            artistMatcher = { artist ->
+                artist.trim().equals("Leo/need", ignoreCase = true)
+            }
+        ),
+        KnownSongEntry(
+            id = 402801L,
+            titlePattern = Regex("""^Reach Out To The Truth$""", RegexOption.IGNORE_CASE),
+            artistMatcher = { artist ->
+                val lower = artist.lowercase()
+                lower.contains("平田志穂子")
             }
         )
     )
@@ -76,16 +92,18 @@ class NetEaseLyricProvider : LyricProvider {
     private data class SongCandidate(
         val id: Long,
         val title: String,
-        val artist: String
+        val artist: String,
+        val album: String
     )
 
-    private suspend fun searchSongs(title: String, artist: String): List<SongCandidate> {
+    private suspend fun searchSongs(title: String, artist: String, album: String = ""): List<SongCandidate> {
         val seenIds = mutableSetOf<Long>()
         val ranked = mutableListOf<Pair<SongCandidate, Int>>()
         for (keyword in LyricSearchHelper.buildSearchKeywords(title, artist)) {
             for ((candidate, score) in searchSongsByKeyword(keyword, title, artist)) {
                 if (seenIds.add(candidate.id)) {
-                    ranked.add(candidate to score)
+                    val albumScore = LyricSearchHelper.scoreAlbumMatch(candidate.album, album)
+                    ranked.add(candidate to (score + albumScore))
                 }
             }
         }
@@ -138,7 +156,8 @@ class NetEaseLyricProvider : LyricProvider {
         return SongCandidate(
             id = song.getLong("id"),
             title = song.optString("name", fallbackTitle),
-            artist = artistName
+            artist = artistName,
+            album = song.optJSONObject("album")?.optString("name", "") ?: ""
         )
     }
 

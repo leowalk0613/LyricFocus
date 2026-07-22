@@ -72,6 +72,9 @@ object FocusPreferences {
     const val LYRIC_SOURCE_QQ = "qq"
     const val LYRIC_SOURCE_LOCAL = "local"
     const val LYRIC_SOURCE_AI = "ai"
+    const val LYRIC_SOURCE_SUPERLYRIC = "superlyric"
+    const val LYRIC_SOURCE_LYRICON = "lyricon"
+    const val LYRIC_SOURCE_LYRICINFO = "lyricinfo"
 
     const val PREF_LOCAL_LRC_DIR = "local_lrc_dir"
     const val PREF_LOCAL_LRC_TREE_URI = "local_lrc_tree_uri"
@@ -205,7 +208,10 @@ object FocusPreferences {
             LYRIC_SOURCE_NETEASE,
             LYRIC_SOURCE_QQ,
             LYRIC_SOURCE_LOCAL,
-            LYRIC_SOURCE_AI -> source
+            LYRIC_SOURCE_AI,
+            LYRIC_SOURCE_SUPERLYRIC,
+            LYRIC_SOURCE_LYRICON,
+            LYRIC_SOURCE_LYRICINFO -> source
             else -> LYRIC_SOURCE_AUTO
         }
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -220,6 +226,10 @@ object FocusPreferences {
             LYRIC_SOURCE_QQ -> "QQ音乐"
             LYRIC_SOURCE_LOCAL -> "本地 LRC 文件"
             LYRIC_SOURCE_AI -> "AI 翻译（在线 + 翻译）"
+            LYRIC_SOURCE_SUPERLYRIC -> "Super Lyric"
+            LYRIC_SOURCE_LYRICON -> "词幕 Lyricon"
+            LYRIC_SOURCE_LYRICON -> "词幕 Lyricon"
+            LYRIC_SOURCE_LYRICINFO -> "LyricInfo"
             else -> "自动（网易云 → QQ音乐）"
         }
     }
@@ -228,6 +238,9 @@ object FocusPreferences {
         LYRIC_SOURCE_AUTO to formatLyricSourceLabel(LYRIC_SOURCE_AUTO),
         LYRIC_SOURCE_NETEASE to formatLyricSourceLabel(LYRIC_SOURCE_NETEASE),
         LYRIC_SOURCE_QQ to formatLyricSourceLabel(LYRIC_SOURCE_QQ),
+        LYRIC_SOURCE_SUPERLYRIC to formatLyricSourceLabel(LYRIC_SOURCE_SUPERLYRIC),
+        LYRIC_SOURCE_LYRICON to formatLyricSourceLabel(LYRIC_SOURCE_LYRICON),
+        LYRIC_SOURCE_LYRICINFO to formatLyricSourceLabel(LYRIC_SOURCE_LYRICINFO),
         LYRIC_SOURCE_LOCAL to formatLyricSourceLabel(LYRIC_SOURCE_LOCAL),
         LYRIC_SOURCE_AI to formatLyricSourceLabel(LYRIC_SOURCE_AI)
     )

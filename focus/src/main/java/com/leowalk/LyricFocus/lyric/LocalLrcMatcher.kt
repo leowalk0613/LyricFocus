@@ -16,6 +16,12 @@ object LocalLrcMatcher {
         } ?: return null
         if (files.isEmpty()) return null
 
+        val candidates = buildCandidateNames(title, artist)
+        for (candidate in candidates) {
+            val exact = files.find { it.nameWithoutExtension.equals(candidate, ignoreCase = true) }
+            if (exact != null) return exact
+        }
+
         var bestFile: File? = null
         var bestScore = Int.MIN_VALUE
         for (file in files) {

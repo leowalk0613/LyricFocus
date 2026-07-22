@@ -606,8 +606,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                     )
                     module.hook(method).intercept { chain ->
                         val result = chain.proceed()
-                        if (!isKeyguardLocked()) return@intercept result
-                        handler.postDelayed({ repostFocusIfNeeded() }, SCREEN_REPOST_DELAY_MS)
+                        handler.postDelayed({ forceCancelAndRepostForAod() }, SCREEN_REPOST_DELAY_MS)
                         result
                     }
                 }
@@ -629,12 +628,14 @@ class SystemUIHyperFocusHook : BaseHook() {
                         handler.postDelayed({ forceCancelAndRepostForAod() }, 600L)
                     }
                     Intent.ACTION_SCREEN_ON -> {
-                        handler.postDelayed({ repostFocusIfNeeded() }, SCREEN_REPOST_DELAY_MS)
+                        handler.postDelayed({
+                            forceCancelAndRepostForAod()
+                        }, SCREEN_REPOST_DELAY_MS)
                     }
                     Intent.ACTION_USER_PRESENT -> {
                         handler.postDelayed({
                             hideFocusRowsInUnlockedShade()
-                            repostFocusIfNeeded()
+                            forceCancelAndRepostForAod()
                         }, SCREEN_REPOST_DELAY_MS)
                     }
                 }
@@ -1261,7 +1262,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                 cancelFocusNotification()
                 return
             }
-            val multiLine = buildMultiLineWindow()
+            val multiLine = if (isKeyguardLocked()) buildMultiLineWindow() else null
             HyperFocusLyricStyle.postFocusNotification(
                 systemContext = context,
                 notificationManager = nm,

@@ -11,30 +11,24 @@ import android.provider.Settings
 import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.widget.ImageViewCompat
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
-import com.google.android.material.textfield.TextInputEditText
 import com.leowalk.LyricFocus.FocusPreferences
 import com.leowalk.LyricFocus.NotificationPermissionHelper
 import com.leowalk.LyricFocus.R
-import com.leowalk.LyricFocus.lyric.AiLyricTranslator
-import com.leowalk.LyricFocus.lyric.LocalLrcBootstrap
 import com.leowalk.LyricFocus.service.LyricService
 import com.leowalk.LyricFocus.service.MusicMonitorService
 import com.leowalk.LyricFocus.util.AutostartHelper
 import com.leowalk.LyricFocus.util.InstalledAppsHelper
 import com.leowalk.LyricFocus.util.RootHelper
 import com.leowalk.LyricFocus.util.UpdateChecker
-import kotlinx.coroutines.launch
 
 class HomeFragment : Fragment(R.layout.fragment_home) {
 
@@ -42,13 +36,16 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
     private lateinit var switchCustomAodLayout: MaterialSwitch
     private lateinit var switchAppWhitelist: MaterialSwitch
     private lateinit var btnManageWhitelist: MaterialButton
-    private lateinit var btnSwitchLyricSource: MaterialButton
-    private lateinit var btnConfigureLyricSource: MaterialButton
+    private lateinit var btnManageLyricSource: MaterialButton
     private lateinit var sliderSyncAdvance: Slider
     private lateinit var tvSyncAdvanceValue: TextView
     private lateinit var tvLyricSourceMode: TextView
-    private lateinit var tvLyricSourceHit: TextView
     private lateinit var tvServiceStatus: TextView
+    private lateinit var cardServiceStatus: com.google.android.material.card.MaterialCardView
+    private lateinit var btnUsageHelp: ImageButton
+    private lateinit var tvStatusAodMode: TextView
+    private lateinit var tvStatusSongInfo: TextView
+    private lateinit var tvStatusLyricSource: TextView
     private lateinit var ivNotificationPermission: ImageView
     private lateinit var ivPostNotificationPermission: ImageView
     private lateinit var btnGrantNotification: MaterialButton
@@ -90,25 +87,6 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         if (!granted) maybeShowPostNotificationSettingsDialog()
     }
 
-    private val pickLocalLrcFolder = registerForActivityResult(
-        ActivityResultContracts.OpenDocumentTree()
-    ) { uri ->
-        if (uri == null) return@registerForActivityResult
-        val ctx = requireContext().applicationContext
-        try {
-            requireContext().contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
-            FocusPreferences.setLocalLrcTreeUri(ctx, uri.toString())
-            FocusPreferences.setLocalLrcBootstrapped(ctx, false)
-            LocalLrcBootstrap.ensureReady(ctx)
-            updateLyricSourceUi()
-            broadcastSettingsChanged(includeLyricSource = true)
-        } catch (_: Exception) {
-        }
-    }
-
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         initViews(view)
@@ -134,13 +112,15 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         switchCustomAodLayout = view.findViewById(R.id.switch_custom_aod_layout)
         switchAppWhitelist = view.findViewById(R.id.switch_app_whitelist)
         btnManageWhitelist = view.findViewById(R.id.btn_manage_whitelist)
-        btnSwitchLyricSource = view.findViewById(R.id.btn_switch_lyric_source)
-        btnConfigureLyricSource = view.findViewById(R.id.btn_configure_lyric_source)
+        btnManageLyricSource = view.findViewById(R.id.btn_manage_lyric_source)
         sliderSyncAdvance = view.findViewById(R.id.slider_sync_advance)
         tvSyncAdvanceValue = view.findViewById(R.id.tv_sync_advance_value)
         tvLyricSourceMode = view.findViewById(R.id.tv_lyric_source_mode)
-        tvLyricSourceHit = view.findViewById(R.id.tv_lyric_source_hit)
         tvServiceStatus = view.findViewById(R.id.tv_service_status)
+        cardServiceStatus = view.findViewById(R.id.card_service_status)
+        tvStatusAodMode = view.findViewById(R.id.tv_status_aod_mode)
+        tvStatusSongInfo = view.findViewById(R.id.tv_status_song_info)
+        tvStatusLyricSource = view.findViewById(R.id.tv_status_lyric_source)
         ivNotificationPermission = view.findViewById(R.id.iv_notification_permission_status)
         ivPostNotificationPermission = view.findViewById(R.id.iv_post_notification_permission_status)
         btnGrantNotification = view.findViewById(R.id.btn_grant_notification)
@@ -155,6 +135,7 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         view.findViewById<ImageButton>(R.id.btn_usage_help).setOnClickListener {
             showUsageHelpDialog()
         }
+        btnUsageHelp = view.findViewById(R.id.btn_usage_help)
 
         val ctx = requireContext()
         switchFocusLyric.isChecked = FocusPreferences.isFocusEnabled(ctx)
@@ -194,11 +175,8 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         btnManageWhitelist.setOnClickListener {
             startActivity(Intent(requireContext(), com.leowalk.LyricFocus.AppWhitelistActivity::class.java))
         }
-        btnSwitchLyricSource.setOnClickListener {
-            showLyricSourcePicker()
-        }
-        btnConfigureLyricSource.setOnClickListener {
-            showLyricSourceSettingsDialog()
+        btnManageLyricSource.setOnClickListener {
+            startActivity(Intent(requireContext(), com.leowalk.LyricFocus.LyricSourceActivity::class.java))
         }
         btnGrantNotification.setOnClickListener {
             openNotificationAccessSettings()
@@ -246,147 +224,17 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         val ctx = requireContext()
         val source = FocusPreferences.getLyricSource(ctx)
         tvLyricSourceMode.text = FocusPreferences.formatLyricSourceLabel(source)
-        btnConfigureLyricSource.visibility = when (source) {
-            FocusPreferences.LYRIC_SOURCE_LOCAL,
-            FocusPreferences.LYRIC_SOURCE_AI -> View.VISIBLE
-            else -> View.GONE
-        }
-        val hit = LyricService.currentLyricSourceHit
-        val song = LyricService.currentLyricSongLabel
-        tvLyricSourceHit.text = when {
-            hit.isNotBlank() && song.isNotBlank() -> "$song · $hit"
-            hit.isNotBlank() -> hit
-            song.isNotBlank() -> "$song · 未命中"
-            LyricService.isServiceRunning -> "等待播放…"
-            else -> "未播放"
-        }
     }
 
-    private fun showLyricSourcePicker() {
-        val ctx = requireContext()
-        val options = FocusPreferences.lyricSourceOptions()
-        val current = FocusPreferences.getLyricSource(ctx)
-        val labels = options.map { it.second }.toTypedArray()
-        val checked = options.indexOfFirst { it.first == current }.coerceAtLeast(0)
-        MaterialAlertDialogBuilder(ctx)
-            .setTitle("歌词获取源")
-            .setSingleChoiceItems(labels, checked) { dialog, which ->
-                val selected = options[which].first
-                if (selected != current) {
-                    FocusPreferences.setLyricSource(ctx, selected)
-                    updateLyricSourceUi()
-                    broadcastSettingsChanged(includeLyricSource = true)
-                }
-                dialog.dismiss()
-            }
-            .setNegativeButton("取消", null)
-            .show()
-    }
-
-    private fun showLyricSourceSettingsDialog() {
-        when (FocusPreferences.getLyricSource(requireContext())) {
-            FocusPreferences.LYRIC_SOURCE_LOCAL -> showLocalLrcSettingsDialog()
-            FocusPreferences.LYRIC_SOURCE_AI -> showAiLyricSettingsDialog()
-            else -> {
-                MaterialAlertDialogBuilder(requireContext())
-                    .setTitle("歌词源配置")
-                    .setMessage("当前歌词源无需额外配置。如需使用本地 LRC 或 AI 翻译，请先点击「切换」。")
-                    .setPositiveButton("知道了", null)
-                    .show()
-            }
+    private fun buildAodModeLabel(ctx: android.content.Context): String {
+        return if (FocusPreferences.isCustomAodLayout(ctx)) {
+            "万象息屏（自定义）"
+        } else if (FocusPreferences.isMultiLineLyrics(ctx)) {
+            val lines = FocusPreferences.getMultiLineLineCount(ctx)
+            "锁屏样式（多行×$lines）"
+        } else {
+            "锁屏样式"
         }
-    }
-
-    private fun showLocalLrcSettingsDialog() {
-        val ctx = requireContext()
-        val dialogView = layoutInflater.inflate(R.layout.dialog_local_lrc_settings, null)
-        val tvLocation = dialogView.findViewById<TextView>(R.id.tv_local_lrc_location)
-        val btnPickFolder = dialogView.findViewById<MaterialButton>(R.id.btn_pick_local_lrc_folder)
-        val btnResetFolder = dialogView.findViewById<MaterialButton>(R.id.btn_reset_local_lrc_folder)
-
-        fun refreshLocationLabel() {
-            tvLocation.text = FocusPreferences.getLocalLrcLocationLabel(ctx)
-        }
-        refreshLocationLabel()
-
-        btnPickFolder.setOnClickListener {
-            pickLocalLrcFolder.launch(null)
-        }
-        btnResetFolder.setOnClickListener {
-            FocusPreferences.clearLocalLrcTreeUri(ctx)
-            FocusPreferences.setLocalLrcBootstrapped(ctx, false)
-            LocalLrcBootstrap.ensureReady(ctx)
-            refreshLocationLabel()
-            updateLyricSourceUi()
-            broadcastSettingsChanged(includeLyricSource = true)
-        }
-
-        MaterialAlertDialogBuilder(ctx)
-            .setTitle("本地 LRC 配置")
-            .setView(dialogView)
-            .setPositiveButton("完成", null)
-            .show()
-    }
-
-    private fun showAiLyricSettingsDialog() {
-        val ctx = requireContext()
-        val dialogView = layoutInflater.inflate(R.layout.dialog_ai_lyric_settings, null)
-        val inputBaseUrl = dialogView.findViewById<TextInputEditText>(R.id.input_ai_base_url)
-        val inputApiKey = dialogView.findViewById<TextInputEditText>(R.id.input_ai_api_key)
-        val inputModel = dialogView.findViewById<TextInputEditText>(R.id.input_ai_model)
-        val inputTargetLanguage = dialogView.findViewById<TextInputEditText>(R.id.input_ai_target_language)
-        val switchTranslateAll = dialogView.findViewById<MaterialSwitch>(R.id.switch_ai_translate_all)
-        val btnTestConnectivity = dialogView.findViewById<MaterialButton>(R.id.btn_test_ai_connectivity)
-        val tvConnectivityResult = dialogView.findViewById<TextView>(R.id.tv_ai_connectivity_result)
-
-        inputBaseUrl.setText(FocusPreferences.getAiApiBaseUrl(ctx))
-        inputApiKey.setText(FocusPreferences.getAiApiKey(ctx))
-        inputModel.setText(FocusPreferences.getAiApiModel(ctx))
-        inputTargetLanguage.setText(FocusPreferences.getAiTargetLanguage(ctx))
-        switchTranslateAll.isChecked = FocusPreferences.isAiTranslateAllLyrics(ctx)
-
-        btnTestConnectivity.setOnClickListener {
-            btnTestConnectivity.isEnabled = false
-            tvConnectivityResult.visibility = View.VISIBLE
-            tvConnectivityResult.setTextColor(ctx.getColor(R.color.grey))
-            tvConnectivityResult.text = "正在检测…"
-
-            val config = AiLyricTranslator.ApiConfig(
-                baseUrl = inputBaseUrl.text?.toString().orEmpty(),
-                apiKey = inputApiKey.text?.toString().orEmpty(),
-                model = inputModel.text?.toString().orEmpty()
-            )
-            viewLifecycleOwner.lifecycleScope.launch {
-                val result = AiLyricTranslator(ctx).testConnectivity(config)
-                if (!isAdded) return@launch
-                btnTestConnectivity.isEnabled = true
-                when (result) {
-                    is AiLyricTranslator.ConnectivityResult.Success -> {
-                        tvConnectivityResult.setTextColor(ctx.getColor(R.color.green))
-                        tvConnectivityResult.text = result.message
-                    }
-                    is AiLyricTranslator.ConnectivityResult.Failure -> {
-                        tvConnectivityResult.setTextColor(ctx.getColor(R.color.red))
-                        tvConnectivityResult.text = result.message
-                    }
-                }
-            }
-        }
-
-        MaterialAlertDialogBuilder(ctx)
-            .setTitle("AI 翻译配置")
-            .setView(dialogView)
-            .setPositiveButton("保存") { _, _ ->
-                FocusPreferences.setAiApiBaseUrl(ctx, inputBaseUrl.text?.toString().orEmpty())
-                FocusPreferences.setAiApiKey(ctx, inputApiKey.text?.toString().orEmpty())
-                FocusPreferences.setAiApiModel(ctx, inputModel.text?.toString().orEmpty())
-                FocusPreferences.setAiTargetLanguage(ctx, inputTargetLanguage.text?.toString().orEmpty())
-                FocusPreferences.setAiTranslateAllLyrics(ctx, switchTranslateAll.isChecked)
-                updateLyricSourceUi()
-                broadcastSettingsChanged(includeLyricSource = true)
-            }
-            .setNegativeButton("取消", null)
-            .show()
     }
 
     private fun updateWhitelistUi() {
@@ -445,7 +293,58 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         )
 
         tvServiceStatus.text = if (running) "运行中" else "未运行"
-        tvServiceStatus.setTextColor(ctx.getColor(if (running) R.color.green else R.color.grey))
+        if (running) {
+            val accent = com.google.android.material.color.MaterialColors.getColor(ctx,
+                com.google.android.material.R.attr.colorPrimary, "LyricFocus")
+            cardServiceStatus.setCardBackgroundColor(android.content.res.ColorStateList.valueOf(accent))
+            val onAccent = com.google.android.material.color.MaterialColors.getColor(ctx,
+                com.google.android.material.R.attr.colorOnPrimary, "LyricFocus")
+            tvServiceStatus.setTextColor(onAccent)
+            tvServiceStatus.setTypeface(tvServiceStatus.typeface, android.graphics.Typeface.BOLD)
+            btnUsageHelp.setColorFilter(onAccent)
+            tvStatusAodMode.setTextColor(onAccent)
+            tvStatusSongInfo.setTextColor(onAccent)
+            tvStatusLyricSource.setTextColor(onAccent)
+        } else {
+            cardServiceStatus.setCardBackgroundColor(
+                android.content.res.ColorStateList.valueOf(
+                    com.google.android.material.color.MaterialColors.getColor(ctx,
+                        com.google.android.material.R.attr.colorSurfaceContainerLow, "LyricFocus")
+                )
+            )
+            val primary = com.google.android.material.color.MaterialColors.getColor(ctx,
+                com.google.android.material.R.attr.colorPrimary, "LyricFocus")
+            val onSurface = com.google.android.material.color.MaterialColors.getColor(ctx,
+                com.google.android.material.R.attr.colorOnSurfaceVariant, "LyricFocus")
+            tvServiceStatus.setTextColor(primary)
+            tvServiceStatus.setTypeface(tvServiceStatus.typeface, android.graphics.Typeface.NORMAL)
+            btnUsageHelp.setColorFilter(onSurface)
+            tvStatusAodMode.setTextColor(onSurface)
+            tvStatusSongInfo.setTextColor(onSurface)
+            tvStatusLyricSource.setTextColor(onSurface)
+        }
+
+        if (running) {
+            val aodMode = buildAodModeLabel(ctx)
+            tvStatusAodMode.text = "AOD 模式: $aodMode"
+            tvStatusAodMode.visibility = View.VISIBLE
+
+            val song = LyricService.currentLyricSongLabel
+            tvStatusSongInfo.visibility = if (song.isNotBlank()) {
+                tvStatusSongInfo.text = "当前播放: $song"
+                View.VISIBLE
+            } else View.GONE
+
+            val source = LyricService.currentLyricSourceHit
+            tvStatusLyricSource.visibility = if (source.isNotBlank()) {
+                tvStatusLyricSource.text = "歌词来源: $source"
+                View.VISIBLE
+            } else View.GONE
+        } else {
+            tvStatusAodMode.visibility = View.GONE
+            tvStatusSongInfo.visibility = View.GONE
+            tvStatusLyricSource.visibility = View.GONE
+        }
         updateLyricSourceUi()
 
         if (hasNotificationPermission && !running) {

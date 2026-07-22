@@ -1,32 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/preview_container"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="#1A1A1A">
+    android:layout_marginBottom="12dp"
+    app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="0dp"
+    app:strokeWidth="0dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:padding="16dp">
 
         <LinearLayout
             android:id="@+id/preview_header"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="10dp"
-            android:background="?attr/selectableItemBackground">
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true">
 
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="\u6837\u5f0f\u9884\u89c8"
-                android:textAppearance="?attr/textAppearanceTitleSmall"
-                android:textColor="#E0E0E0" />
+                android:text="样式预览"
+                android:textAppearance="?attr/textAppearanceTitleMedium" />
 
             <TextView
                 android:id="@+id/preview_mode_label"
@@ -34,16 +40,15 @@
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="8dp"
                 android:textAppearance="?attr/textAppearanceBodySmall"
-                android:textColor="#888888" />
+                android:textColor="?attr/colorOnSurfaceVariant" />
 
             <ImageView
                 android:id="@+id/preview_expand_icon"
-                android:layout_width="20dp"
-                android:layout_height="20dp"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
                 android:contentDescription="@null"
-                android:rotation="0"
                 android:src="@drawable/ic_expand_more"
-                android:tint="#888888" />
+                app:tint="?attr/colorOnSurfaceVariant" />
 
         </LinearLayout>
 
@@ -51,25 +56,16 @@
             android:id="@+id/preview_content"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
             android:orientation="vertical"
             android:visibility="gone">
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#33FFFFFF" />
 
             <LinearLayout
                 android:id="@+id/preview_root"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="12dp"
-                android:layout_marginVertical="12dp"
-                android:background="@drawable/preview_card_background"
-                android:elevation="2dp"
                 android:orientation="vertical"
-                android:paddingHorizontal="16dp"
-                android:paddingVertical="12dp">
+                android:padding="12dp">
 
                 <LinearLayout
                     android:id="@+id/preview_song_row"
@@ -85,8 +81,7 @@
                         android:layout_height="20dp"
                         android:layout_marginEnd="8dp"
                         android:contentDescription="@null"
-                        android:src="@drawable/ic_music_note"
-                        android:tint="#E0E0E0" />
+                        android:src="@drawable/ic_music_note" />
 
                     <TextView
                         android:id="@+id/preview_song_title"
@@ -95,7 +90,6 @@
                         android:ellipsize="end"
                         android:includeFontPadding="false"
                         android:maxLines="1"
-                        android:textColor="#E0E0E0"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -107,7 +101,6 @@
                     android:ellipsize="end"
                     android:includeFontPadding="false"
                     android:maxLines="2"
-                    android:textColor="@color/focus_lyric_aod_primary"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
@@ -119,7 +112,6 @@
                     android:ellipsize="end"
                     android:includeFontPadding="false"
                     android:maxLines="1"
-                    android:textColor="@color/focus_lyric_aod_secondary"
                     android:textSize="14sp" />
 
                 <LinearLayout
@@ -136,7 +128,6 @@
                         android:ellipsize="end"
                         android:includeFontPadding="false"
                         android:maxLines="1"
-                        android:textColor="@color/focus_lyric_aod_primary"
                         android:textSize="14sp" />
 
                     <TextView
@@ -146,7 +137,6 @@
                         android:ellipsize="end"
                         android:includeFontPadding="false"
                         android:maxLines="1"
-                        android:textColor="@color/focus_lyric_aod_secondary"
                         android:textSize="14sp" />
 
                     <TextView
@@ -156,7 +146,6 @@
                         android:ellipsize="end"
                         android:includeFontPadding="false"
                         android:maxLines="1"
-                        android:textColor="@color/focus_lyric_aod_primary"
                         android:textSize="14sp" />
 
                     <TextView
@@ -166,7 +155,6 @@
                         android:ellipsize="end"
                         android:includeFontPadding="false"
                         android:maxLines="1"
-                        android:textColor="@color/focus_lyric_aod_secondary"
                         android:textSize="14sp" />
 
                     <TextView
@@ -176,7 +164,6 @@
                         android:ellipsize="end"
                         android:includeFontPadding="false"
                         android:maxLines="1"
-                        android:textColor="@color/focus_lyric_aod_primary"
                         android:textSize="14sp" />
 
                     <TextView
@@ -186,7 +173,6 @@
                         android:ellipsize="end"
                         android:includeFontPadding="false"
                         android:maxLines="1"
-                        android:textColor="@color/focus_lyric_aod_secondary"
                         android:textSize="14sp" />
 
                     <TextView
@@ -196,7 +182,6 @@
                         android:ellipsize="end"
                         android:includeFontPadding="false"
                         android:maxLines="1"
-                        android:textColor="@color/focus_lyric_aod_primary"
                         android:textSize="14sp" />
 
                     <TextView
@@ -206,7 +191,6 @@
                         android:ellipsize="end"
                         android:includeFontPadding="false"
                         android:maxLines="1"
-                        android:textColor="@color/focus_lyric_aod_secondary"
                         android:textSize="14sp" />
 
                 </LinearLayout>
@@ -217,4 +201,4 @@
 
     </LinearLayout>
 
-</FrameLayout>
+</com.google.android.material.card.MaterialCardView>

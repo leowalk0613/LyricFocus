@@ -162,6 +162,18 @@ class LyricNotificationManager(private val context: Context) {
         )
     }
 
+    fun showAiTranslating(title: String, artist: String) {
+        lastLyricText = ""
+        lastSecondLineText = ""
+        updateLyricNotification(
+            lyricText = title.ifBlank { "AI翻译中..." },
+            secondLineText = "AI翻译中...",
+            title = title,
+            artist = artist,
+            isPlaying = true
+        )
+    }
+
     fun showNoLyricNotification(title: String, artist: String) {
         lastLyricText = ""
         lastSecondLineText = ""

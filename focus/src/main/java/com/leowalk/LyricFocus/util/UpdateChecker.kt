@@ -230,7 +230,7 @@ class UpdateChecker(private val context: Context) {
     fun getCurrentVersion(context: Context): String {
         return try {
             val info = context.packageManager.getPackageInfo(context.packageName, 0)
-            info.versionName
+            info.versionName ?: "1.8.2"
         } catch (e: Exception) {
             "1.6.2"
         }

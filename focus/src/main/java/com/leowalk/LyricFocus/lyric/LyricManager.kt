@@ -22,10 +22,16 @@ class LyricManager(context: Context) {
                 FocusPreferences.LYRIC_SOURCE_LOCAL ->
                     localProvider.searchLyric(title, artist, album)
                 FocusPreferences.LYRIC_SOURCE_AI ->
-                    fetchWithAiTranslation(title, artist, album)
+                    fetchBaseForAi(title, artist, album)
                 else ->
                     fetchFromProviders(providersForCurrentSource(), title, artist, album)
             }
+        }
+    }
+
+    suspend fun translateWithAi(lyricInfo: LyricInfo, title: String, artist: String): LyricInfo {
+        return withContext(Dispatchers.IO) {
+            aiTranslator.translateIfNeeded(lyricInfo, title, artist)
         }
     }
 
@@ -33,17 +39,16 @@ class LyricManager(context: Context) {
         addAll(onlineProviders.map { it.name })
         add(localProvider.name)
         add("AI翻译")
+        add("Super Lyric")
     }
 
-    private suspend fun fetchWithAiTranslation(
+    private suspend fun fetchBaseForAi(
         title: String,
         artist: String,
         album: String
     ): LyricInfo? {
-        val baseLyric = fetchFromProviders(onlineProviders, title, artist, album)
+        return fetchFromProviders(onlineProviders, title, artist, album)
             ?: localProvider.searchLyric(title, artist, album)
-            ?: return null
-        return aiTranslator.translateIfNeeded(baseLyric, title, artist)
     }
 
     private suspend fun fetchFromProviders(
@@ -71,6 +76,9 @@ class LyricManager(context: Context) {
                 onlineProviders.filter { it.id == FocusPreferences.LYRIC_SOURCE_NETEASE }
             FocusPreferences.LYRIC_SOURCE_QQ ->
                 onlineProviders.filter { it.id == FocusPreferences.LYRIC_SOURCE_QQ }
+            FocusPreferences.LYRIC_SOURCE_SUPERLYRIC,
+            FocusPreferences.LYRIC_SOURCE_LYRICON,
+            FocusPreferences.LYRIC_SOURCE_LYRICINFO -> emptyList()
             else -> onlineProviders
         }
     }
