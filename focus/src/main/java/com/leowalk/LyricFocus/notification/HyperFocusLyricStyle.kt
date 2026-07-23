@@ -762,9 +762,14 @@ object HyperFocusLyricStyle {
         if (secondaryText.isNullOrBlank()) {
             views.setViewVisibility(R.id.focustflyric, View.GONE)
         } else {
+            val secondarySize = if (isJapaneseText(secondaryText)) {
+                style.secondarySizeSp * 0.88f
+            } else {
+                style.secondarySizeSp
+            }
             views.setTextViewText(R.id.focustflyric, secondaryText)
             views.setTextColor(R.id.focustflyric, style.colorSecondary)
-            views.setTextViewTextSize(R.id.focustflyric, TypedValue.COMPLEX_UNIT_SP, style.secondarySizeSp)
+            views.setTextViewTextSize(R.id.focustflyric, TypedValue.COMPLEX_UNIT_SP, secondarySize)
             views.setInt(R.id.focustflyric, "setMaxLines", style.translationMaxLines)
             views.setInt(R.id.focustflyric, "setGravity", style.gravityValue)
             views.setViewVisibility(R.id.focustflyric, View.VISIBLE)
@@ -1207,9 +1212,21 @@ object HyperFocusLyricStyle {
         }
 
         val textSizeSp = FocusStyleSnapshot.multiLineTextSizeSp
-        val defaultLineColor = FocusStyleSnapshot.extractedTextColor
-            ?: style.colorPrimary
-        val currentLineColor = when (style.backgroundColor) {
+        val monetBgColor = if (FocusStyleSnapshot.monetDynamicColorEnabled) {
+            FocusStyleSnapshot.extractedBgColor
+        } else null
+        val defaultLineColor = if (monetBgColor != null) {
+            AlbumColorExtractor.ensureContrast(
+                FocusStyleSnapshot.extractedTextColor ?: style.colorPrimary,
+                monetBgColor,
+                4.0
+            )
+        } else {
+            FocusStyleSnapshot.extractedTextColor ?: style.colorPrimary
+        }
+        val currentLineColor = if (monetBgColor != null) {
+            AlbumColorExtractor.ensureContrast(defaultLineColor, monetBgColor, 7.0)
+        } else when (style.backgroundColor) {
             Color.WHITE -> Color.BLACK
             else -> COLOR_LYRIC_PRIMARY
         }
@@ -1231,11 +1248,17 @@ object HyperFocusLyricStyle {
             views.setTextViewText(viewId, displayText)
             val inCurrentPair = isCurrentPair(i)
             if (inCurrentPair) {
-                views.setTextColor(viewId, currentLineColor)
-                if (i == currentLineSlot) {
+                if (isTranslation) {
+                    // 当前行的翻译使用淡色，与其他翻译行一致
+                    views.setTextColor(viewId, nonCurrentTransColor)
+                    views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.65f + 2f)
+                    views.setViewPadding(viewId, 0, 0, 0, 12)
+                } else if (i == currentLineSlot) {
+                    views.setTextColor(viewId, currentLineColor)
                     views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp)
                     views.setViewPadding(viewId, 0, 12, 0, 0)
                 } else {
+                    views.setTextColor(viewId, currentLineColor)
                     views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.65f + 2f)
                     views.setViewPadding(viewId, 0, 0, 0, 12)
                 }
@@ -1266,6 +1289,15 @@ object HyperFocusLyricStyle {
     private fun fadeTextColor(color: Int, factor: Float = 0.72f): Int {
         val a = (Color.alpha(color) * factor).toInt().coerceIn(0, 255)
         return Color.argb(a, Color.red(color), Color.green(color), Color.blue(color))
+    }
+
+    /** 检测文本是否包含日语字符（平假名/片假名/汉字） */
+    private fun isJapaneseText(text: String): Boolean {
+        return text.any { c ->
+            c in '\u3040'..'\u309F' ||  // 平假名
+            c in '\u30A0'..'\u30FF' ||  // 片假名
+            c in '\u4E00'..'\u9FFF'     // CJK 汉字
+        }
     }
 
 

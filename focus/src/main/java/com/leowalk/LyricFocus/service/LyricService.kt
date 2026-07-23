@@ -896,6 +896,9 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         if (songChanged) {
             currentTitle = title
             currentArtist = artist
+            currentLyricInfo = LyricInfo.EMPTY
+            currentLyricInfoForPreview = LyricInfo.EMPTY
+            currentLyricSourceHit = ""
             resetBroadcastCache()
             clearAlbumColorForNewSong()
             fetchLyric(title, artist)
@@ -1053,26 +1056,73 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                 if (lyricText.isBlank()) return@launch
                 val songName = root.optString("songName", title)
                 val songArtist = root.optString("artist", artist)
-                val lyricInfo = com.leowalk.LyricFocus.lyric.LrcParser.parse(lyricText)
-                if (lyricInfo.lines.size < 2) return@launch
-                val result = lyricInfo.copy(
-                    title = songName,
-                    artist = songArtist,
-                    source = "LyricInfo"
-                )
-                applyLyricResult(result, songName, songArtist)
-                Log.d(TAG, "LyricInfo loaded: ${result.lines.size} lines")
-                for (i in 0 until minOf(5, result.lines.size)) {
-                    Log.d(TAG, "LyricInfo line[$i]: text='${result.lines[i].text.take(40)}' trans='${result.lines[i].translation?.take(40) ?: ""}' time=${result.lines[i].time}")
+                // 校验歌词是否匹配当前播放的歌曲，避免切歌后显示旧歌词
+                if (title.isNotBlank() && songName.isNotBlank()) {
+                    val titleMatch = title.equals(songName, ignoreCase = true) ||
+                        title.replace(" ", "").equals(songName.replace(" ", ""), ignoreCase = true) ||
+                        songName.contains(title, ignoreCase = true) ||
+                        title.contains(songName, ignoreCase = true)
+                    if (!titleMatch) {
+                        Log.d(TAG, "LyricInfo song mismatch: expected='$title', got='$songName', retrying in 500ms")
+                        clearLyricResult()
+                        kotlinx.coroutines.delay(500L)
+                        val retryMetadata = MusicMonitorService.currentMetadata
+                        if (retryMetadata != null) {
+                            val retryJson = retryMetadata.getString("lyricInfo")
+                            if (retryJson != null) {
+                                val retryRoot = org.json.JSONObject(retryJson)
+                                val retryName = retryRoot.optString("songName", "")
+                                val retryMatch = title.equals(retryName, ignoreCase = true) ||
+                                    title.replace(" ", "").equals(retryName.replace(" ", ""), ignoreCase = true) ||
+                                    retryName.contains(title, ignoreCase = true) ||
+                                    title.contains(retryName, ignoreCase = true)
+                                if (!retryMatch) {
+                                    Log.d(TAG, "LyricInfo retry still mismatch: expected='$title', got='$retryName'")
+                                    return@launch
+                                }
+                                return@launch parseAndApplyLyricInfo(retryRoot, title, artist)
+                            }
+                        }
+                        return@launch
+                    }
                 }
-                // Dump raw lines around the timestamp range to debug parsing
-                val rawAround = lyricText.lines().filter { it.contains("[00:06") || it.contains("[00:07") }
-                for (rl in rawAround.take(6)) {
-                    Log.d(TAG, "LyricInfo raw: $rl")
-                }
+                parseAndApplyLyricInfo(root, title, artist)
             } catch (e: Exception) {
                 Log.e(TAG, "LyricInfo parse error", e)
             }
+        }
+    }
+
+    private fun parseAndApplyLyricInfo(root: org.json.JSONObject, title: String, artist: String) {
+        try {
+            // 防止切歌后旧协程的解析结果覆盖新歌词
+            if (currentTitle.isNotBlank() && title.isNotBlank() &&
+                currentTitle != title && !currentTitle.contains(title, ignoreCase = true)) {
+                Log.d(TAG, "LyricInfo stale result ignored: current='$currentTitle', expected='$title'")
+                return
+            }
+            val lyricText = root.optString("lyric", "")
+            val songName = root.optString("songName", title)
+            val songArtist = root.optString("artist", artist)
+            val lyricInfo = com.leowalk.LyricFocus.lyric.LrcParser.parse(lyricText)
+            if (lyricInfo.lines.size < 2) return
+            val result = lyricInfo.copy(
+                title = songName,
+                artist = songArtist,
+                source = "LyricInfo"
+            )
+            applyLyricResult(result, songName, songArtist)
+            Log.d(TAG, "LyricInfo loaded: ${result.lines.size} lines")
+            for (i in 0 until minOf(5, result.lines.size)) {
+                Log.d(TAG, "LyricInfo line[$i]: text='${result.lines[i].text.take(40)}' trans='${result.lines[i].translation?.take(40) ?: ""}' time=${result.lines[i].time}")
+            }
+            // Dump raw lines around the timestamp range to debug parsing
+            val rawAround = lyricText.lines().filter { it.contains("[00:06") || it.contains("[00:07") }
+            for (rl in rawAround.take(6)) {
+                Log.d(TAG, "LyricInfo raw: $rl")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "LyricInfo parse error", e)
         }
     }
 
@@ -1092,6 +1142,17 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
         override fun onLineReceived(lineText: String, lineTranslation: String?, accumulatedLyricInfo: LyricInfo) {
             if (lineText.isBlank()) return
+            // 校验歌词来源是否匹配当前播放歌曲，防止切歌后旧 Bridge 回调残留
+            if (currentTitle.isNotBlank() && accumulatedLyricInfo.title.isNotBlank()) {
+                val match = currentTitle.equals(accumulatedLyricInfo.title, ignoreCase = true) ||
+                    currentTitle.replace(" ", "").equals(accumulatedLyricInfo.title.replace(" ", ""), ignoreCase = true) ||
+                    accumulatedLyricInfo.title.contains(currentTitle, ignoreCase = true) ||
+                    currentTitle.contains(accumulatedLyricInfo.title, ignoreCase = true)
+                if (!match) {
+                    Log.d(TAG, "SuperLyric song mismatch ignored: current='$currentTitle', received='${accumulatedLyricInfo.title}'")
+                    return
+                }
+            }
             Log.d(TAG, "SuperLyric line: $lineText, hasTrans=${lineTranslation != null}, totalLines=${accumulatedLyricInfo.lines.size}")
             applyLyricResult(accumulatedLyricInfo, currentTitle, currentArtist, restartTicker = !tickerStarted)
             tickerStarted = true
@@ -1107,6 +1168,17 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     private val lyriconCb = object : com.leowalk.LyricFocus.lyric.LyriconBridge.Callback {
         override fun onSongReceived(lyricInfo: LyricInfo) {
             if (lyricInfo.lines.isEmpty()) return
+            // 校验歌词来源是否匹配当前播放歌曲，防止切歌后旧 Bridge 回调残留
+            if (currentTitle.isNotBlank() && lyricInfo.title.isNotBlank()) {
+                val match = currentTitle.equals(lyricInfo.title, ignoreCase = true) ||
+                    currentTitle.replace(" ", "").equals(lyricInfo.title.replace(" ", ""), ignoreCase = true) ||
+                    lyricInfo.title.contains(currentTitle, ignoreCase = true) ||
+                    currentTitle.contains(lyricInfo.title, ignoreCase = true)
+                if (!match) {
+                    Log.d(TAG, "Lyricon song mismatch ignored: current='$currentTitle', received='${lyricInfo.title}'")
+                    return
+                }
+            }
             Log.d(TAG, "Lyricon song: ${lyricInfo.title}, ${lyricInfo.lines.size} lines")
             applyLyricResult(lyricInfo, lyricInfo.title.ifBlank { currentTitle },
                 lyricInfo.artist.ifBlank { currentArtist })

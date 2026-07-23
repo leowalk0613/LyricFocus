@@ -36,8 +36,6 @@ class LyricSourceActivity : AppCompatActivity() {
     private lateinit var tvDebugFromAi: TextView
     private lateinit var llLyricSourceItems: LinearLayout
 
-    private var expandedSourceKey: String? = null
-
     private val pickLocalLrcFolder = registerForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
@@ -139,7 +137,19 @@ class LyricSourceActivity : AppCompatActivity() {
         val ctx = this
         val current = FocusPreferences.getLyricSource(ctx)
         val options = FocusPreferences.lyricSourceOptions()
-        val theme = ctx.theme
+
+        val selectedColor = MaterialColors.getColor(
+            ctx, com.google.android.material.R.attr.colorPrimary, "LyricFocus"
+        )
+        val surfaceColor = MaterialColors.getColor(
+            ctx, com.google.android.material.R.attr.colorSurfaceContainerLow, "LyricFocus"
+        )
+        val onSurfaceColor = MaterialColors.getColor(
+            ctx, com.google.android.material.R.attr.colorOnSurface, "LyricFocus"
+        )
+        val variantColor = MaterialColors.getColor(
+            ctx, com.google.android.material.R.attr.colorOnSurfaceVariant, "LyricFocus"
+        )
 
         for ((index, option) in options.withIndex()) {
             val key = option.first
@@ -150,119 +160,149 @@ class LyricSourceActivity : AppCompatActivity() {
                     key == FocusPreferences.LYRIC_SOURCE_SUPERLYRIC ||
                     key == FocusPreferences.LYRIC_SOURCE_LYRICON ||
                     key == FocusPreferences.LYRIC_SOURCE_LYRICINFO
-            val isExpanded = expandedSourceKey == key && canExpand
+            val isExpanded = isSelected && canExpand
 
-            val header = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = android.view.Gravity.CENTER_VERTICAL
-                setPadding(0, dpToPx(10), 0, dpToPx(10))
+            // 获取每个源的描述和图标
+            val (desc, iconRes) = when (key) {
+                FocusPreferences.LYRIC_SOURCE_AUTO -> "自动切换网易云、QQ 音乐等在线源" to R.drawable.ic_music_note
+                FocusPreferences.LYRIC_SOURCE_NETEASE -> "从网易云音乐获取歌词" to R.drawable.ic_app_icon_netease
+                FocusPreferences.LYRIC_SOURCE_QQ -> "从 QQ 音乐获取歌词" to R.drawable.ic_app_icon_qq
+                FocusPreferences.LYRIC_SOURCE_SUPERLYRIC -> "实时推送单行歌词" to R.drawable.ic_music_note
+                FocusPreferences.LYRIC_SOURCE_LYRICON -> "完整歌词含原文+翻译" to R.drawable.ic_music_note
+                FocusPreferences.LYRIC_SOURCE_LYRICINFO -> "读取通知栏歌词字段" to R.drawable.ic_info
+                FocusPreferences.LYRIC_SOURCE_LOCAL -> "从本地 LRC 文件读取" to R.drawable.ic_home
+                FocusPreferences.LYRIC_SOURCE_AI -> "在线获取 + AI 翻译" to R.drawable.ic_palette
+                else -> "" to R.drawable.ic_music_note
+            }
+
+            // 卡片容器
+            val card = android.widget.FrameLayout(ctx).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = dpToPx(10)
+                }
+            }
+
+            val cardBg = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                cornerRadius = 14f * ctx.resources.displayMetrics.density
+                setColor(surfaceColor)
+                if (isSelected) {
+                    setStroke(dpToPx(2), selectedColor)
+                }
+            }
+
+            val cardInner = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                background = cardBg
+                setPadding(dpToPx(14), dpToPx(12), dpToPx(14), dpToPx(12))
                 isClickable = true
                 isFocusable = true
-                val tv = android.util.TypedValue()
-                theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
-                background = androidx.core.content.ContextCompat.getDrawable(
-                    ctx, tv.resourceId
-                )
                 setOnClickListener {
                     if (!isSelected) {
                         FocusPreferences.setLyricSource(ctx, key)
-                        expandedSourceKey = if (canExpand) key else null
                         updateLyricSourceUi()
                         broadcastSettingsChanged(includeLyricSource = true)
-                    } else if (canExpand) {
-                        expandedSourceKey = if (isExpanded) null else key
-                        updateLyricSourceUi()
                     }
                 }
             }
 
-            val dot = View(ctx).apply {
-                val size = dpToPx(12)
-                layoutParams = LinearLayout.LayoutParams(size, size).apply {
+            val headerRow = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+            }
+
+            // 图标
+            val icon = ImageView(ctx).apply {
+                setImageResource(iconRes)
+                layoutParams = LinearLayout.LayoutParams(dpToPx(32), dpToPx(32)).apply {
                     marginEnd = dpToPx(12)
                     gravity = android.view.Gravity.CENTER_VERTICAL
                 }
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    shape = android.graphics.drawable.GradientDrawable.OVAL
-                    if (isSelected) {
-                        setColor(MaterialColors.getColor(
-                            ctx, com.google.android.material.R.attr.colorPrimary, "LyricFocus"
-                        ))
-                    } else {
-                        setStroke(
-                            dpToPx(2),
-                            androidx.core.content.ContextCompat.getColor(ctx, R.color.grey)
-                        )
-                    }
+                if (isSelected) {
+                    setColorFilter(selectedColor)
+                } else {
+                    setColorFilter(variantColor)
                 }
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
             }
-            header.addView(dot)
+            headerRow.addView(icon)
 
-            val labelView = TextView(ctx).apply {
-                text = label
-                setTextAppearance(
-                    if (isSelected) com.google.android.material.R.style.TextAppearance_Material3_BodyLarge
-                    else com.google.android.material.R.style.TextAppearance_Material3_BodyMedium
-                )
-                setTextColor(
-                    if (isSelected) MaterialColors.getColor(
-                        ctx, com.google.android.material.R.attr.colorPrimary, "LyricFocus"
-                    )
-                    else MaterialColors.getColor(
-                        ctx, com.google.android.material.R.attr.colorOnSurface, "LyricFocus"
-                    )
-                )
+            // 标题和描述
+            val textCol = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
                 layoutParams = LinearLayout.LayoutParams(
                     0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
                 )
             }
-            header.addView(labelView)
 
-            if (canExpand) {
-                val arrow = ImageView(ctx).apply {
-                    setImageResource(R.drawable.ic_expand_more)
-                    layoutParams = LinearLayout.LayoutParams(
-                        dpToPx(24), dpToPx(24)
-                    )
-                    if (isExpanded) rotation = 180f
-                }
-                header.addView(arrow)
+            val labelView = TextView(ctx).apply {
+                text = label
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyLarge)
+                setTextColor(if (isSelected) selectedColor else onSurfaceColor)
             }
+            textCol.addView(labelView)
 
-            llLyricSourceItems.addView(header)
-
-            if (index < options.size - 1) {
-                val divider = View(ctx).apply {
-                    layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)
-                    ).apply { marginStart = dpToPx(28) }
-                    setBackgroundColor(
-                        MaterialColors.getColor(
-                            ctx,
-                            com.google.android.material.R.attr.colorOutlineVariant,
-                            "LyricFocus"
-                        )
-                    )
+            if (desc.isNotBlank()) {
+                val descView = TextView(ctx).apply {
+                    text = desc
+                    setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
+                    setTextColor(variantColor)
+                    maxLines = 2
                 }
-                llLyricSourceItems.addView(divider)
+                textCol.addView(descView)
             }
+            headerRow.addView(textCol)
 
+            // 选中指示器
+            val radio = View(ctx).apply {
+                val size = dpToPx(20)
+                layoutParams = LinearLayout.LayoutParams(size, size).apply {
+                    marginStart = dpToPx(8)
+                }
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    if (isSelected) {
+                        setColor(selectedColor)
+                    } else {
+                        setStroke(dpToPx(2), variantColor)
+                    }
+                }
+            }
+            headerRow.addView(radio)
+
+            cardInner.addView(headerRow)
+
+            // 展开内容
             if (isExpanded) {
-                when (key) {
-                    FocusPreferences.LYRIC_SOURCE_LOCAL -> buildLocalLrcInline(ctx)
-                    FocusPreferences.LYRIC_SOURCE_AI -> buildAiInline(ctx)
-                    FocusPreferences.LYRIC_SOURCE_SUPERLYRIC -> buildSuperLyricInline(ctx)
-                    FocusPreferences.LYRIC_SOURCE_LYRICON -> buildLyriconInline(ctx)
-                    FocusPreferences.LYRIC_SOURCE_LYRICINFO -> buildLyricInfoInline(ctx)
+                val expandContent = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(0, dpToPx(12), 0, 0)
                 }
+                when (key) {
+                    FocusPreferences.LYRIC_SOURCE_LOCAL -> buildLocalLrcInline(ctx, expandContent)
+                    FocusPreferences.LYRIC_SOURCE_AI -> buildAiInline(ctx, expandContent)
+                    FocusPreferences.LYRIC_SOURCE_SUPERLYRIC -> buildSuperLyricInline(ctx, expandContent)
+                    FocusPreferences.LYRIC_SOURCE_LYRICON -> buildLyriconInline(ctx, expandContent)
+                    FocusPreferences.LYRIC_SOURCE_LYRICINFO -> buildLyricInfoInline(ctx, expandContent)
+                }
+                cardInner.addView(expandContent)
             }
+
+            card.addView(cardInner)
+            llLyricSourceItems.addView(card)
         }
     }
 
-    private fun buildLocalLrcInline(ctx: android.content.Context) {
-        val body = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(28), dpToPx(4), 0, dpToPx(12))
+    private fun buildLocalLrcInline(ctx: android.content.Context, parent: LinearLayout? = null) {
+        val target = parent ?: run {
+            val body = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dpToPx(28), dpToPx(4), 0, dpToPx(12))
+            }
+            llLyricSourceItems.addView(body)
+            body
         }
 
         val tvLocation = TextView(ctx).apply {
@@ -277,7 +317,7 @@ class LyricSourceActivity : AppCompatActivity() {
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = dpToPx(8) }
         }
-        body.addView(tvLocation)
+        target.addView(tvLocation)
 
         val btnRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -303,14 +343,20 @@ class LyricSourceActivity : AppCompatActivity() {
             }
         }
         btnRow.addView(btnReset)
-        body.addView(btnRow)
-        llLyricSourceItems.addView(body)
+        target.addView(btnRow)
+        if (parent == null) {
+            llLyricSourceItems.addView(target)
+        }
     }
 
-    private fun buildLyriconInline(ctx: android.content.Context) {
-        val body = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(28), dpToPx(4), 0, dpToPx(12))
+    private fun buildLyriconInline(ctx: android.content.Context, parent: LinearLayout? = null) {
+        val target = parent ?: run {
+            val body = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dpToPx(28), dpToPx(4), 0, dpToPx(12))
+            }
+            llLyricSourceItems.addView(body)
+            body
         }
         val textColor = MaterialColors.getColor(
             ctx, com.google.android.material.R.attr.colorOnSurfaceVariant, "LyricFocus"
@@ -321,7 +367,7 @@ class LyricSourceActivity : AppCompatActivity() {
             "· 需安装 LyricProvider (LSPosed) 并在作用域勾选音乐App"
         )
         for (line in warnings) {
-            body.addView(TextView(ctx).apply {
+            target.addView(TextView(ctx).apply {
                 text = line
                 setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
                 setTextColor(textColor)
@@ -330,13 +376,19 @@ class LyricSourceActivity : AppCompatActivity() {
                 ).apply { bottomMargin = dpToPx(2) }
             })
         }
-        llLyricSourceItems.addView(body)
+        if (parent == null) {
+            llLyricSourceItems.addView(target)
+        }
     }
 
-    private fun buildLyricInfoInline(ctx: android.content.Context) {
-        val body = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(28), dpToPx(4), 0, dpToPx(12))
+    private fun buildLyricInfoInline(ctx: android.content.Context, parent: LinearLayout? = null) {
+        val target = parent ?: run {
+            val body = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dpToPx(28), dpToPx(4), 0, dpToPx(12))
+            }
+            llLyricSourceItems.addView(body)
+            body
         }
         val textColor = MaterialColors.getColor(
             ctx, com.google.android.material.R.attr.colorOnSurfaceVariant, "LyricFocus"
@@ -347,7 +399,7 @@ class LyricSourceActivity : AppCompatActivity() {
             "· 零外部依赖，LRC 格式直接解析"
         )
         for (line in warnings) {
-            body.addView(TextView(ctx).apply {
+            target.addView(TextView(ctx).apply {
                 text = line
                 setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
                 setTextColor(textColor)
@@ -356,13 +408,19 @@ class LyricSourceActivity : AppCompatActivity() {
                 ).apply { bottomMargin = dpToPx(2) }
             })
         }
-        llLyricSourceItems.addView(body)
+        if (parent == null) {
+            llLyricSourceItems.addView(target)
+        }
     }
 
-    private fun buildSuperLyricInline(ctx: android.content.Context) {
-        val body = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(28), dpToPx(4), 0, dpToPx(12))
+    private fun buildSuperLyricInline(ctx: android.content.Context, parent: LinearLayout? = null) {
+        val target = parent ?: run {
+            val body = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dpToPx(28), dpToPx(4), 0, dpToPx(12))
+            }
+            llLyricSourceItems.addView(body)
+            body
         }
 
         val textColor = MaterialColors.getColor(
@@ -382,16 +440,22 @@ class LyricSourceActivity : AppCompatActivity() {
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
                 ).apply { bottomMargin = dpToPx(2) }
             }
-            body.addView(tv)
+            target.addView(tv)
         }
 
-        llLyricSourceItems.addView(body)
+        if (parent == null) {
+            llLyricSourceItems.addView(target)
+        }
     }
 
-    private fun buildAiInline(ctx: android.content.Context) {
-        val body = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(28), dpToPx(4), 0, dpToPx(12))
+    private fun buildAiInline(ctx: android.content.Context, parent: LinearLayout? = null) {
+        val target = parent ?: run {
+            val body = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dpToPx(28), dpToPx(4), 0, dpToPx(12))
+            }
+            llLyricSourceItems.addView(body)
+            body
         }
 
         val textColor = MaterialColors.getColor(
@@ -411,7 +475,7 @@ class LyricSourceActivity : AppCompatActivity() {
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
                 ).apply { bottomMargin = dpToPx(4) }
             }
-            body.addView(tv)
+            target.addView(tv)
         }
 
         val btnEdit = MaterialButton(android.view.ContextThemeWrapper(ctx,
@@ -422,8 +486,10 @@ class LyricSourceActivity : AppCompatActivity() {
             ).apply { topMargin = dpToPx(4) }
             setOnClickListener { showAiLyricSettingsDialog() }
         }
-        body.addView(btnEdit)
-        llLyricSourceItems.addView(body)
+        target.addView(btnEdit)
+        if (parent == null) {
+            llLyricSourceItems.addView(target)
+        }
     }
 
     private fun showAiLyricSettingsDialog() {

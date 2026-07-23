@@ -4,17 +4,24 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.method.LinkMovementMethod
+import android.text.style.ClickableSpan
+import android.text.style.ForegroundColorSpan
 import android.util.Log
 import android.view.View
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.tabs.TabLayout
 import com.leowalk.LyricFocus.R
@@ -98,23 +105,100 @@ class AboutFragment : Fragment(R.layout.activity_about) {
     }
 
     private fun showAcknowledgmentsDialog() {
-        val message = buildString {
-            append("感谢下列项目提供框架、依赖与实现参考。\n\n")
-            append("▎焦点通知\n")
-            append("• HyperCeiler — 焦点歌词、MusicBaseHook / FocusNotifLyric 思路；渠道 ID、插件 ClassLoader bypass、防闪烁等\n")
-            append("• FocusNotifLyric — 焦点歌词上游原型\n")
-            append("• HyperFocusApi — miui.focus 参数封装\n\n")
-            append("▎框架与库\n")
-            append("• LSPosed · XposedBridge\n")
-            append("• AndroidX · OkHttp · Kotlin\n\n")
-            append("▎同生态\n")
-            append("• Lyric-Getter / Lyric-Getter-Api\n")
-            append("• HookTool · Cemiuiler\n\n")
-            append("歌词 Web API 版权归网易云、QQ 音乐各自平台所有。")
+        val ctx = requireContext()
+        val scrollView = ScrollView(ctx).apply {
+            setPadding(0, 16, 0, 0)
         }
+        val container = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 0, 24, 16)
+        }
+        val sectionColor = MaterialColors.getColor(ctx, com.google.android.material.R.attr.colorOnSurface, "LyricFocus")
+        val linkColor = MaterialColors.getColor(ctx, com.google.android.material.R.attr.colorPrimary, "LyricFocus")
+        val descColor = MaterialColors.getColor(ctx, com.google.android.material.R.attr.colorOnSurfaceVariant, "LyricFocus")
+
+        fun addSection(title: String) {
+            val tv = TextView(ctx).apply {
+                text = title
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleSmall)
+                setTextColor(sectionColor)
+                setPadding(0, 0, 0, 4)
+            }
+            container.addView(tv)
+        }
+
+        fun addLinkedItem(name: String, url: String, desc: String) {
+            val tv = TextView(ctx).apply {
+                val text = "$name — $desc"
+                val ss = SpannableString(text)
+                val nameEnd = name.length
+                ss.setSpan(object : ClickableSpan() {
+                    override fun onClick(widget: View) {
+                        openUrl(url)
+                    }
+                }, 0, nameEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                ss.setSpan(ForegroundColorSpan(linkColor), 0, nameEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                setText(ss)
+                movementMethod = LinkMovementMethod.getInstance()
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
+                setTextColor(descColor)
+                setPadding(0, 4, 0, 2)
+            }
+            container.addView(tv)
+        }
+
+        fun addPlainItem(name: String, desc: String) {
+            val tv = TextView(ctx).apply {
+                text = "$name — $desc"
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
+                setTextColor(descColor)
+                setPadding(0, 4, 0, 2)
+            }
+            container.addView(tv)
+        }
+
+        fun spacer() {
+            container.addView(View(ctx).apply {
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 12)
+            })
+        }
+
+        addSection("▎焦点通知")
+        addLinkedItem("HyperCeiler", "https://github.com/ReChronoRain/HyperCeiler", "焦点歌词、MusicBaseHook / FocusNotifLyric 思路；渠道 ID、插件 ClassLoader bypass、防闪烁等")
+        addLinkedItem("FocusNotifLyric", "https://github.com/ghhccghk/FocusNotifLyric", "焦点歌词上游原型（wuyou-123），已并入 HyperCeiler")
+        addLinkedItem("HyperFocusApi", "https://github.com/ghhccghk/HyperFocusApi", "miui.focus 参数封装")
+        spacer()
+
+        addSection("▎框架与库")
+        addLinkedItem("LSPosed", "https://github.com/LSPosed/LSPosed", "Xposed 框架")
+        addLinkedItem("XposedBridge", "https://github.com/rovo89/XposedBridge", "Xposed API")
+        addLinkedItem("AndroidX", "https://github.com/androidx/androidx", "Android Jetpack")
+        addLinkedItem("OkHttp", "https://github.com/square/okhttp", "HTTP 网络")
+        addLinkedItem("Kotlin", "https://github.com/JetBrains/kotlin", "编程语言")
+        spacer()
+
+        addSection("▎同生态")
+        addLinkedItem("Lyric-Getter", "https://github.com/xiaowine/Lyric-Getter", "歌词获取综合方案")
+        addLinkedItem("Lyric-Getter-Api", "https://github.com/xiaowine/Lyric-Getter-Api", "歌词获取 API")
+        addLinkedItem("SuperLyricApi", "https://github.com/HChenX/SuperLyricApi", "SuperLyric 歌词源（LGPL-2.1）")
+        addLinkedItem("Lyricon", "https://github.com/proify/lyricon", "词幕 Lyricon 歌词源（Apache 2.0）")
+        addLinkedItem("LyricInfo", "https://github.com/limczhh/LyricInfo", "通知栏 LRC 注入（Xposed）")
+        addLinkedItem("HookTool", "https://github.com/HChenX/HookTool", "HyperOS 增强工具")
+        addLinkedItem("Cemiuiler", "https://github.com/ReChronoRain/Cemiuiler", "HyperOS 功能扩展")
+        spacer()
+
+        val footer = TextView(ctx).apply {
+            text = "歌词 Web API 版权归网易云、QQ 音乐各自平台所有。"
+            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
+            setTextColor(descColor)
+        }
+        container.addView(footer)
+
+        scrollView.addView(container)
+
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("致谢")
-            .setMessage(message)
+            .setView(scrollView)
             .setPositiveButton("知道了", null)
             .show()
     }

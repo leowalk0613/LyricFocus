@@ -101,6 +101,7 @@ class SuperLyricBridge {
     }
 
     fun stop() {
+        callback = null
         receiver?.let {
             try {
                 SuperLyricHelper.unregisterReceiver(it)
@@ -109,7 +110,6 @@ class SuperLyricBridge {
             }
         }
         receiver = null
-        callback = null
         accumulatedLines.clear()
         lastLineTime = 0L
     }

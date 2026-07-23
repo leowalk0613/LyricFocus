@@ -436,6 +436,17 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 
 ## 版本更新
 
+### v1.8.4
+
+- **锁屏切歌性能优化**：消除锁屏切歌掉帧，改为原地更新通知；AOD 息屏保留 cancel+repost 置顶；添加 600ms 防抖
+- **致谢页更新**：与 README 对齐，全部项目名称可点击链接跳转 GitHub
+- **歌词源 UI 重设计**：卡片式布局，图标+标题+描述+圆形选择器，选中自动展开详情
+- **多行模式修复**：当前行翻译使用淡色（与其他翻译行一致）；Monet 取色下通过 `ensureContrast` 计算对比度避免同色不可读
+- **切歌稳定性**：LyricInfo/Lyricon/SuperLyric 均增加歌名校验，旧回调不覆盖新歌；Bridge `stop()` 提前置空 callback
+- **样式细节**：日语原文第二行字号缩小 12%；预览背景 16dp 圆角
+- **版本号**：`1.8.4` (versionCode 24)
+- [完整更新日志](release-notes-v1.8.4.md)
+
 ### v1.8.3
 
 - **全新歌词源**：SuperLyricApi（实时推送）、LyricInfo（通知栏读取 LRC）、词幕 Lyricon（完整歌词+翻译）

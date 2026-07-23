@@ -48,6 +48,7 @@ class LyriconBridge(context: Application) {
     }
 
     fun stop() {
+        callback = null
         subscriber?.let {
             try {
                 it.unsubscribeActivePlayer(activePlayerListener)
@@ -58,7 +59,6 @@ class LyriconBridge(context: Application) {
             }
         }
         subscriber = null
-        callback = null
     }
 
     private val connectionListener = object : ConnectionListener {

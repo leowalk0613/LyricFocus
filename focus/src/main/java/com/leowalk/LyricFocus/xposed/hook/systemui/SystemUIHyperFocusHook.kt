@@ -85,11 +85,14 @@ class SystemUIHyperFocusHook : BaseHook() {
         private var lastNotifiedTitle = ""
         private var lastNotifiedArtist = ""
         private var lastNotifiedMultiLineKey = ""
+        private var lastCancelAndRepostTime = 0L
 
         private const val MIN_TICK_MS = 500L
         private const val LAYOUT_REFLOW_DEBOUNCE_MS = 2_000L
         /** 亮屏/解锁后重发焦点通知，等待 Keyguard 与 SystemUI 就绪 */
         private const val SCREEN_REPOST_DELAY_MS = 100L
+        /** 切歌/屏状态变化时 cancel+repost 的最小间隔 */
+        private const val CANCEL_REPOST_DEBOUNCE_MS = 600L
 
         private enum class FocusRefreshMode {
             LINE_CHANGE,
@@ -629,13 +632,14 @@ class SystemUIHyperFocusHook : BaseHook() {
                     }
                     Intent.ACTION_SCREEN_ON -> {
                         handler.postDelayed({
+                            if (!isKeyguardLocked()) return@postDelayed
                             forceCancelAndRepostForAod()
                         }, SCREEN_REPOST_DELAY_MS)
                     }
                     Intent.ACTION_USER_PRESENT -> {
                         handler.postDelayed({
                             hideFocusRowsInUnlockedShade()
-                            forceCancelAndRepostForAod()
+                            cancelFocusNotification()
                         }, SCREEN_REPOST_DELAY_MS)
                     }
                 }
@@ -1300,13 +1304,28 @@ class SystemUIHyperFocusHook : BaseHook() {
         }
     }
 
-    /** AOD 进入 / 切歌时 cancel + repost，确保焦点通知置顶。通知中心正常操作时不调用。 */
+    /** AOD 进入 / 切歌时刷新焦点通知。切歌时直接更新不 cancel，避免锁屏掉帧。 */
     private fun forceCancelAndRepostForAod() {
         if (!focusEnabled || !isPlaying || currentLyricText.isBlank()) return
-        log("forceCancelAndRepostForAod: cancel + repost for pin-to-top")
-        cancelFocusNotification()
-        HyperFocusLyricStyle.resetPostedCache()
+        val now = System.currentTimeMillis()
+        if (now - lastCancelAndRepostTime < CANCEL_REPOST_DEBOUNCE_MS) {
+            handler.postDelayed({
+                lastCancelAndRepostTime = 0L
+                forceCancelAndRepostForAod()
+            }, CANCEL_REPOST_DEBOUNCE_MS)
+            return
+        }
+        lastCancelAndRepostTime = now
+        // 仅锁屏切歌时直接更新通知，避免 cancel 造成的闪烁掉帧
+        val renewForAod = isAodActive() && !isScreenInteractive()
+        if (renewForAod) {
+            // AOD 息屏：cancel + repost 确保置顶
+            cancelFocusNotification()
+            HyperFocusLyricStyle.resetPostedCache()
+        }
+        // 无论是否 cancel，都强制重置防重复缓存让新歌词能发出去
         clearNotifiedLyricContent()
+        HyperFocusLyricStyle.resetPostedCache()
         postFocusUpdate(FocusRefreshMode.LINE_CHANGE, force = true)
         scheduleNextUpdate()
     }

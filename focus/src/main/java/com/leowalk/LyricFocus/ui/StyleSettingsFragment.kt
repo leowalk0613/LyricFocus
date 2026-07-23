@@ -1091,7 +1091,10 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     }
 
     private fun refreshAodPreview(ctx: android.content.Context, state: LyricService.PreviewState, hasLyric: Boolean) {
-        previewRoot.setBackgroundColor(android.graphics.Color.BLACK)
+        previewRoot.background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(android.graphics.Color.BLACK)
+            cornerRadius = 16f * ctx.resources.displayMetrics.density
+        }
         previewMultiLines.visibility = View.GONE
         previewLyric.visibility = View.VISIBLE
         previewSecond.visibility = View.VISIBLE
@@ -1175,7 +1178,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         previewLyric.maxLines = lyricMaxLines
 
         previewSecond.text = secondText
-        previewSecond.textSize = textSize * 0.78f
+        previewSecond.textSize = textSize * 0.78f * if (isJapaneseText(secondText)) 0.88f else 1f
         previewSecond.setTextColor(secondaryColor)
         previewSecond.gravity = gravity
         previewSecond.minLines = translationMaxLines
@@ -1194,17 +1197,20 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         val lyricMaxLines = FocusPreferences.getLyricMaxLines(ctx)
         val translationMaxLines = FocusPreferences.getTranslationMaxLines(ctx)
         val background = FocusPreferences.getFocusBackground(ctx)
+        val monetEnabled = FocusPreferences.isMonetDynamicColorEnabled(ctx)
         val (primaryColor, secondaryColor, extractedBg) = resolvePreviewColors(ctx)
 
         // 背景：Monet 取色时优先用提取的背景色，否则用手动设置
-        previewRoot.setBackgroundColor(
-            if (extractedBg != null) extractedBg
-            else when (background) {
-                FocusPreferences.BACKGROUND_BLACK -> android.graphics.Color.BLACK
-                FocusPreferences.BACKGROUND_WHITE -> android.graphics.Color.WHITE
-                else -> 0xFF2A2A2A.toInt()
-            }
-        )
+        val previewBgColor = if (extractedBg != null) extractedBg
+        else when (background) {
+            FocusPreferences.BACKGROUND_BLACK -> android.graphics.Color.BLACK
+            FocusPreferences.BACKGROUND_WHITE -> android.graphics.Color.WHITE
+            else -> 0xFF2A2A2A.toInt()
+        }
+        previewRoot.background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(previewBgColor)
+            cornerRadius = 16f * ctx.resources.displayMetrics.density
+        }
 
         // 重置 padding
         previewLyric.setPadding(0, previewLyric.paddingTop, 0, previewLyric.paddingBottom)
@@ -1246,8 +1252,19 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                 trans = if (interleaved) List(pairCount) { "\u7ffb\u8bd1 \u7b2c${it + 1}\u53e5" } else List(pairCount) { "" }
             }
             // Mirror applyMultiLineStyle colors and sizes exactly
-            val defaultLineColor = FocusPreferences.getExtractedTextColor(ctx) ?: primaryColor
-            val currentLineColor = if (FocusPreferences.getFocusBackground(ctx) == FocusPreferences.BACKGROUND_WHITE)
+            val monetBgColor = if (monetEnabled) extractedBg else null
+            val defaultLineColor = if (monetBgColor != null) {
+                AlbumColorExtractor.ensureContrast(
+                    FocusPreferences.getExtractedTextColor(ctx) ?: primaryColor,
+                    monetBgColor,
+                    4.0
+                )
+            } else {
+                FocusPreferences.getExtractedTextColor(ctx) ?: primaryColor
+            }
+            val currentLineColor = if (monetBgColor != null) {
+                AlbumColorExtractor.ensureContrast(defaultLineColor, monetBgColor, 7.0)
+            } else if (background == FocusPreferences.BACKGROUND_WHITE)
                 android.graphics.Color.BLACK else android.graphics.Color.WHITE
             val nonCurrentTransColor = fadeTextColor(defaultLineColor)
             val isCurrentPair = { idx: Int -> interleaved && idx >= 0 && (idx == currentSlot || (idx == currentSlot + 1 && currentSlot % 2 == 0)) }
@@ -1269,6 +1286,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                         tv.visibility = View.VISIBLE
                         tv.text = text
                         tv.setTextColor(when {
+                            inCurrentPair && isTranslationSlot -> nonCurrentTransColor
                             inCurrentPair -> currentLineColor
                             isTranslationSlot -> nonCurrentTransColor
                             else -> defaultLineColor
@@ -1316,7 +1334,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
 
             if (!singleLineOnly) {
                 previewSecond.text = secondText
-                previewSecond.textSize = textSize * 0.78f
+                previewSecond.textSize = textSize * 0.78f * if (isJapaneseText(secondText)) 0.88f else 1f
                 previewSecond.setTextColor(secondaryColor)
                 previewSecond.gravity = gravity
                 previewSecond.minLines = translationMaxLines
@@ -1328,6 +1346,12 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     private fun fadeTextColor(color: Int, factor: Float = 0.72f): Int {
         val a = (android.graphics.Color.alpha(color) * factor).toInt().coerceIn(0, 255)
         return android.graphics.Color.argb(a, android.graphics.Color.red(color), android.graphics.Color.green(color), android.graphics.Color.blue(color))
+    }
+
+    private fun isJapaneseText(text: String): Boolean {
+        return text.any { c ->
+            c in '\u3040'..'\u309F' || c in '\u30A0'..'\u30FF' || c in '\u4E00'..'\u9FFF'
+        }
     }
 
     private fun blendSecondary(primary: Int): Int {
