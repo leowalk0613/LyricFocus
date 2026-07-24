@@ -1,42 +1,35 @@
 <div align="center">
 
-<h1 align="center">
-  <img src="focus/src/main/res/drawable-nodpi/ic_launcher_full.png" alt="LyricFocus icon" width="64" height="64">
-  LyricFocus
-</h1>
+<img src="https://raw.githubusercontent.com/leowalk0613/LyricFocus/main/focus/src/main/res/drawable-nodpi/ic_launcher_full.png" alt="LyricFocus" width="96">
 
+# LyricFocus
+
+![GitHub Release](https://img.shields.io/github/v/release/leowalk0613/LyricFocus?style=for-the-badge)
 ![Android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-0095D5?&style=for-the-badge&logo=kotlin&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)
 
 在小米 HyperOS 上于**锁屏、AOD（息屏显示）、通知中心**展示同步歌词。  
-通过 LSPosed 注入 SystemUI，使用 HyperOS **焦点通知**（`miui.focus.*`）渲染歌词；主界面副标题：**实现 HyperOS 锁屏息屏焦点歌词的 LSP 模块**。
+通过 LSPosed 注入 SystemUI，使用 HyperOS **焦点通知**（`miui.focus.*`）渲染歌词。
 
-包名：`com.leowalk.LyricFocus`
+> 实现 HyperOS 锁屏息屏焦点歌词的 LSP 模块 — `com.leowalk.LyricFocus`
 
-[123网盘更新地址](https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3)  
+[123 网盘](https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3) ·
 [GitHub Releases](https://github.com/leowalk0613/LyricFocus/releases)
+
 </div>
 
 ---
 
 ## 📋 目录
 
-- [功能概览](#功能概览)
-- [系统要求](#系统要求)
-- [架构与数据流](#架构与数据流)
-- [项目结构](#项目结构)
-- [安装与配置](#安装与配置)
-- [设置项](#设置项)
-- [歌词源](#歌词源)
-- [进程间通信](#进程间通信)
-- [Xposed Hook](#xposed-hook)
-- [依赖](#依赖)
-- [版本更新](#版本更新)
-- [调试与反馈](#调试与反馈)
-- [已知限制](#已知限制)
-- [致谢](#致谢)
-- [许可证](#许可证)
+| | | |
+|---|---|---|
+| [功能概览](#功能概览) | [系统要求](#系统要求) | [架构与数据流](#架构与数据流) |
+| [项目结构](#项目结构) | [安装与配置](#安装与配置) | [设置项](#设置项) |
+| [歌词源](#歌词源) | [进程间通信](#进程间通信) | [Xposed Hook](#xposed-hook) |
+| [依赖](#依赖) | [版本更新](#版本更新) | [调试与反馈](#调试与反馈) |
+| [已知限制](#已知限制) | [致谢](#致谢) | [许可证](#许可证) |
 
 ---
 
