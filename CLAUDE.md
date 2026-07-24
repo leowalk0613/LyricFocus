@@ -11,7 +11,7 @@
 5. **git push origin main --tags**
 6. **gh release create vX.X.X**：
    - `--title "vX.X.X - 简短描述"`
-   - `--notes-file release-notes-vX.X.X.md`
+   - `--notes-file release-notes/release-notes-vX.X.X.md`
    - 附加 release APK 文件
 7. 返回 Release URL
 

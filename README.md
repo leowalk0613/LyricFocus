@@ -444,7 +444,7 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 - **LyricInfo 修复**：切歌用 stale 标记避免多行回退丢失原文
 - **UI 细节**：主界面「运行中/未运行」加大加粗
 - **版本号**：`1.8.5` (versionCode 25)
-- [完整更新日志](release-notes-v1.8.5.md)
+- [完整更新日志](release-notes/release-notes-v1.8.5.md)
 
 ### v1.8.4
 
@@ -455,7 +455,7 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 - **切歌稳定性**：LyricInfo/Lyricon/SuperLyric 均增加歌名校验，旧回调不覆盖新歌；Bridge `stop()` 提前置空 callback
 - **样式细节**：日语原文第二行字号缩小 12%；预览背景 16dp 圆角
 - **版本号**：`1.8.4` (versionCode 24)
-- [完整更新日志](release-notes-v1.8.4.md)
+- [完整更新日志](release-notes/release-notes-v1.8.4.md)
 
 ### v1.8.3
 
@@ -467,7 +467,7 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 - **歌词匹配**：专辑名优先加分，已知歌曲 ID 直绑；本地 LRC 精确文件名优先
 - **构建系统**：Gradle 8.11 / AGP 8.9 / Kotlin 2.3.20 / compileSdk 36 / Java 21
 - **版本号**：`1.8.3`（versionCode 23）
-- [完整更新日志](release-notes-v1.8.3.md)
+- [完整更新日志](release-notes/release-notes-v1.8.3.md)
 
 ### v1.8.2
 
