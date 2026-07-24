@@ -42,9 +42,12 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     private lateinit var linesCardHint: TextView
     private lateinit var switchMultiLineLyrics: MaterialSwitch
     private lateinit var multiLineCountRow: View
-    private lateinit var multiLineCountGroup: MaterialButtonToggleGroup
+    private lateinit var sliderMultiLineCount: Slider
+    private lateinit var tvMultiLineCountLabel: TextView
     private lateinit var multiLineTranslationRow: View
     private lateinit var switchMultiLineShowTranslation: MaterialSwitch
+    private lateinit var aodMultiLineOnlyRow: View
+    private lateinit var switchAodMultiLineOnly: MaterialSwitch
     private lateinit var multiLineTextSizeRow: View
     private lateinit var sliderMultiLineTextSize: Slider
     private lateinit var tvMultiLineTextSizeLabel: TextView
@@ -75,6 +78,10 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     private lateinit var colorExtractionHint: TextView
     private lateinit var colorExtractionSwitch: MaterialSwitch
     private lateinit var monetDynamicSwitch: MaterialSwitch
+    private lateinit var colorModeCard: View
+    private lateinit var colorModeTitle: TextView
+    private lateinit var colorModeHint: TextView
+    private lateinit var colorModeSwitch: MaterialSwitch
 
     private lateinit var sliderCustomAodTextSize: Slider
     private lateinit var tvCustomAodTextSizeLabel: TextView
@@ -145,9 +152,12 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         linesCardHint = view.findViewById(R.id.lines_card_hint)
         switchMultiLineLyrics = view.findViewById(R.id.switch_multi_line_lyrics)
         multiLineCountRow = view.findViewById(R.id.multi_line_count_row)
-        multiLineCountGroup = view.findViewById(R.id.multi_line_count_group)
+        sliderMultiLineCount = view.findViewById(R.id.slider_multi_line_count)
+        tvMultiLineCountLabel = view.findViewById(R.id.multi_line_count_label)
         multiLineTranslationRow = view.findViewById(R.id.multi_line_translation_row)
         switchMultiLineShowTranslation = view.findViewById(R.id.switch_multi_line_show_translation)
+        aodMultiLineOnlyRow = view.findViewById(R.id.aod_multi_line_only_row)
+        switchAodMultiLineOnly = view.findViewById(R.id.switch_aod_multi_line_only)
         multiLineTextSizeRow = view.findViewById(R.id.multi_line_text_size_row)
         sliderMultiLineTextSize = view.findViewById(R.id.slider_multi_line_text_size)
         tvMultiLineTextSizeLabel = view.findViewById(R.id.multi_line_text_size_label)
@@ -178,6 +188,10 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         colorExtractionHint = view.findViewById(R.id.color_extraction_hint)
         colorExtractionSwitch = view.findViewById(R.id.color_extraction_switch)
         monetDynamicSwitch = view.findViewById(R.id.monet_dynamic_switch)
+        colorModeCard = view.findViewById(R.id.color_mode_card)
+        colorModeTitle = view.findViewById(R.id.color_mode_title)
+        colorModeHint = view.findViewById(R.id.color_mode_hint)
+        colorModeSwitch = view.findViewById(R.id.color_mode_switch)
 
         sliderCustomAodTextSize = view.findViewById(R.id.slider_custom_aod_text_size)
         tvCustomAodTextSizeLabel = view.findViewById(R.id.custom_aod_text_size_label)
@@ -210,7 +224,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             translationLinesGroup,
             gravityGroup,
             switchMultiLineLyrics,
-            multiLineCountGroup,
+            sliderMultiLineCount,
             switchMultiLineShowTranslation,
             sliderMultiLineTextSize
         )
@@ -298,13 +312,10 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         switchMultiLineLyrics.isChecked = FocusPreferences.isMultiLineLyrics(requireContext())
         switchMultiLineShowTranslation.isChecked =
             FocusPreferences.isMultiLineShowTranslation(requireContext())
-        multiLineCountGroup.check(
-            when (FocusPreferences.getMultiLineLineCount(requireContext())) {
-                4 -> R.id.multi_line_count_4
-                6 -> R.id.multi_line_count_6
-                else -> R.id.multi_line_count_8
-            }
-        )
+        val lineCount = FocusPreferences.getMultiLineLineCount(requireContext()).toFloat()
+        sliderMultiLineCount.value = lineCount
+        tvMultiLineCountLabel.text = "${lineCount.toInt()} 行"
+        switchAodMultiLineOnly.isChecked = FocusPreferences.isAodMultiLineOnly(requireContext())
         bindMultiLineTextSizeSlider(FocusPreferences.getMultiLineTextSize(requireContext()))
 
         bindTextSizeSlider(FocusPreferences.getLyricTextSize(requireContext()))
@@ -343,6 +354,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
 
         monetDynamicSwitch.isChecked = FocusPreferences.isMonetDynamicColorEnabled(requireContext())
         colorExtractionSwitch.isChecked = FocusPreferences.isTextColorExtractionEnabled(requireContext())
+        colorModeSwitch.isChecked = FocusPreferences.isColorModeEnabled(requireContext())
 
         bindCustomAodTextSizeSlider(FocusPreferences.getCustomAodTextSize(requireContext()))
         bindCustomAodWidthSlider(FocusPreferences.getCustomAodLyricWidth(requireContext()))
@@ -438,6 +450,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             multiLineCountRow.visibility = View.GONE
             multiLineTranslationRow.visibility = View.GONE
             multiLineTextSizeRow.visibility = View.GONE
+            aodMultiLineOnlyRow.visibility = View.GONE
             switchMultiLineLyrics.isEnabled = false
             switchMultiLineLyrics.alpha = 0.38f
             switchSwapLyricTranslation.isEnabled = false
@@ -453,11 +466,15 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         multiLineCountRow.visibility = if (multiLineEnabled) View.VISIBLE else View.GONE
         multiLineTranslationRow.visibility = if (multiLineEnabled) View.VISIBLE else View.GONE
         multiLineTextSizeRow.visibility = if (multiLineEnabled) View.VISIBLE else View.GONE
+        aodMultiLineOnlyRow.visibility = if (multiLineEnabled) View.VISIBLE else View.GONE
         val multiLineInteractive = lockScreenInteractive && multiLineEnabled
+        switchAodMultiLineOnly.isEnabled = multiLineInteractive
+        switchAodMultiLineOnly.alpha = if (multiLineInteractive) 1f else 0.38f
         switchMultiLineShowTranslation.isEnabled = multiLineInteractive
         switchMultiLineShowTranslation.alpha = if (multiLineInteractive) 1f else 0.38f
-        multiLineCountGroup.isEnabled = multiLineInteractive
-        multiLineCountGroup.alpha = if (multiLineInteractive) 1f else 0.38f
+        sliderMultiLineCount.isEnabled = multiLineInteractive
+        sliderMultiLineCount.alpha = if (multiLineInteractive) 1f else 0.38f
+        tvMultiLineCountLabel.alpha = if (multiLineInteractive) 1f else 0.38f
         sliderMultiLineTextSize.isEnabled = multiLineInteractive
         sliderMultiLineTextSize.alpha = if (multiLineInteractive) 1f else 0.38f
         tvMultiLineTextSizeLabel.alpha = if (multiLineInteractive) 1f else 0.38f
@@ -485,15 +502,19 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     private fun updateDynamicColorUi() {
         val monetEnabled = FocusPreferences.isMonetDynamicColorEnabled(requireContext())
         val textExtractionEnabled = FocusPreferences.isTextColorExtractionEnabled(requireContext())
+        val colorModeEnabled = FocusPreferences.isColorModeEnabled(requireContext())
+        val anyExtraction = monetEnabled || textExtractionEnabled
         val manualTextEnabled = !monetEnabled && !textExtractionEnabled
+
+        colorModeSwitch.isEnabled = anyExtraction
 
         setSectionEnabled(
             section = textColorSection,
             title = textColorTitle,
             hint = textColorHint,
             hintText = when {
-                monetEnabled -> "Monet 动态取色已接管文字颜色"
-                textExtractionEnabled -> "通知文字取色已接管文字颜色"
+                monetEnabled -> if (colorModeEnabled) "色彩模式已接管文字颜色" else "Monet 动态取色已接管文字颜色"
+                textExtractionEnabled -> if (colorModeEnabled) "色彩模式已接管文字颜色" else "通知文字取色已接管文字颜色"
                 else -> null
             },
             enabled = manualTextEnabled,
@@ -505,7 +526,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             title = backgroundTitle,
             hint = backgroundHint,
             hintText = when {
-                monetEnabled -> "Monet 动态取色已接管焦点通知背景"
+                monetEnabled -> if (colorModeEnabled) "色彩模式已接管焦点通知背景" else "Monet 动态取色已接管焦点通知背景"
                 else -> null
             },
             enabled = !monetEnabled,
@@ -523,6 +544,8 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             enabled = !monetEnabled,
             controls = listOf(colorExtractionSwitch)
         )
+
+        colorModeSwitch.isEnabled = anyExtraction
     }
 
     private fun bindCustomAodSongInfo(mode: String) {
@@ -665,21 +688,27 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             FocusPreferences.setMultiLineShowTranslation(requireContext(), checked)
             notifyStyleChanged()
         }
-        multiLineCountGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
-            if (FocusPreferences.isCustomAodLayout(requireContext()) ||
-                !FocusPreferences.isMultiLineLyrics(requireContext())
-            ) {
-                return@addOnButtonCheckedListener
-            }
-            val count = when (checkedId) {
-                R.id.multi_line_count_4 -> 4
-                R.id.multi_line_count_6 -> 6
-                else -> 8
-            }
-            FocusPreferences.setMultiLineLineCount(requireContext(), count)
+        switchAodMultiLineOnly.setOnCheckedChangeListener { _, checked ->
+            if (isBindingUi) return@setOnCheckedChangeListener
+            FocusPreferences.setAodMultiLineOnly(requireContext(), checked)
             notifyStyleChanged()
         }
+        sliderMultiLineCount.addOnChangeListener { _, value, fromUser ->
+            tvMultiLineCountLabel.text = "${value.toInt()} 行"
+        }
+        sliderMultiLineCount.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) = Unit
+            override fun onStopTrackingTouch(slider: Slider) {
+                if (!FocusPreferences.isMultiLineLyrics(requireContext()) ||
+                    !sliderMultiLineCount.isEnabled
+                ) {
+                    return
+                }
+                val count = slider.value.toInt()
+                FocusPreferences.setMultiLineLineCount(requireContext(), count)
+                notifyStyleChanged()
+            }
+        })
 
         sliderMultiLineTextSize.addOnChangeListener { _, value, fromUser ->
             if (!fromUser || isMultiLineTextSizeUpdating) return@addOnChangeListener
@@ -835,6 +864,16 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         colorExtractionSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (isBindingUi || FocusPreferences.isMonetDynamicColorEnabled(requireContext())) return@setOnCheckedChangeListener
             FocusPreferences.setTextColorExtractionEnabled(requireContext(), isChecked)
+            if (!isChecked) {
+                FocusPreferences.clearExtractedTextColor(requireContext())
+            }
+            updateDynamicColorUi()
+            notifyStyleChanged()
+        }
+
+        colorModeSwitch.setOnCheckedChangeListener { _, isChecked ->
+            if (isBindingUi) return@setOnCheckedChangeListener
+            FocusPreferences.setColorModeEnabled(requireContext(), isChecked)
             if (!isChecked) {
                 FocusPreferences.clearExtractedTextColor(requireContext())
             }
@@ -1221,11 +1260,12 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             previewSecond.visibility = View.GONE
             previewMultiLines.visibility = View.VISIBLE
 
-            val count = FocusPreferences.getMultiLineLineCount(ctx)
+            val rawCount = FocusPreferences.getMultiLineLineCount(ctx)
+            val pageSlots = FocusPreferences.multiLinePageSlots(rawCount)
+            val hideFirstLine = rawCount != pageSlots
             val mlTextSize = FocusPreferences.getMultiLineTextSize(ctx)
             val showTransPref = FocusPreferences.isMultiLineShowTranslation(ctx)
 
-            // Use full lyrics + current position for page logic (mirror buildMultiLineWindow)
             val lyricInfo = LyricService.currentLyricInfoForPreview
             val allLines = if (!lyricInfo.isEmpty) lyricInfo.lines else emptyList()
             val currentIndex = if (allLines.isNotEmpty()) {
@@ -1234,9 +1274,12 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             } else 0
 
             val interleaved = showTransPref && allLines.any { it.translation?.isNotBlank() == true }
-            val pairCount = if (interleaved) count / 2 else count
+            val pairCount = if (interleaved) pageSlots / 2 else pageSlots
             val pageStart = (currentIndex / pairCount) * pairCount
             val currentSlot = if (interleaved) (currentIndex - pageStart) * 2 else currentIndex - pageStart
+            val hideSlot = if (hideFirstLine && currentIndex > pageStart) {
+                if (interleaved) 2 else 1
+            } else 0
 
             val origins: List<String>
             val trans: List<String>
@@ -1252,25 +1295,33 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                 trans = if (interleaved) List(pairCount) { "\u7ffb\u8bd1 \u7b2c${it + 1}\u53e5" } else List(pairCount) { "" }
             }
             // Mirror applyMultiLineStyle colors and sizes exactly
+            val colorModeEnabled = FocusPreferences.isColorModeEnabled(ctx)
+            val colorModeBgColor = if (colorModeEnabled) FocusPreferences.getExtractedBgColor(ctx) else null
             val monetBgColor = if (monetEnabled) extractedBg else null
-            val defaultLineColor = if (monetBgColor != null) {
+            val extractedBg = colorModeBgColor ?: monetBgColor
+            val defaultLineColor = if (extractedBg != null) {
                 AlbumColorExtractor.ensureContrast(
                     FocusPreferences.getExtractedTextColor(ctx) ?: primaryColor,
-                    monetBgColor,
+                    extractedBg,
                     4.0
                 )
             } else {
                 FocusPreferences.getExtractedTextColor(ctx) ?: primaryColor
             }
-            val currentLineColor = if (monetBgColor != null) {
+            val currentLineColor = if (colorModeBgColor != null) {
+                AlbumColorExtractor.ensureContrast(
+                    FocusPreferences.getExtractedAccentColor(ctx) ?: defaultLineColor,
+                    colorModeBgColor,
+                    5.0
+                )
+            } else if (monetBgColor != null) {
                 AlbumColorExtractor.ensureContrast(defaultLineColor, monetBgColor, 7.0)
             } else if (background == FocusPreferences.BACKGROUND_WHITE)
                 android.graphics.Color.BLACK else android.graphics.Color.WHITE
             val nonCurrentTransColor = fadeTextColor(defaultLineColor)
-            val isCurrentPair = { idx: Int -> interleaved && idx >= 0 && (idx == currentSlot || (idx == currentSlot + 1 && currentSlot % 2 == 0)) }
             for (i in 0 until 8) {
                 val tv = previewMultiTextViews[i]
-                if (i < count) {
+                if (i < pageSlots) {
                     val isTranslationSlot = interleaved && i % 2 == 1
                     val pairIdx = i / 2
                     val swapped = interleaved && swapLyricTranslation
@@ -1279,24 +1330,17 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                     } else {
                         if (swapped && interleaved) trans[pairIdx.coerceAtMost(trans.size - 1)] else origins[pairIdx.coerceAtMost(origins.size - 1)]
                     }
-                    if (text.isBlank()) {
-                        tv.visibility = View.GONE
+                    if (i < hideSlot || text.isBlank()) {
+                        tv.visibility = View.INVISIBLE
                     } else {
-                        val inCurrentPair = isCurrentPair(i)
                         tv.visibility = View.VISIBLE
                         tv.text = text
                         tv.setTextColor(when {
-                            inCurrentPair && isTranslationSlot -> nonCurrentTransColor
-                            inCurrentPair -> currentLineColor
+                            i == currentSlot -> currentLineColor
                             isTranslationSlot -> nonCurrentTransColor
                             else -> defaultLineColor
                         })
-                        tv.textSize = when {
-                            i == currentSlot -> mlTextSize
-                            inCurrentPair && isTranslationSlot -> mlTextSize * 0.65f + 2f
-                            isTranslationSlot -> mlTextSize * 0.5f
-                            else -> mlTextSize * 0.65f
-                        }
+                        tv.textSize = if (i == currentSlot) mlTextSize else mlTextSize * 0.65f
                         tv.gravity = gravity
                     }
                 } else {

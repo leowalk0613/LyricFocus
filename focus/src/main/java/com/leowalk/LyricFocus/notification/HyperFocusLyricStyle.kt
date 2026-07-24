@@ -116,8 +116,8 @@ object HyperFocusLyricStyle {
          * false：所选行数皆为原文。
          */
         val interleavedTranslations: Boolean = false,
-        /** 实际展示行数：4 / 6 / 8 */
-        val visibleCount: Int = FocusPreferences.DEFAULT_MULTI_LINE_LINE_COUNT,
+        /** 实际展示行数：4~8 */
+        val visibleCount: Int = MULTI_LINE_MAX_SLOTS,
         /** 当前正在播放的歌词行在 [lines] 中的槽位索引，-1 表示不标识 */
         val currentLineSlot: Int = -1
     ) {
@@ -212,8 +212,7 @@ object HyperFocusLyricStyle {
         val secondKey = secondLine.orEmpty()
 
         val multiLine = content.multiLine?.takeIf {
-            it.lines.size == MULTI_LINE_MAX_SLOTS &&
-                FocusPreferences.coerceMultiLineLineCount(it.visibleCount) == it.visibleCount
+            it.lines.size == MULTI_LINE_MAX_SLOTS
         }
         val multiLineKey = multiLine?.contentKey().orEmpty()
 
@@ -582,17 +581,30 @@ object HyperFocusLyricStyle {
         val background = FocusStyleSnapshot.background
         val monetEnabled = FocusStyleSnapshot.monetDynamicColorEnabled
         val textExtractionEnabled = FocusStyleSnapshot.textColorExtractionEnabled
-        val extractedColor = if (monetEnabled || textExtractionEnabled) {
+        val colorModeEnabled = FocusStyleSnapshot.colorModeEnabled
+        val hasExtractedColors = monetEnabled || textExtractionEnabled
+        val extractedColor = if (hasExtractedColors) {
             FocusStyleSnapshot.extractedTextColor
         } else {
             null
         }
         val extractedBgColor = FocusStyleSnapshot.extractedBgColor
+        val extractedAccent = FocusStyleSnapshot.extractedAccentColor
 
         val colorPrimary: Int
         val colorSecondary: Int
         val backgroundColor: Int?
         when {
+            monetEnabled && colorModeEnabled && extractedColor != null && extractedBgColor != null -> {
+                colorPrimary = AlbumColorExtractor.ensureContrastColorful(extractedColor, extractedBgColor)
+                val accent = extractedAccent ?: extractedColor
+                colorSecondary = AlbumColorExtractor.ensureContrastColorful(
+                    AlbumColorExtractor.blendSecondary(accent, extractedBgColor),
+                    extractedBgColor,
+                    3.0
+                )
+                backgroundColor = extractedBgColor
+            }
             monetEnabled && extractedColor != null && extractedBgColor != null -> {
                 colorPrimary = extractedColor
                 colorSecondary = AlbumColorExtractor.ensureContrast(
@@ -601,6 +613,24 @@ object HyperFocusLyricStyle {
                     3.0
                 )
                 backgroundColor = extractedBgColor
+            }
+            textExtractionEnabled && colorModeEnabled && extractedColor != null && extractedAccent != null -> {
+                val bg = when (background) {
+                    FocusPreferences.BACKGROUND_BLACK -> Color.BLACK
+                    FocusPreferences.BACKGROUND_WHITE -> Color.WHITE
+                    else -> Color.BLACK
+                }
+                colorPrimary = AlbumColorExtractor.ensureContrastColorful(extractedColor, bg)
+                colorSecondary = AlbumColorExtractor.ensureContrastColorful(
+                    AlbumColorExtractor.blendSecondary(extractedAccent, bg),
+                    bg,
+                    3.0
+                )
+                backgroundColor = when (background) {
+                    FocusPreferences.BACKGROUND_BLACK -> Color.BLACK
+                    FocusPreferences.BACKGROUND_WHITE -> Color.WHITE
+                    else -> null
+                }
             }
             textExtractionEnabled && extractedColor != null -> {
                 val (primary, secondary) = AlbumColorExtractor.resolveTextColors(
@@ -1196,7 +1226,7 @@ object HyperFocusLyricStyle {
 
         val interleaved = multiLine.interleavedTranslations
         val rawLines = multiLine.lines
-        val visibleCount = FocusPreferences.coerceMultiLineLineCount(multiLine.visibleCount)
+        val visibleCount = multiLine.visibleCount.coerceIn(4, 8)
         val displayLines = if (interleaved && FocusStyleSnapshot.swapLyricTranslation) {
             // 每对内互换：偶数槽显示翻译（主色），奇数槽显示原文（淡色）
             List(MULTI_LINE_MAX_SLOTS) { i ->
@@ -1212,19 +1242,37 @@ object HyperFocusLyricStyle {
         }
 
         val textSizeSp = FocusStyleSnapshot.multiLineTextSizeSp
+        val colorModeBgColor = if (FocusStyleSnapshot.colorModeEnabled) {
+            FocusStyleSnapshot.extractedBgColor
+        } else null
         val monetBgColor = if (FocusStyleSnapshot.monetDynamicColorEnabled) {
             FocusStyleSnapshot.extractedBgColor
         } else null
-        val defaultLineColor = if (monetBgColor != null) {
-            AlbumColorExtractor.ensureContrast(
-                FocusStyleSnapshot.extractedTextColor ?: style.colorPrimary,
-                monetBgColor,
-                4.0
-            )
+        val extractedBg = colorModeBgColor ?: monetBgColor
+        val defaultLineColor = if (extractedBg != null) {
+            if (colorModeBgColor != null) {
+                AlbumColorExtractor.ensureContrastColorful(
+                    FocusStyleSnapshot.extractedTextColor ?: style.colorPrimary,
+                    extractedBg,
+                    4.0
+                )
+            } else {
+                AlbumColorExtractor.ensureContrast(
+                    FocusStyleSnapshot.extractedTextColor ?: style.colorPrimary,
+                    extractedBg,
+                    4.0
+                )
+            }
         } else {
             FocusStyleSnapshot.extractedTextColor ?: style.colorPrimary
         }
-        val currentLineColor = if (monetBgColor != null) {
+        val currentLineColor = if (colorModeBgColor != null) {
+            AlbumColorExtractor.ensureContrastColorful(
+                FocusStyleSnapshot.extractedAccentColor ?: defaultLineColor,
+                colorModeBgColor,
+                5.0
+            )
+        } else if (monetBgColor != null) {
             AlbumColorExtractor.ensureContrast(defaultLineColor, monetBgColor, 7.0)
         } else when (style.backgroundColor) {
             Color.WHITE -> Color.BLACK
@@ -1232,39 +1280,32 @@ object HyperFocusLyricStyle {
         }
         val nonCurrentTransColor = fadeTextColor(defaultLineColor)
         val currentLineSlot = multiLine.currentLineSlot.coerceAtLeast(0)
-        val isCurrentPair = { idx: Int -> interleaved && idx >= 0 && (idx == currentLineSlot || (idx == currentLineSlot + 1 && currentLineSlot % 2 == 0)) }
 
         for (i in 0 until MULTI_LINE_MAX_SLOTS) {
             val viewId = MULTI_LINE_IDS[i]
             val displayText = displayLines[i]
             val isTranslation = interleaved && i < visibleCount && i % 2 == 1
             val isCurrentLine = i == currentLineSlot
-            if (i >= visibleCount || displayText.isBlank()) {
+            if (i >= visibleCount) {
                 views.setTextViewText(viewId, " ")
                 views.setViewVisibility(viewId, View.GONE)
                 continue
             }
+            if (displayText.isBlank()) {
+                views.setTextViewText(viewId, " ")
+                views.setViewVisibility(viewId, View.INVISIBLE)
+                continue
+            }
             views.setViewVisibility(viewId, View.VISIBLE)
             views.setTextViewText(viewId, displayText)
-            val inCurrentPair = isCurrentPair(i)
-            if (inCurrentPair) {
-                if (isTranslation) {
-                    // 当前行的翻译使用淡色，与其他翻译行一致
-                    views.setTextColor(viewId, nonCurrentTransColor)
-                    views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.65f + 2f)
-                    views.setViewPadding(viewId, 0, 0, 0, 12)
-                } else if (i == currentLineSlot) {
-                    views.setTextColor(viewId, currentLineColor)
-                    views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp)
-                    views.setViewPadding(viewId, 0, 12, 0, 0)
-                } else {
-                    views.setTextColor(viewId, currentLineColor)
-                    views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.65f + 2f)
-                    views.setViewPadding(viewId, 0, 0, 0, 12)
-                }
+            if (isCurrentLine) {
+                views.setTextColor(viewId, currentLineColor)
+                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp)
+                views.setViewPadding(viewId, 0, 12, 0, 0)
             } else if (isTranslation) {
                 views.setTextColor(viewId, nonCurrentTransColor)
-                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.5f)
+                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.65f)
+                views.setViewPadding(viewId, 0, 0, 0, 12)
             } else {
                 views.setTextColor(viewId, defaultLineColor)
                 views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.65f)

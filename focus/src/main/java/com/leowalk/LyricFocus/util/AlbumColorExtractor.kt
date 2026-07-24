@@ -6,6 +6,7 @@ import androidx.palette.graphics.Palette
 import com.leowalk.LyricFocus.FocusPreferences
 import kotlin.math.max
 import kotlin.math.pow
+import kotlin.math.sqrt
 
 object AlbumColorExtractor {
 
@@ -17,6 +18,12 @@ object AlbumColorExtractor {
     data class LyricColors(
         val accent: Int,
         val backgroundEstimate: Int
+    )
+
+    data class DistinctColors(
+        val background: Int,
+        val primaryText: Int,
+        val accent: Int
     )
 
     data class MonetScheme(
@@ -60,6 +67,39 @@ object AlbumColorExtractor {
             primaryText = primaryText,
             secondaryText = secondaryText,
             accent = seed
+        )
+    }
+
+    fun extractDistinctColors(bitmap: Bitmap?): DistinctColors? {
+        if (bitmap == null || bitmap.isRecycled || bitmap.width <= 0 || bitmap.height <= 0) {
+            return null
+        }
+        val palette = try {
+            Palette.from(bitmap).generate()
+        } catch (_: Throwable) {
+            return null
+        }
+
+        val colors = mutableListOf<Int>()
+        palette.vibrantSwatch?.rgb?.let { colors.add(it) }
+        palette.lightVibrantSwatch?.rgb?.let { colors.add(it) }
+        palette.darkVibrantSwatch?.rgb?.let { colors.add(it) }
+        palette.mutedSwatch?.rgb?.let { colors.add(it) }
+        palette.lightMutedSwatch?.rgb?.let { colors.add(it) }
+        palette.darkMutedSwatch?.rgb?.let { colors.add(it) }
+        palette.dominantSwatch?.rgb?.let { colors.add(it) }
+        if (colors.size < 3) return null
+
+        val (a, b, c) = pickThreeDistinct(colors)
+        val sorted = listOf(a, b, c).sortedBy { relativeLuminance(it) }
+        val bg = sorted.first()
+        val text = sorted[1]
+        val accent = sorted.last()
+
+        return DistinctColors(
+            background = bg,
+            primaryText = ensureContrast(text, bg, MIN_PRIMARY_CONTRAST),
+            accent = ensureContrast(accent, bg, 3.0)
         )
     }
 
@@ -181,6 +221,33 @@ object AlbumColorExtractor {
             ratio += 0.08f
         }
         return if (lighten) Color.WHITE else Color.BLACK
+    }
+
+    /** 保持色相和饱和度，仅调整明度来满足对比度，比 [ensureContrast] 更鲜艳 */
+    fun ensureContrastColorful(foreground: Int, background: Int, minRatio: Double = MIN_PRIMARY_CONTRAST): Int {
+        if (contrastRatio(foreground, background) >= minRatio) return foreground
+        val bgLum = relativeLuminance(background)
+        val fgLum = relativeLuminance(foreground)
+        val needLighter = bgLum < 0.45
+        val hsv = FloatArray(3)
+        Color.colorToHSV(foreground, hsv)
+        // 逐步调整明度直到满足对比度，保持色相和饱和度不变
+        var step = 0.02f
+        var maxSteps = 50
+        while (maxSteps-- > 0) {
+            if (needLighter) {
+                hsv[2] = (hsv[2] + step).coerceIn(0f, 1f)
+            } else {
+                hsv[2] = (hsv[2] - step).coerceIn(0f, 1f)
+            }
+            val candidate = Color.HSVToColor(hsv)
+            if (contrastRatio(candidate, background) >= minRatio) {
+                return candidate
+            }
+            if (hsv[2] <= 0.02f || hsv[2] >= 0.98f) break
+        }
+        // 保底：用传统方法
+        return ensureContrast(foreground, background, minRatio)
     }
 
     fun estimateAverageColor(bitmap: Bitmap?): Int? {
@@ -359,6 +426,36 @@ object AlbumColorExtractor {
             (Color.red(from) * inverse + Color.red(to) * ratio).toInt().coerceIn(0, 255),
             (Color.green(from) * inverse + Color.green(to) * ratio).toInt().coerceIn(0, 255),
             (Color.blue(from) * inverse + Color.blue(to) * ratio).toInt().coerceIn(0, 255)
+        )
+    }
+
+    private fun pickThreeDistinct(colors: List<Int>): Triple<Int, Int, Int> {
+        var best = Triple(colors[0], colors[1], colors[2])
+        var bestMin = 0f
+        for (i in colors.indices) {
+            for (j in i + 1 until colors.size) {
+                for (k in j + 1 until colors.size) {
+                    val d12 = colorDistance(colors[i], colors[j])
+                    val d13 = colorDistance(colors[i], colors[k])
+                    val d23 = colorDistance(colors[j], colors[k])
+                    val minD = minOf(d12, d13, d23)
+                    if (minD > bestMin) {
+                        bestMin = minD
+                        best = Triple(colors[i], colors[j], colors[k])
+                    }
+                }
+            }
+        }
+        return best
+    }
+
+    private fun colorDistance(c1: Int, c2: Int): Float {
+        val rMean = (Color.red(c1) + Color.red(c2)) / 2f
+        val dr = (Color.red(c1) - Color.red(c2)).toFloat()
+        val dg = (Color.green(c1) - Color.green(c2)).toFloat()
+        val db = (Color.blue(c1) - Color.blue(c2)).toFloat()
+        return kotlin.math.sqrt(
+            (2 + rMean / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rMean) / 256) * db * db
         )
     }
 }

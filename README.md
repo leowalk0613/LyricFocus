@@ -436,6 +436,16 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 
 ## 版本更新
 
+### v1.8.5
+
+- **多行歌词重设计**：行数滑块 3~8 替代固定选项，奇数隐藏首行已播；通知高度自适应；字号统一 0.65x；新增「仅 AOD 显示多行」开关
+- **色彩模式**：从封面 Palette 挑 3 差异色（通知三色+文字两色）；HSL 保彩对比度，比 RGB 混合更鲜艳；+Monet 接管背景，+文字取色仅接管文字
+- **状态实时化**：主界面 2 秒定时刷新歌曲信息；读取器直接拉 `MediaController.metadata`
+- **LyricInfo 修复**：切歌用 stale 标记避免多行回退丢失原文
+- **UI 细节**：主界面「运行中/未运行」加大加粗
+- **版本号**：`1.8.5` (versionCode 25)
+- [完整更新日志](release-notes-v1.8.5.md)
+
 ### v1.8.4
 
 - **锁屏切歌性能优化**：消除锁屏切歌掉帧，改为原地更新通知；AOD 息屏保留 cancel+repost 置顶；添加 600ms 防抖

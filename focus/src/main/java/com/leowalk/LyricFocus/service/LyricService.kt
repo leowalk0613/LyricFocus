@@ -201,11 +201,17 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                 } else {
                     FocusPreferences.clearExtractedTextColor(this@LyricService)
                 }
-                if (intent.hasExtra(FocusPreferences.EXTRA_LYRIC_SOURCE) &&
-                    currentTitle.isNotBlank()
-                ) {
-                    fetchLyric(currentTitle, currentArtist)
-                    return
+                if (intent.hasExtra(FocusPreferences.EXTRA_LYRIC_SOURCE)) {
+                    val metadata = MusicMonitorService.currentController?.metadata
+                        ?: MusicMonitorService.currentMetadata
+                    val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: currentTitle
+                    val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: currentArtist
+                    if (title.isNotBlank()) {
+                        currentTitle = title
+                        currentArtist = artist
+                        fetchLyric(title, artist)
+                        return
+                    }
                 }
                 if (intent.getBooleanExtra(FocusStyleSnapshot.EXTRA_STYLE_CHANGED, false)) {
                     val needsColorResync = FocusPreferences.shouldExtractAlbumColors(this@LyricService) &&
@@ -596,7 +602,9 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     }
 
     private fun refreshMetadataFromMonitor() {
-        val metadata = MusicMonitorService.currentMetadata ?: return
+        val metadata = MusicMonitorService.currentController?.metadata
+            ?: MusicMonitorService.currentMetadata
+            ?: return
         currentTitle = metadata.getString(MediaMetadata.METADATA_KEY_TITLE) ?: ""
         currentArtist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: ""
     }
@@ -740,6 +748,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     private fun extractAndSaveAlbumColor(bitmap: Bitmap?, forceNotify: Boolean = false) {
         val monetEnabled = FocusPreferences.isMonetDynamicColorEnabled(this)
         val textExtractionEnabled = FocusPreferences.isTextColorExtractionEnabled(this)
+        val colorModeEnabled = FocusPreferences.isColorModeEnabled(this)
         val customAodAlbum = FocusPreferences.isCustomAodLayout(this) &&
             FocusPreferences.getCustomAodColorMode(this) == FocusPreferences.CUSTOM_AOD_COLOR_ALBUM
         if (!monetEnabled && !textExtractionEnabled && !customAodAlbum) {
@@ -750,7 +759,22 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         val previousBg = FocusPreferences.getExtractedBgColor(this)
         val previousAccent = FocusPreferences.getExtractedAccentColor(this)
         val art = bitmap ?: AlbumArtLoader.load(this, MusicMonitorService.currentMetadata)
-        if (monetEnabled) {
+        if (colorModeEnabled && (monetEnabled || textExtractionEnabled)) {
+            val distinct = AlbumColorExtractor.extractDistinctColors(art)
+            if (distinct == null) {
+                if (previous != null || previousBg != null || previousAccent != null || forceNotify) {
+                    FocusPreferences.clearExtractedTextColor(this)
+                    publishAlbumColorUpdate()
+                }
+                return
+            }
+            if (distinct.primaryText == previous && distinct.background == previousBg &&
+                distinct.accent == previousAccent && !forceNotify
+            ) {
+                return
+            }
+            FocusPreferences.setExtractedDistinctColors(this, distinct)
+        } else if (monetEnabled) {
             val scheme = AlbumColorExtractor.extractMonetScheme(art)
             if (scheme == null) {
                 if (previous != null || previousBg != null || previousAccent != null || forceNotify) {

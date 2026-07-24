@@ -23,8 +23,10 @@ object FocusPreferences {
     const val PREF_MULTI_LINE_LYRICS = "multi_line_lyrics"
     /** 多行模式下是否显示翻译（有翻译时交错显示原文与翻译） */
     const val PREF_MULTI_LINE_SHOW_TRANSLATION = "multi_line_show_translation"
-    /** 多行模式一页行数：4 / 6 / 8 */
+    /** 多行模式一页行数：4~8 */
     const val PREF_MULTI_LINE_LINE_COUNT = "multi_line_line_count"
+    /** 仅 AOD 显示多行歌词，锁屏保持双行 */
+    const val PREF_AOD_MULTI_LINE_ONLY = "aod_multi_line_only"
     /** 多行歌词独立字号（原文/翻译统一） */
     const val PREF_MULTI_LINE_TEXT_SIZE = "multi_line_text_size"
     /** 万象息屏 AOD 独立样式 */
@@ -52,6 +54,7 @@ object FocusPreferences {
     const val PREF_FOCUS_BACKGROUND = "focus_background"
     const val PREF_LYRIC_COLOR_EXTRACTION = "lyric_color_extraction"
     const val PREF_MONET_DYNAMIC_COLOR = "monet_dynamic_color"
+    const val PREF_COLOR_MODE = "color_mode"
     const val PREF_EXTRACTED_TEXT_COLOR = "extracted_text_color"
     const val PREF_EXTRACTED_BG_COLOR = "extracted_bg_color"
     const val PREF_EXTRACTED_ACCENT_COLOR = "extracted_accent_color"
@@ -142,21 +145,24 @@ object FocusPreferences {
 
     const val DEFAULT_LYRIC_TEXT_SIZE_SP = 18f
     const val DEFAULT_MULTI_LINE_TEXT_SIZE_SP = 14f
+
+    const val DEFAULT_MULTI_LINE_LINE_COUNT = 8
+    const val MIN_MULTI_LINE_COUNT = 3
+    const val MAX_MULTI_LINE_COUNT = 8
+
+    fun coerceMultiLineLineCount(lines: Int): Int {
+        return lines.coerceIn(MIN_MULTI_LINE_COUNT, MAX_MULTI_LINE_COUNT)
+    }
+    /** 3->4, 4->4, 5->6, 6->6, 7->8, 8->8 */
+    fun multiLinePageSlots(lines: Int): Int {
+        return ((lines + 1) / 2 * 2).coerceIn(4, 8)
+    }
+
     const val MIN_LYRIC_TEXT_SIZE_SP = 12f
     const val MAX_LYRIC_TEXT_SIZE_SP = 32f
 
-    const val DEFAULT_MULTI_LINE_LINE_COUNT = 8
-    val MULTI_LINE_LINE_COUNT_OPTIONS = intArrayOf(4, 6, 8)
-
     const val DEFAULT_LYRIC_MAX_LINES = 2
     const val DEFAULT_TRANSLATION_MAX_LINES = 1
-
-    fun coerceMultiLineLineCount(lines: Int): Int {
-        return when (lines) {
-            4, 6, 8 -> lines
-            else -> DEFAULT_MULTI_LINE_LINE_COUNT
-        }
-    }
 
     fun defaultMusicPackages(): Set<String> = linkedSetOf(
         "com.netease.cloudmusic",
@@ -562,6 +568,22 @@ object FocusPreferences {
 
     fun readMultiLineLyrics(context: Context): Boolean {
         return readFromModule(context) { isMultiLineLyrics(it) } ?: false
+    }
+
+    fun isAodMultiLineOnly(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_AOD_MULTI_LINE_ONLY, false)
+    }
+
+    fun setAodMultiLineOnly(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_AOD_MULTI_LINE_ONLY, enabled)
+            .apply()
+    }
+
+    fun readAodMultiLineOnly(context: Context): Boolean {
+        return readFromModule(context) { isAodMultiLineOnly(it) } ?: false
     }
 
     fun isMultiLineShowTranslation(context: Context): Boolean {
@@ -1018,6 +1040,22 @@ object FocusPreferences {
             .commit()
     }
 
+    fun isColorModeEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_COLOR_MODE, false)
+    }
+
+    fun setColorModeEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_COLOR_MODE, enabled)
+            .commit()
+    }
+
+    fun readColorModeEnabled(context: Context): Boolean {
+        return readFromModule(context) { isColorModeEnabled(it) } ?: false
+    }
+
     fun isAlbumColorExtractionActive(context: Context): Boolean {
         return isMonetDynamicColorEnabled(context) || isTextColorExtractionEnabled(context)
     }
@@ -1097,6 +1135,15 @@ object FocusPreferences {
             .commit()
     }
 
+    fun setExtractedDistinctColors(context: Context, colors: com.leowalk.LyricFocus.util.AlbumColorExtractor.DistinctColors) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(PREF_EXTRACTED_TEXT_COLOR, colors.primaryText)
+            .putInt(PREF_EXTRACTED_BG_COLOR, colors.background)
+            .putInt(PREF_EXTRACTED_ACCENT_COLOR, colors.accent)
+            .commit()
+    }
+
     fun setExtractedTextColor(context: Context, color: Int) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
@@ -1120,8 +1167,10 @@ object FocusPreferences {
     fun fillStyleExtras(intent: android.content.Intent, context: Context) {
         val monet = isMonetDynamicColorEnabled(context)
         val textExtraction = isTextColorExtractionEnabled(context)
+        val colorMode = isColorModeEnabled(context)
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_MONET_DYNAMIC_COLOR, monet)
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_COLOR_EXTRACTION, textExtraction)
+        intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_COLOR_MODE, colorMode)
         appendExtractedColorExtras(intent, context)
     }
 
@@ -1194,6 +1243,10 @@ object FocusPreferences {
                     getMultiLineTextSize(context)
                 )
                 putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_AOD_MULTI_LINE_ONLY,
+                    isAodMultiLineOnly(context)
+                )
+                putExtra(
                     FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_TEXT_SIZE,
                     getCustomAodTextSize(context)
                 )
@@ -1244,6 +1297,10 @@ object FocusPreferences {
                 putExtra(
                     FocusStyleSnapshot.EXTRA_STYLE_COLOR_EXTRACTION,
                     isTextColorExtractionEnabled(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_COLOR_MODE,
+                    isColorModeEnabled(context)
                 )
                 appendExtractedColorExtras(this, context)
             }

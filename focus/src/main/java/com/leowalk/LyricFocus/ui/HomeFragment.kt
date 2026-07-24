@@ -61,6 +61,13 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
     private var pendingUpdateInfo: UpdateChecker.UpdateInfo? = null
     private var hasCheckedForUpdates = false
     private var isCheckingRoot = false
+    private val statusHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val statusRefreshRunnable = object : Runnable {
+        override fun run() {
+            if (isAdded) updateStatus()
+            statusHandler.postDelayed(this, 2000L)
+        }
+    }
 
     interface UpdateCallback {
         fun onUpdateChecked(info: UpdateChecker.UpdateInfo)
@@ -101,10 +108,16 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         updateWhitelistUi()
         updateLyricSourceUi()
         updateStatus()
+        statusHandler.postDelayed(statusRefreshRunnable, 2000L)
         if (!hasCheckedForUpdates) {
             hasCheckedForUpdates = true
             checkForUpdates()
         }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        statusHandler.removeCallbacks(statusRefreshRunnable)
     }
 
     private fun initViews(view: View) {

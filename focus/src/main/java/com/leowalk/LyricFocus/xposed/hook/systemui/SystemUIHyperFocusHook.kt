@@ -73,6 +73,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         private var lyricOffset = 0L
         private var syncAdvanceMs = FocusPreferences.DEFAULT_SYNC_ADVANCE_MS
         private var lyricLines: List<LyricLineData> = emptyList()
+        private var lyricLinesStale = false
         private var preferAppLyric = false
         private var focusEnabled = true
         private var showInShade = false
@@ -85,6 +86,8 @@ class SystemUIHyperFocusHook : BaseHook() {
         private var lastNotifiedTitle = ""
         private var lastNotifiedArtist = ""
         private var lastNotifiedMultiLineKey = ""
+        /** 用于 AOD↔锁屏过渡时检测多行状态切换 */
+        private var lastMultiLineWasActive = false
         private var lastCancelAndRepostTime = 0L
 
         private const val MIN_TICK_MS = 500L
@@ -718,6 +721,7 @@ class SystemUIHyperFocusHook : BaseHook() {
     private fun applyIncomingStyleExtras(intent: Intent): Boolean {
         val prevMonet = FocusStyleSnapshot.monetDynamicColorEnabled
         val prevTextExtraction = FocusStyleSnapshot.textColorExtractionEnabled
+        val prevColorMode = FocusStyleSnapshot.colorModeEnabled
         val prevEnabled = FocusStyleSnapshot.colorExtractionEnabled
         val prevColor = FocusStyleSnapshot.extractedTextColor
         val prevBgColor = FocusStyleSnapshot.extractedBgColor
@@ -727,6 +731,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         val newColorSet = FocusStyleSnapshot.extractedTextColor != null
         return prevMonet != FocusStyleSnapshot.monetDynamicColorEnabled ||
             prevTextExtraction != FocusStyleSnapshot.textColorExtractionEnabled ||
+            prevColorMode != FocusStyleSnapshot.colorModeEnabled ||
             prevEnabled != FocusStyleSnapshot.colorExtractionEnabled ||
             prevColor != FocusStyleSnapshot.extractedTextColor ||
             prevBgColor != FocusStyleSnapshot.extractedBgColor ||
@@ -838,6 +843,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                 return
             }
             lyricLines = parseLyricJson(lyricJson)
+            lyricLinesStale = false
             val hasAppLyricSource = lyricLines.isNotEmpty() || isPlaceholder
 
             if (hasAppLyricSource || lyricText.isNotBlank()) {
@@ -904,6 +910,9 @@ class SystemUIHyperFocusHook : BaseHook() {
                 return
             }
             val songChanged = title != currentTitle || artist != currentArtist
+            if (songChanged) {
+                lyricLinesStale = true
+            }
             val forceResync = intent.getBooleanExtra(EXTRA_FORCE_RESYNC, false)
             val prevLyric = currentLyricText
             val leavingPlaceholder = isPlaceholderLyric(prevLyric) &&
@@ -1057,6 +1066,7 @@ class SystemUIHyperFocusHook : BaseHook() {
     }
 
     private fun hasRealTimedLyrics(): Boolean {
+        if (lyricLinesStale) return false
         if (lyricLines.size < 2) return false
         if (isPlaceholderLyric(currentLyricText)) return false
         return true
@@ -1065,16 +1075,16 @@ class SystemUIHyperFocusHook : BaseHook() {
     private fun buildMultiLineWindow(): HyperFocusLyricStyle.MultiLineWindow? {
         if (!FocusStyleSnapshot.multiLineLyrics) return null
         if (!hasRealTimedLyrics()) return null
-        // 未到首句也展示第一页，进入多行模式即见完整歌词页
         val currentIndex = getCurrentLineIndex(currentPosition).coerceAtLeast(0)
-        val visibleCount = FocusPreferences.coerceMultiLineLineCount(
+        val rawCount = FocusPreferences.coerceMultiLineLineCount(
             FocusStyleSnapshot.multiLineLineCount
         )
+        val pageSlots = FocusPreferences.multiLinePageSlots(rawCount)
+        val hideFirstLine = rawCount != pageSlots
         val maxSlots = HyperFocusLyricStyle.MULTI_LINE_MAX_SLOTS
 
         if (FocusStyleSnapshot.multiLineShowTranslation) {
-            // 有翻译：(原文+翻译) 交错填满所选行数，例如 8 行 = 4 对
-            val pairCount = visibleCount / 2
+            val pairCount = pageSlots / 2
             val pageStart = (currentIndex / pairCount) * pairCount
             val originals = ArrayList<String>(pairCount)
             val translations = ArrayList<String>(pairCount)
@@ -1091,7 +1101,6 @@ class SystemUIHyperFocusHook : BaseHook() {
                 translations += secondary
                 if (secondary.isNotBlank()) hasAnyTranslation = true
             }
-            // 当前行可能只有单独下发的翻译（无逐行 translation 字段）
             if (!hasAnyTranslation) {
                 val offsetInPage = currentIndex - pageStart
                 val fallback = currentLineTranslation
@@ -1112,33 +1121,42 @@ class SystemUIHyperFocusHook : BaseHook() {
                 while (interleaved.size < maxSlots) {
                     interleaved += ""
                 }
+                // 奇数行时隐藏第一个已播行（一对 = 2槽）
+                if (hideFirstLine && currentIndex > pageStart) {
+                    interleaved[0] = ""
+                    interleaved[1] = ""
+                }
                 val currentSlot = if (currentIndex >= pageStart && currentIndex < pageStart + pairCount) {
                     (currentIndex - pageStart) * 2
                 } else -1
                 return HyperFocusLyricStyle.MultiLineWindow(
                     lines = interleaved,
                     interleavedTranslations = true,
-                    visibleCount = visibleCount,
+                    visibleCount = pageSlots,
                     currentLineSlot = currentSlot
                 )
             }
         }
 
-        val pageStart = (currentIndex / visibleCount) * visibleCount
+        val pageStart = (currentIndex / pageSlots) * pageSlots
         val lines = ArrayList<String>(maxSlots)
-        for (i in 0 until visibleCount) {
+        for (i in 0 until pageSlots) {
             val text = lyricLines.getOrNull(pageStart + i)?.text?.trim().orEmpty()
             lines += text
         }
         while (lines.size < maxSlots) {
             lines += ""
         }
-        val currentSlot = if (currentIndex >= pageStart && currentIndex < pageStart + visibleCount) {
+        // 奇数行时隐藏第一个已播行
+        if (hideFirstLine && currentIndex > pageStart) {
+            lines[0] = ""
+        }
+        val currentSlot = if (currentIndex >= pageStart && currentIndex < pageStart + pageSlots) {
             currentIndex - pageStart
         } else -1
         return HyperFocusLyricStyle.MultiLineWindow(
             lines = lines,
-            visibleCount = visibleCount,
+            visibleCount = pageSlots,
             currentLineSlot = currentSlot
         )
     }
@@ -1266,7 +1284,16 @@ class SystemUIHyperFocusHook : BaseHook() {
                 cancelFocusNotification()
                 return
             }
-            val multiLine = if (isKeyguardLocked()) buildMultiLineWindow() else null
+            val multiLine = if (FocusStyleSnapshot.aodMultiLineOnly) {
+                if (isAodActive()) buildMultiLineWindow() else null
+            } else {
+                if (isKeyguardLocked()) buildMultiLineWindow() else null
+            }
+            // AOD→锁屏过渡：多行切双行时 cancel 重发确保动画切换
+            val multiLineActive = multiLine != null
+            val recreateForTransition = FocusStyleSnapshot.aodMultiLineOnly &&
+                lastMultiLineWasActive && !multiLineActive
+            lastMultiLineWasActive = multiLineActive
             HyperFocusLyricStyle.postFocusNotification(
                 systemContext = context,
                 notificationManager = nm,
@@ -1284,7 +1311,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                 showOnIsland = showOnIsland,
                 refreshKind = refreshKind,
                 forceRefresh = forceRefresh,
-                recreateForAod = false
+                recreateForAod = recreateForTransition
             )
             lastFocusNotifyTime = System.currentTimeMillis()
             rememberNotifiedLyricContent()

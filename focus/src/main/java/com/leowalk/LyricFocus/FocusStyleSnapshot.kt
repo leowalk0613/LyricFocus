@@ -25,6 +25,7 @@ object FocusStyleSnapshot {
     const val EXTRA_STYLE_MULTI_LINE_SHOW_TRANSLATION = "style_multi_line_show_translation"
     const val EXTRA_STYLE_MULTI_LINE_LINE_COUNT = "style_multi_line_line_count"
     const val EXTRA_STYLE_MULTI_LINE_TEXT_SIZE = "style_multi_line_text_size"
+    const val EXTRA_STYLE_AOD_MULTI_LINE_ONLY = "style_aod_multi_line_only"
     const val EXTRA_STYLE_CUSTOM_AOD_TEXT_SIZE = "style_custom_aod_text_size"
     const val EXTRA_STYLE_CUSTOM_AOD_LYRIC_WIDTH = "style_custom_aod_lyric_width"
     const val EXTRA_STYLE_CUSTOM_AOD_LYRIC_MAX_LINES = "style_custom_aod_lyric_max_lines"
@@ -38,6 +39,7 @@ object FocusStyleSnapshot {
     const val EXTRA_STYLE_CUSTOM_AOD_TITLE_ICON_SIZE = "style_custom_aod_title_icon_size"
     const val EXTRA_STYLE_MONET_DYNAMIC_COLOR = "style_monet_dynamic_color"
     const val EXTRA_STYLE_COLOR_EXTRACTION = "style_color_extraction"
+    const val EXTRA_STYLE_COLOR_MODE = "style_color_mode"
     const val EXTRA_STYLE_EXTRACTED_COLOR = "style_extracted_color"
     const val EXTRA_STYLE_EXTRACTED_COLOR_SET = "style_extracted_color_set"
     const val EXTRA_STYLE_EXTRACTED_BG_COLOR = "style_extracted_bg_color"
@@ -98,6 +100,10 @@ object FocusStyleSnapshot {
         private set
 
     @Volatile
+    var aodMultiLineOnly: Boolean = false
+        private set
+
+    @Volatile
     var customAodTextSizeSp: Float = FocusPreferences.DEFAULT_LYRIC_TEXT_SIZE_SP
         private set
 
@@ -147,6 +153,10 @@ object FocusStyleSnapshot {
 
     @Volatile
     var textColorExtractionEnabled: Boolean = false
+        private set
+
+    @Volatile
+    var colorModeEnabled: Boolean = false
         private set
 
     @Volatile
@@ -234,6 +244,10 @@ object FocusStyleSnapshot {
             FocusPreferences.MIN_LYRIC_TEXT_SIZE_SP,
             FocusPreferences.MAX_LYRIC_TEXT_SIZE_SP
         )
+        aodMultiLineOnly = prefs.getBoolean(
+            FocusPreferences.PREF_AOD_MULTI_LINE_ONLY,
+            false
+        )
         customAodTextSizeSp = prefs.getFloat(
             FocusPreferences.PREF_CUSTOM_AOD_TEXT_SIZE,
             FocusPreferences.DEFAULT_LYRIC_TEXT_SIZE_SP
@@ -293,6 +307,10 @@ object FocusStyleSnapshot {
         )
         textColorExtractionEnabled = prefs.getBoolean(
             FocusPreferences.PREF_LYRIC_COLOR_EXTRACTION,
+            false
+        )
+        colorModeEnabled = prefs.getBoolean(
+            FocusPreferences.PREF_COLOR_MODE,
             false
         )
         colorExtractionEnabled = monetDynamicColorEnabled || textColorExtractionEnabled
@@ -392,6 +410,9 @@ object FocusStyleSnapshot {
                 FocusPreferences.MAX_LYRIC_TEXT_SIZE_SP
             )
         }
+        if (intent.hasExtra(EXTRA_STYLE_AOD_MULTI_LINE_ONLY)) {
+            aodMultiLineOnly = intent.getBooleanExtra(EXTRA_STYLE_AOD_MULTI_LINE_ONLY, false)
+        }
         if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_TEXT_SIZE)) {
             customAodTextSizeSp = intent.getFloatExtra(EXTRA_STYLE_CUSTOM_AOD_TEXT_SIZE, customAodTextSizeSp)
                 .coerceIn(
@@ -455,6 +476,9 @@ object FocusStyleSnapshot {
         }
         if (intent.hasExtra(EXTRA_STYLE_COLOR_EXTRACTION)) {
             textColorExtractionEnabled = intent.getBooleanExtra(EXTRA_STYLE_COLOR_EXTRACTION, false)
+        }
+        if (intent.hasExtra(EXTRA_STYLE_COLOR_MODE)) {
+            colorModeEnabled = intent.getBooleanExtra(EXTRA_STYLE_COLOR_MODE, false)
         }
         colorExtractionEnabled = monetDynamicColorEnabled || textColorExtractionEnabled
         if (intent.hasExtra(EXTRA_STYLE_EXTRACTED_COLOR_SET)) {
