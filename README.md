@@ -35,31 +35,27 @@
 
 ## 功能概览
 
-- **Material 3 界面**：主界面、样式设置、关于页统一 Tonal 风格；工具栏常驻 **版本信息** 按钮（有更新时变红，无更新时白色可查看当前版本日志）与 **重启 SystemUI** 图标（需 Root）
-- **版本更新检测**：应用启动后同时检测 GitHub 与 Gitee Release，并行请求取最新版本；有更新时工具栏按钮变红并显示更新日志与下载链接，无更新时点击按钮可查看当前版本更新日志；检测完全在后台线程，不阻塞界面
-- **Monet 应用图标（v1.6.1）**：对话气泡 + 音符自适应图标；背景 / 图形跟随壁纸 `system_accent` 取色，并提供主题图标 monochrome 层
-- **权限设置（v1.6.1）**：分为必要 / 其他；每项显示用途说明与状态图标；支持自启动、读取应用列表、忽略电池优化跳转
-- **样式设置（v1.5）**：分 **通用**、**锁屏样式 AOD**、**万象息屏 AOD** 三类；开启万象息屏时锁屏样式项置灰，关闭时万象息屏专用项置灰
-- **通用样式**：歌词与翻译位置互换、仅显示第一行、**焦点通知背景**、**Monet 动态取色** 与 **通知文字取色**（全局作用于全部布局）
-- **锁屏样式 AOD**：字号、文字颜色、固定行数、排版、**多行模式**（4 / 6 / 8 行按页显示；有翻译时可交错显示原文与更淡翻译）
-- **万象息屏 AOD 专用样式**：字号、歌词宽度（50–100%）、歌名显示（全部/隐藏歌名/隐藏歌手/全部隐藏）、歌词/翻译行数、排版、颜色（白/专辑取色/24 色推荐色 + RGB 自定义）；歌名 · 歌手 3:2 居中块，长标题代码 ellipsize
-- **样式设置 UI（v1.5.1+）**：锁屏样式 AOD 合并为单卡片统一置灰；万象息屏字体排版区块与锁屏样式层级一致
-- **Monet 动态取色**：从当前播放专辑封面实时提取背景与文字色（Material You 风格），自动增强对比度以保证歌词可读性；开启后手动背景/文字/文字取色选项置灰
-- **实时歌词**：`NotificationListenerService` 绑定 MediaSession，监听播放进度与元数据
-- **多歌词源**：网易云音乐、QQ 音乐、本地 LRC 文件、AI 翻译（自动链式回退或指定单一源）；本地源支持应用内选文件夹与三语 LRC
-- **AI 翻译增强（v1.6.1）**：连通性检测；可选「翻译所有歌词」覆盖已有译文；配置说明兼容各类 OpenAI Chat Completions 格式 API
-- **歌词焦点通知置顶**：歌词焦点卡片优先于其他焦点通知（含倒计时、HyperIsland 转换通知）
-- **万象息屏（自定义）AOD**：主界面开关；横向 `rvAod` 布局，修复万象/自定义息屏歌词只显示首字的问题；歌名左侧可显示音乐图标（按歌词颜色染色，网易云音乐自动识别预设图标）
-- **超级岛（固定关闭）**：主界面已移除开关，代码层固定关闭
-- **防闪烁 Hook 已移除**：`FocusAntiFlickerHook` 已删除——新的原地更新方案不再触发焦点通知入场动画，无需手动压制
-- **通知更新模式**：锁屏 / AOD 歌词换行不再重建通知会话，仅更新通知内 RemoteViews 内容
-- **应用白名单**：可选仅对指定音乐 App 的 MediaSession 响应；支持搜索已安装应用、手动添加包名
-- **歌词提前量**：可调同步偏移（默认提前 200 ms）
-- **Root 重启 SystemUI**：主界面右上角一键重启，Hook / 样式变更后快速生效
-- **统一通知渠道**：后台服务通知合并为单一渠道；焦点渠道文案标注为 LyricFocus
-- **服务自启动**：开机完成、用户解锁后自动拉起歌词服务；AlarmManager 周期性保活
-- **关于界面**：软件信息、项目信息与联系作者、获取日志（自动扫描 / 手动选择）、系统要求按钮（位于第一个卡片右上角）、许可证与致谢
-- **LSPosed 日志查看**：应用内选择日志文件/ZIP 压缩包，自动筛选 LyricFocus 相关日志，支持一键复制
+- **Material 3 界面**：主界面、歌词源管理、样式设置、关于页统一 Tonal 风格；工具栏常驻版本信息按钮（有更新变红）与重启 SystemUI 图标（需 Root）
+- **版本更新检测**：启动后并行检测 GitHub 与 Gitee Release，取最新版本；后台线程运行，不阻塞界面
+- **实时歌词**：`NotificationListenerService` 绑定 MediaSession，监听播放进度与元数据；主界面 2 秒定时刷新歌曲状态
+- **多歌词源**：网易云音乐、QQ 音乐、SuperLyricApi（AIDL 实时推送）、LyricInfo（通知栏 LRC 注入）、词幕 Lyricon、本地 LRC、AI 翻译；自动链式回退或指定单源
+- **本地 LRC**：应用内 SAF 选文件夹，支持「歌名-歌手」双向匹配、三语 LRC 同时间戳合并；专辑名优先加分、已知歌曲 ID 直绑
+- **AI 翻译**：OpenAI 兼容 `/chat/completions` API，可选覆盖已有译文，支持连通性检测
+- **样式设置**：按场景分通用、锁屏样式 AOD、万象息屏 AOD 三类，开关联动互斥置灰
+- **通用样式**：歌词翻译位置互换、仅显示第一行、焦点通知背景、Monet 动态取色、通知文字取色
+- **锁屏样式 AOD**：字号、文字颜色、固定行数、对齐方式、多行模式（3~8 行滑块，当前行高亮+强调色，支持仅 AOD 展开多行）
+- **万象息屏 AOD**：独立字号、歌词宽度（50–100%）、歌名显示选项（全部/隐藏歌名/隐藏歌手/全隐藏）、颜色模式（白/专辑取色/24 推荐色+RGB）；歌名 · 歌手 3:2 居中，标题图标按歌词染色
+- **动态取色**：HSL 保彩对比度算法，从专辑封面 Palette 挑 3 差异色（通知三色+文字两色）；Monet 接管背景、文字取色仅接管文字
+- **样式实时预览**：样式设置页固定预览区，实时反映所有改动，播放时同步显示真实歌词
+- **通知原地更新**：锁屏/AOD 换行不重建通知会话，仅更新 RemoteViews；600ms 防抖消除切歌掉帧
+- **歌词焦点置顶**：焦点通知数据层+视图层双保险，歌词卡片始终优先于倒计时等通知
+- **应用白名单**：可选仅对指定音乐 App 响应；支持搜索已安装应用、手动添加包名
+- **AOD 过渡保护**：锁屏↔AOD 切换时保护歌词视图不被清除；AOD 仅显示歌词模式下自动隐藏其他焦点通知
+- **服务保活**：开机自启、用户解锁拉起、AlarmManager 周期性保活
+- **Root 重启 SystemUI**：主界面右上角一键重启，Hook/样式变更后快速生效
+- **权限向导**：必要/其他分组，逐项显示用途说明与状态图标，一键跳转授权
+- **LSPosed 日志查看**：应用内自动扫描或手动选择日志，筛选 LyricFocus 相关条目，支持一键复制
+- **关于界面**：软件信息、项目与联系作者、系统要求、许可证与致谢
 
 ---
 
@@ -68,7 +64,7 @@
 | 项目 | 要求 |
 |------|------|
 | 系统 | **小米 HyperOS 3.0+ **（验证环境：HyperOS 3.0.x，如 `3.0.302.0.WNCCNXM`） |
-| Android | API **31+**，`targetSdk 34` |
+| Android | API **31+**，`targetSdk 36` |
 | 框架 | **LSPosed 2.0**（API 102），旧版 LSPosed (API 82) 不再兼容。**必须更新！** |
 | LSPosed 作用域 | `com.android.systemui`（系统界面）、`com.miui.aod`（息屏与锁屏编辑） |
 | 权限 | 通知访问、发送通知、网络、前台服务、读取应用列表（白名单选应用，Android 11+） |
@@ -81,7 +77,7 @@
 | 模块 | 说明 | 链接 |
 |------|------|------|
 | **HyperIsland** | 移除焦点通知白名单，支持自定义超级岛内容 | [GitHub](https://github.com/1812z/HyperIsland) |
-| **HyperCeiler** | HyperOS 系统增强模块，包含焦点通知相关功能 | [GitHub](https://github.com/ReChronoRain/HyperCeiler) |等
+| **HyperCeiler** | HyperOS 系统增强模块，包含焦点通知相关功能 | [GitHub](https://github.com/ReChronoRain/HyperCeiler) |
 
 > 若未安装上述类似模块，焦点通知可能无法显示或被系统拦截。
 
@@ -138,11 +134,12 @@ LyricFocus/
         ├── assets/xposed_init          → FocusMainHook
         ├── java/com/leowalk/LyricFocus/
         │   ├── MainActivity.kt
-        │   ├── StyleSettingsActivity.kt  → 样式设置（字号、取色、背景等）
-        │   ├── AboutActivity.kt          → 关于界面（软件信息、日志查看、联系邮箱）
-        │   ├── AppWhitelistActivity.kt   → 音乐应用白名单
+        │   ├── LyricSourceActivity.kt  → 歌词源管理
+        │   ├── AppWhitelistActivity.kt  → 音乐应用白名单
+        │   ├── WelcomeActivity.kt       → 欢迎页
         │   ├── FocusPreferences.kt
-        │   ├── FocusStyleSnapshot.kt     → SystemUI 侧样式快照
+        │   ├── FocusStyleSnapshot.kt    → SystemUI 侧样式快照
+        │   ├── ui/                       # HomeFragment、StyleSettingsFragment、AboutFragment
         │   ├── lyric/                    # 网易云 / QQ、LRC 解析
         │   ├── service/                  # MediaSession、歌词服务、通知管理
         │   ├── notification/             # HyperFocusLyricStyle
@@ -175,7 +172,7 @@ LyricFocus/
 
 ### 方式一：下载 Release APK（推荐）
 
-1. 在 [Releases](../../releases) 页面下载最新 `LyricFocus.v*.apk`（如 `LyricFocus.v1.8.0.apk`）
+1. 在 [Releases](../../releases) 页面下载最新 `LyricFocus.v*.apk`（如 `LyricFocus.v1.8.5.apk`）
 2. 将 APK 传到手机，在系统设置中允许「安装未知来源应用」
 3. 点击 APK 完成安装
 4. 继续下方 [LSPosed 配置](#lsposed-配置) 与 [应用权限](#应用权限)
@@ -184,7 +181,7 @@ LyricFocus/
 
 ### 方式二：自行编译
 
-**环境要求**：JDK 17、Android SDK（`compileSdk 34`）、Gradle（随仓库 Wrapper）
+**环境要求**：JDK 21、Android SDK（`compileSdk 36`）、Gradle（随仓库 Wrapper）
 
 **Release 签名（安装 Release APK 必需）**：
 
@@ -326,7 +323,7 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 | 超级岛显示歌词 | `show_on_super_island` | 关 | 代码固定关闭（v1.3 主界面已移除开关） |
 | 应用白名单 | `app_whitelist_enabled` | 关 | 限制 MediaSession 包名 |
 | 白名单包名列表 | `app_whitelist_packages` | 空 | 开启白名单时默认填充常见音乐 App |
-| 歌词获取源 | `lyric_source` | `auto` | `auto` / `netease` / `qq` |
+| 歌词获取源 | `lyric_source` | `auto` | `auto` / `netease` / `qq` / `local` / `ai` / `super_lyric` / `lyric_info` / `lyricon` |
 | 歌词提前量 | `sync_advance_ms` | `200` | -1000 ~ 3000 ms |
 | AOD 保活间隔 | `aod_keepalive_sec` | `9` | 受焦点会话 ~9s 系统上限约束 |
 | 万象息屏 AOD | `custom_aod_layout` | 关 | 万象/自定义息屏时使用横向 rvAod 布局 |
@@ -348,7 +345,7 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 | 翻译行数 | `translation_max_lines` | `1` | 1 ~ 2；多行模式下不可用 |
 | 多行模式 | `multi_line_lyrics` | 关 | 锁屏按页多行歌词 |
 | 多行显示翻译 | `multi_line_show_translation` | 开 | 有翻译时交错填满所选行数 |
-| 多行行数 | `multi_line_line_count` | `8` | 4 / 6 / 8 |
+| 多行行数 | `multi_line_line_count` | `8` | 3 ~ 8 |
 | 多行字号 | `multi_line_text_size` | `14` | 12 ~ 32 sp |
 | 对齐方式 | `lyric_gravity` | `center` | `left` / `center` / `right`；锁屏样式 AOD |
 | 焦点通知背景 | `focus_background` | `default` | `default` / `black` / `white`；Monet 开启时无效 |
@@ -359,17 +356,23 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 
 ## 歌词源
 
-| 源 | Provider | API |
-|----|----------|-----|
-| 网易云 | `NetEaseLyricProvider` | `music.163.com/api/...` |
-| QQ 音乐 | `QQMusicLyricProvider` | `u.y.qq.com/cgi-bin/musicu.fcg`（搜索）、`i.y.qq.com/lyric/...`（歌词） |
-| 本地 LRC | `LocalLrcLyricProvider` | 应用内选择文件夹（SAF），或应用私有 `lyrics` 目录 |
-| AI 翻译 | `AiLyricTranslator` | OpenAI 兼容 `/chat/completions`（需配置 API Key） |
+| 源 | Provider | 说明 |
+|----|----------|------|
+| 网易云音乐 | `NetEaseLyricProvider` | `music.163.com/api/...` |
+| QQ 音乐 | `QQMusicLyricProvider` | `u.y.qq.com` 搜索 + `i.y.qq.com` 歌词 |
+| SuperLyricApi | `SuperLyricBridge` | AIDL 实时推送，第三方歌词源（LGPL-2.1） |
+| LyricInfo | `LyricInfo` | 通知栏读取 LRC（Xposed 注入） |
+| 词幕 Lyricon | `LyriconBridge` | 完整歌词+翻译（Apache 2.0） |
+| 本地 LRC | `LocalLrcLyricProvider` | SAF 选文件夹，支持三语同时间戳 LRC |
+| AI 翻译 | `AiLyricTranslator` | OpenAI 兼容 API，默认仅补全无译文 |
 
-- `auto`：先网易云，失败再 QQ
-- `local`：匹配本地 `.lrc`（应用内**选择文件夹**；支持「歌名 - 歌手」/「歌手 - 歌名」及三语同时间戳格式）
+- `auto`：先网易云，失败再 QQ，最后本地
+- `local`：匹配本地 `.lrc`（支持「歌名 - 歌手」/「歌手 - 歌名」及三语同时间戳格式）
 - `ai`：先在线获取歌词，再调用 AI 生成译文（需配置 API Key）
-- 按 MediaSession 的**标题 + 艺术家**搜词；播放器不限于上述两家（如 Spotify，只要 API 能搜到）
+- `super_lyric`：SuperLyricApi AIDL 实时推送
+- `lyric_info`：LyricInfo 通知栏 LRC 注入（需 Xposed）
+- `lyricon`：词幕 Lyricon 歌词源
+- 按 MediaSession 的**标题 + 艺术家**搜词，专辑名优先加分；已知歌曲 ID 直绑；播放器不限网易云/QQ
 
 `LrcParser` 支持标准 LRC、`[mm:ss:cc]` 网易格式、外部翻译合并、三语 LRC（原文 / 翻译 / 读音同时间戳合并）、跳过作词/作曲行。
 
@@ -806,7 +809,7 @@ LSPosed 日志目录结构：
 
 ### 焦点通知
 
-- **[HyperCeiler](https://github.com/ReChronoRain/HyperCeiler)** — 焦点歌词、`MusicBaseHook` / `FocusNotifLyric` 思路；渠道 ID、插件 ClassLoader bypass、防闪烁等见 `HyperFocusLyricStyle`、`SystemUIHyperFocusHook`、`SystemUIPluginHook`、`FocusAntiFlickerHook`
+- **[HyperCeiler](https://github.com/ReChronoRain/HyperCeiler)** — 焦点歌词、`MusicBaseHook` / `FocusNotifLyric` 思路；渠道 ID、插件 ClassLoader bypass 等见 `HyperFocusLyricStyle`、`SystemUIHyperFocusHook`、`SystemUIPluginHook`
 - **[FocusNotifLyric](https://github.com/ghhccghk/FocusNotifLyric)**（[wuyou-123](https://github.com/wuyou-123)）— 焦点歌词上游原型，已并入 HyperCeiler
 - **[HyperFocusApi](https://github.com/ghhccghk/HyperFocusApi)** — Gradle 依赖；Demo：[HyperFocusNotifDemo](https://github.com/ghhccghk/HyperFocusNotifDemo)
 
