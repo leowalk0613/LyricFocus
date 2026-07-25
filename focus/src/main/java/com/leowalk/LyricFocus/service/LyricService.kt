@@ -1022,7 +1022,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                 if (lyricInfo != null && !lyricInfo.isEmpty) {
                     applyLyricResult(lyricInfo, title, artist)
 
-                    if (FocusPreferences.getLyricSource(this@LyricService) == FocusPreferences.LYRIC_SOURCE_AI) {
+                    if (FocusPreferences.isAiLyricEnabled(this@LyricService)) {
                         try {
                             lyricNotificationManager.showAiTranslating(title, artist)
                             val translated = lyricManager.translateWithAi(lyricInfo, title, artist)

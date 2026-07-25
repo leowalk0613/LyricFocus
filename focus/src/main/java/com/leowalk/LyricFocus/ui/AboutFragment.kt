@@ -12,6 +12,7 @@ import android.text.style.ForegroundColorSpan
 import android.util.Log
 import android.view.View
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
@@ -24,6 +25,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.tabs.TabLayout
+import com.leowalk.LyricFocus.FocusPreferences
 import com.leowalk.LyricFocus.R
 import com.leowalk.LyricFocus.util.LyricFocusLogFilter
 import com.leowalk.LyricFocus.util.RootHelper
@@ -54,6 +56,24 @@ class AboutFragment : Fragment(R.layout.activity_about) {
         setupLinks(view)
         setupLogViewer(view)
         setupSystemRequirementsButton(view)
+        setupEasterEgg(view)
+    }
+
+    private fun setupEasterEgg(view: View) {
+        var tapCount = 0
+        var lastTapTime = 0L
+        view.findViewById<ImageView>(R.id.iv_app_logo).setOnClickListener {
+            val now = System.currentTimeMillis()
+            if (now - lastTapTime > 1000) tapCount = 0
+            lastTapTime = now
+            tapCount++
+            if (tapCount >= 5) {
+                tapCount = 0
+                FocusPreferences.setWelcomeCompleted(requireContext(), false)
+                Toast.makeText(requireContext(), "\uD83E\uDD5A 欢迎引导已重置", Toast.LENGTH_SHORT).show()
+                startActivity(Intent(requireContext(), com.leowalk.LyricFocus.WelcomeActivity::class.java))
+            }
+        }
     }
 
     private fun setupVersionLabel(view: View) {

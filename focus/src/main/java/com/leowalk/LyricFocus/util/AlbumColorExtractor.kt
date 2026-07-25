@@ -90,17 +90,23 @@ object AlbumColorExtractor {
         palette.dominantSwatch?.rgb?.let { colors.add(it) }
         if (colors.size < 3) return null
 
-        val (a, b, c) = pickThreeDistinct(colors)
-        val sorted = listOf(a, b, c).sortedBy { relativeLuminance(it) }
-        val bg = sorted.first()
-        val text = sorted[1]
-        val accent = sorted.last()
+            val (a, b, c) = pickThreeDistinct(colors)
+            // 背景=最暗，主文字=中间亮度，强调色=饱和度最高的（不再用亮度排序）
+            val sorted = listOf(a, b, c).sortedBy { relativeLuminance(it) }
+            val bg = sorted.first()
+            val mid = sorted[1]
+            val bright = sorted[2]
+            // 饱和度更高的作为 accent，另一个作为 text
+            val acc = if (saturation(mid) >= saturation(bright)) mid else bright
+            val txt = if (acc == mid) bright else mid
+            val text = ensureContrast(txt, bg, 3.5)
+            val accent = ensureContrast(acc, bg, 2.5)
 
-        return DistinctColors(
-            background = bg,
-            primaryText = ensureContrast(text, bg, MIN_PRIMARY_CONTRAST),
-            accent = ensureContrast(accent, bg, 3.0)
-        )
+            return DistinctColors(
+                background = bg,
+                primaryText = text,
+                accent = accent
+            )
     }
 
     fun extractLyricColors(bitmap: Bitmap?): LyricColors? {
@@ -163,7 +169,7 @@ object AlbumColorExtractor {
 
     fun blendSecondary(primary: Int, background: Int = Color.BLACK): Int {
         val blend = if (relativeLuminance(background) > 0.45) Color.BLACK else Color.WHITE
-        return blendColors(primary, blend, 0.35f)
+        return blendColors(primary, blend, 0.22f)
     }
 
     fun ensureContrast(foreground: Int, background: Int, minRatio: Double = MIN_PRIMARY_CONTRAST): Int {
@@ -418,6 +424,12 @@ object AlbumColorExtractor {
         val g = channel(Color.green(color))
         val b = channel(Color.blue(color))
         return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+
+    private fun saturation(color: Int): Float {
+        val maxC = maxOf(Color.red(color), Color.green(color), Color.blue(color))
+        val minC = minOf(Color.red(color), Color.green(color), Color.blue(color))
+        return if (maxC == 0) 0f else (maxC - minC) / maxC.toFloat()
     }
 
     private fun blendColors(from: Int, to: Int, ratio: Float): Int {

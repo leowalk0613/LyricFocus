@@ -38,7 +38,6 @@ class LyricManager(context: Context) {
     fun getProviderNames(): List<String> = buildList {
         addAll(onlineProviders.map { it.name })
         add(localProvider.name)
-        add("AI翻译")
         add("Super Lyric")
     }
 

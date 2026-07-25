@@ -1,6 +1,7 @@
 package com.leowalk.LyricFocus
 
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.media.MediaMetadata
 import android.os.Bundle
 import android.view.View
@@ -14,10 +15,12 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
 import com.leowalk.LyricFocus.lyric.AiLyricTranslator
 import com.leowalk.LyricFocus.lyric.LocalLrcBootstrap
 import com.leowalk.LyricFocus.service.LyricService
@@ -130,6 +133,7 @@ class LyricSourceActivity : AppCompatActivity() {
     private fun updateLyricSourceUi() {
         updateSongDebugInfo()
         buildLyricSourceItems()
+        buildAiCard()
     }
 
     private fun buildLyricSourceItems() {
@@ -156,7 +160,6 @@ class LyricSourceActivity : AppCompatActivity() {
             val label = option.second
             val isSelected = key == current
             val canExpand = key == FocusPreferences.LYRIC_SOURCE_LOCAL ||
-                    key == FocusPreferences.LYRIC_SOURCE_AI ||
                     key == FocusPreferences.LYRIC_SOURCE_SUPERLYRIC ||
                     key == FocusPreferences.LYRIC_SOURCE_LYRICON ||
                     key == FocusPreferences.LYRIC_SOURCE_LYRICINFO
@@ -171,7 +174,6 @@ class LyricSourceActivity : AppCompatActivity() {
                 FocusPreferences.LYRIC_SOURCE_LYRICON -> "完整歌词含原文+翻译" to R.drawable.ic_music_note
                 FocusPreferences.LYRIC_SOURCE_LYRICINFO -> "读取通知栏歌词字段" to R.drawable.ic_info
                 FocusPreferences.LYRIC_SOURCE_LOCAL -> "从本地 LRC 文件读取" to R.drawable.ic_home
-                FocusPreferences.LYRIC_SOURCE_AI -> "在线获取 + AI 翻译" to R.drawable.ic_palette
                 else -> "" to R.drawable.ic_music_note
             }
 
@@ -282,7 +284,6 @@ class LyricSourceActivity : AppCompatActivity() {
                 }
                 when (key) {
                     FocusPreferences.LYRIC_SOURCE_LOCAL -> buildLocalLrcInline(ctx, expandContent)
-                    FocusPreferences.LYRIC_SOURCE_AI -> buildAiInline(ctx, expandContent)
                     FocusPreferences.LYRIC_SOURCE_SUPERLYRIC -> buildSuperLyricInline(ctx, expandContent)
                     FocusPreferences.LYRIC_SOURCE_LYRICON -> buildLyriconInline(ctx, expandContent)
                     FocusPreferences.LYRIC_SOURCE_LYRICINFO -> buildLyricInfoInline(ctx, expandContent)
@@ -448,109 +449,220 @@ class LyricSourceActivity : AppCompatActivity() {
         }
     }
 
-    private fun buildAiInline(ctx: android.content.Context, parent: LinearLayout? = null) {
-        val target = parent ?: run {
-            val body = LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dpToPx(28), dpToPx(4), 0, dpToPx(12))
-            }
-            llLyricSourceItems.addView(body)
-            body
-        }
-
-        val textColor = MaterialColors.getColor(
-            ctx, com.google.android.material.R.attr.colorOnSurfaceVariant, "LyricFocus"
-        )
-        val infos = listOf(
-            "Base URL" to FocusPreferences.getAiApiBaseUrl(ctx),
-            "Model" to FocusPreferences.getAiApiModel(ctx),
-            "目标语言" to FocusPreferences.getAiTargetLanguage(ctx)
-        )
-        for ((label, value) in infos) {
-            val tv = TextView(ctx).apply {
-                text = "$label: $value"
-                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
-                setTextColor(textColor)
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { bottomMargin = dpToPx(4) }
-            }
-            target.addView(tv)
-        }
-
-        val btnEdit = MaterialButton(android.view.ContextThemeWrapper(ctx,
-            com.google.android.material.R.style.Widget_Material3_Button_TonalButton)).apply {
-            text = "编辑配置"
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dpToPx(4) }
-            setOnClickListener { showAiLyricSettingsDialog() }
-        }
-        target.addView(btnEdit)
-        if (parent == null) {
-            llLyricSourceItems.addView(target)
-        }
-    }
-
-    private fun showAiLyricSettingsDialog() {
+    private fun buildAiCard() {
         val ctx = this
-        val dialogView = layoutInflater.inflate(R.layout.dialog_ai_lyric_settings, null)
-        val inputBaseUrl = dialogView.findViewById<TextInputEditText>(R.id.input_ai_base_url)
-        val inputApiKey = dialogView.findViewById<TextInputEditText>(R.id.input_ai_api_key)
-        val inputModel = dialogView.findViewById<TextInputEditText>(R.id.input_ai_model)
-        val inputTargetLanguage = dialogView.findViewById<TextInputEditText>(R.id.input_ai_target_language)
-        val switchTranslateAll = dialogView.findViewById<MaterialSwitch>(R.id.switch_ai_translate_all)
-        val btnTestConnectivity = dialogView.findViewById<MaterialButton>(R.id.btn_test_ai_connectivity)
-        val tvConnectivityResult = dialogView.findViewById<TextView>(R.id.tv_ai_connectivity_result)
+        val scrollContent = findViewById<LinearLayout>(R.id.lyric_source_scroll_content)
+        val aiTag = "ai_card"
+        // 移除旧卡
+        for (i in scrollContent.childCount - 1 downTo 0) {
+            if (scrollContent.getChildAt(i).tag == aiTag) scrollContent.removeViewAt(i)
+        }
 
-        inputBaseUrl.setText(FocusPreferences.getAiApiBaseUrl(ctx))
-        inputApiKey.setText(FocusPreferences.getAiApiKey(ctx))
-        inputModel.setText(FocusPreferences.getAiApiModel(ctx))
-        inputTargetLanguage.setText(FocusPreferences.getAiTargetLanguage(ctx))
-        switchTranslateAll.isChecked = FocusPreferences.isAiTranslateAllLyrics(ctx)
+        val surfaceColor = MaterialColors.getColor(ctx, com.google.android.material.R.attr.colorSurfaceContainerLow, "LyricFocus")
+        val onSurfaceColor = MaterialColors.getColor(ctx, com.google.android.material.R.attr.colorOnSurface, "LyricFocus")
+        val variantColor = MaterialColors.getColor(ctx, com.google.android.material.R.attr.colorOnSurfaceVariant, "LyricFocus")
+        val primaryColor = MaterialColors.getColor(ctx, com.google.android.material.R.attr.colorPrimary, "LyricFocus")
+        val aiEnabled = FocusPreferences.isAiLyricEnabled(ctx)
 
-        btnTestConnectivity.setOnClickListener {
-            btnTestConnectivity.isEnabled = false
-            tvConnectivityResult.visibility = View.VISIBLE
-            tvConnectivityResult.setTextColor(ctx.getColor(R.color.grey))
-            tvConnectivityResult.text = "正在检测…"
+        val card = MaterialCardView(android.view.ContextThemeWrapper(ctx, com.google.android.material.R.style.Widget_Material3_CardView_Filled)).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(12) }
+            setContentPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16))
+            setCardBackgroundColor(android.content.res.ColorStateList.valueOf(surfaceColor))
+            cardElevation = 0f
+            strokeWidth = 0
+            radius = 16f * resources.displayMetrics.density
+            tag = aiTag
+        }
 
-            val config = AiLyricTranslator.ApiConfig(
-                baseUrl = inputBaseUrl.text?.toString().orEmpty(),
-                apiKey = inputApiKey.text?.toString().orEmpty(),
-                model = inputModel.text?.toString().orEmpty()
+        val inner = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+
+        // 标题行 + 开关
+        val headerRow = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(4) }
+        }
+        val titleCol = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        titleCol.addView(TextView(ctx).apply {
+            text = "AI 歌词翻译"
+            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleMedium)
+            setTextColor(onSurfaceColor)
+        })
+        titleCol.addView(TextView(ctx).apply {
+            text = "使用 AI 在线为歌词生成翻译"
+            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
+            setTextColor(variantColor)
+        })
+        headerRow.addView(titleCol)
+        val switch = MaterialSwitch(ctx).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = dpToPx(16) }
+            isChecked = aiEnabled
+            setOnCheckedChangeListener { _, checked ->
+                FocusPreferences.setAiLyricEnabled(ctx, checked)
+                broadcastSettingsChanged()
+                updateLyricSourceUi()
+            }
+        }
+        headerRow.addView(switch)
+        inner.addView(headerRow)
+
+        // 内联配置区域（开关打开时显示）
+        if (aiEnabled) {
+            inner.addView(createDivider(ctx, dpToPx(12)))
+
+            val fields = listOf(
+                "Base URL" to FocusPreferences.getAiApiBaseUrl(ctx),
+                "API Key" to FocusPreferences.getAiApiKey(ctx),
+                "Model" to FocusPreferences.getAiApiModel(ctx),
+                "目标语言" to FocusPreferences.getAiTargetLanguage(ctx)
             )
-            lifecycleScope.launch {
-                val result = AiLyricTranslator(ctx).testConnectivity(config)
-                if (isFinishing || isDestroyed) return@launch
-                btnTestConnectivity.isEnabled = true
-                when (result) {
-                    is AiLyricTranslator.ConnectivityResult.Success -> {
-                        tvConnectivityResult.setTextColor(ctx.getColor(R.color.green))
-                        tvConnectivityResult.text = result.message
+            val inputs = mutableListOf<TextInputEditText>()
+            for ((index, pair) in fields.withIndex()) {
+                val (label, value) = pair
+                if (label == "API Key") {
+                    val keyRow = LinearLayout(ctx).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(8) }
                     }
-                    is AiLyricTranslator.ConnectivityResult.Failure -> {
-                        tvConnectivityResult.setTextColor(ctx.getColor(R.color.red))
-                        tvConnectivityResult.text = result.message
+                    val inputLayout = TextInputLayout(android.view.ContextThemeWrapper(ctx, com.google.android.material.R.style.Widget_Material3_TextInputLayout_OutlinedBox)).apply {
+                        hint = label
+                        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    }
+                    val inputKey = TextInputEditText(ctx).apply {
+                        setText(value)
+                        inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                    }
+                    inputLayout.addView(inputKey)
+                    keyRow.addView(inputLayout)
+                    inputs.add(inputKey)
+
+                    val btnEye = MaterialButton(android.view.ContextThemeWrapper(ctx, com.google.android.material.R.style.Widget_Material3_Button_TextButton)).apply {
+                        text = "显示"
+                        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = dpToPx(4) }
+                        setOnClickListener {
+                            val isPwd = inputKey.inputType == android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                            inputKey.inputType = if (isPwd) android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                            else android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                            text = if (isPwd) "隐藏" else "显示"
+                            inputKey.setSelection(inputKey.text?.length ?: 0)
+                        }
+                    }
+                    keyRow.addView(btnEye)
+                    inner.addView(keyRow)
+                } else {
+                    val inputLayout = TextInputLayout(android.view.ContextThemeWrapper(ctx, com.google.android.material.R.style.Widget_Material3_TextInputLayout_OutlinedBox)).apply {
+                        hint = label
+                        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(8) }
+                    }
+                    val input = TextInputEditText(ctx).apply {
+                        setText(value)
+                    }
+                    inputLayout.addView(input)
+                    inputs.add(input)
+                    inner.addView(inputLayout)
+                }
+            }
+
+            // Translate All 开关
+            val taRow = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(8) }
+            }
+            taRow.addView(TextView(ctx).apply {
+                text = "强制翻译全部行"
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
+                setTextColor(onSurfaceColor)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            val switchTranslateAll = MaterialSwitch(ctx).apply {
+                isChecked = FocusPreferences.isAiTranslateAllLyrics(ctx)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = dpToPx(16) }
+            }
+            taRow.addView(switchTranslateAll)
+            inner.addView(taRow)
+
+            // Token 显示
+            val tokens = FocusPreferences.getAiTotalTokens(ctx)
+            val tokenLabel = if (tokens > 0) "已消耗 $tokens Token" else "暂无消耗"
+            inner.addView(TextView(ctx).apply {
+                text = "Token: $tokenLabel"
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
+                setTextColor(variantColor)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(8) }
+            })
+
+            // 检测连通性按钮 + 保存
+            val btnRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+            val tvResult = TextView(ctx).apply {
+                visibility = View.GONE
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dpToPx(8) }
+            }
+            btnRow.addView(tvResult)
+
+            val btnTest = MaterialButton(android.view.ContextThemeWrapper(ctx, com.google.android.material.R.style.Widget_Material3_Button_TonalButton)).apply {
+                text = "检测"
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginEnd = dpToPx(8) }
+                setOnClickListener {
+                    isEnabled = false
+                    tvResult.visibility = View.VISIBLE
+                    tvResult.setTextColor(ctx.getColor(R.color.grey))
+                    tvResult.text = "检测中…"
+                    val config = AiLyricTranslator.ApiConfig(
+                        baseUrl = inputs[0].text?.toString().orEmpty(),
+                        apiKey = inputs[1].text?.toString().orEmpty(),
+                        model = inputs[2].text?.toString().orEmpty()
+                    )
+                    lifecycleScope.launch {
+                        val result = AiLyricTranslator(ctx).testConnectivity(config)
+                        if (isFinishing || isDestroyed) return@launch
+                        isEnabled = true
+                        when (result) {
+                            is AiLyricTranslator.ConnectivityResult.Success -> {
+                                tvResult.setTextColor(ctx.getColor(R.color.green))
+                                tvResult.text = result.message
+                            }
+                            is AiLyricTranslator.ConnectivityResult.Failure -> {
+                                tvResult.setTextColor(ctx.getColor(R.color.red))
+                                tvResult.text = result.message
+                            }
+                        }
                     }
                 }
             }
+            val btnSave = MaterialButton(android.view.ContextThemeWrapper(ctx, com.google.android.material.R.style.Widget_Material3_Button_TonalButton)).apply {
+                text = "保存"
+                setOnClickListener {
+                    FocusPreferences.setAiApiBaseUrl(ctx, inputs[0].text?.toString().orEmpty())
+                    FocusPreferences.setAiApiKey(ctx, inputs[1].text?.toString().orEmpty())
+                    FocusPreferences.setAiApiModel(ctx, inputs[2].text?.toString().orEmpty())
+                    FocusPreferences.setAiTargetLanguage(ctx, inputs[3].text?.toString().orEmpty())
+                    FocusPreferences.setAiTranslateAllLyrics(ctx, switchTranslateAll.isChecked)
+                    broadcastSettingsChanged()
+                    updateLyricSourceUi()
+                }
+            }
+            btnRow.addView(btnTest)
+            btnRow.addView(btnSave)
+            inner.addView(btnRow)
         }
 
-        MaterialAlertDialogBuilder(ctx)
-            .setTitle("AI 翻译配置")
-            .setView(dialogView)
-            .setPositiveButton("保存") { _, _ ->
-                FocusPreferences.setAiApiBaseUrl(ctx, inputBaseUrl.text?.toString().orEmpty())
-                FocusPreferences.setAiApiKey(ctx, inputApiKey.text?.toString().orEmpty())
-                FocusPreferences.setAiApiModel(ctx, inputModel.text?.toString().orEmpty())
-                FocusPreferences.setAiTargetLanguage(ctx, inputTargetLanguage.text?.toString().orEmpty())
-                FocusPreferences.setAiTranslateAllLyrics(ctx, switchTranslateAll.isChecked)
-                updateLyricSourceUi()
-                broadcastSettingsChanged(includeLyricSource = true)
+        card.addView(inner)
+        scrollContent.addView(card)
+    }
+
+    private fun createDivider(ctx: android.content.Context, topMargin: Int): View {
+        return View(ctx).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).apply {
+                this.topMargin = topMargin
+                bottomMargin = topMargin
             }
-            .setNegativeButton("取消", null)
-            .show()
+            setBackgroundColor(MaterialColors.getColor(ctx, com.google.android.material.R.attr.colorOutlineVariant, "LyricFocus"))
+        }
     }
 
     private fun broadcastSettingsChanged(includeLyricSource: Boolean = false) {

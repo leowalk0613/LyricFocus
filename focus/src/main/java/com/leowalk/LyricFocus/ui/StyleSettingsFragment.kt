@@ -12,6 +12,7 @@ import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.widget.NestedScrollView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.core.view.ViewCompat
@@ -412,6 +413,23 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         }
         updateDynamicColorUi()
         updateMultiLineDependentUi()
+        reorderStyleCards()
+    }
+
+    private fun reorderStyleCards() {
+        val parent = lockScreenSection.parent as? ViewGroup ?: return
+        val customAodEnabled = FocusPreferences.isCustomAodLayout(requireContext())
+        val lockIdx = parent.indexOfChild(lockScreenSection)
+        val aodIdx = parent.indexOfChild(customAodSection)
+        if (lockIdx < 0 || aodIdx < 0) return
+
+        if (customAodEnabled && lockIdx < aodIdx) {
+            parent.removeView(customAodSection)
+            parent.addView(customAodSection, lockIdx)
+        } else if (!customAodEnabled && aodIdx < lockIdx) {
+            parent.removeView(lockScreenSection)
+            parent.addView(lockScreenSection, aodIdx)
+        }
     }
 
     private fun isRealtimeSource(): Boolean {
@@ -478,6 +496,12 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         sliderMultiLineTextSize.isEnabled = multiLineInteractive
         sliderMultiLineTextSize.alpha = if (multiLineInteractive) 1f else 0.38f
         tvMultiLineTextSizeLabel.alpha = if (multiLineInteractive) 1f else 0.38f
+
+        // 多行模式下锁屏字号由多行字号接管，原字号滑块失效
+        val textSizeInteractive = lockScreenInteractive && !multiLineEnabled
+        sliderTextSize.isEnabled = textSizeInteractive
+        sliderTextSize.alpha = if (textSizeInteractive) 1f else 0.38f
+        tvTextSizeLabel.alpha = if (textSizeInteractive) 1f else 0.38f
 
         setSectionEnabled(
             section = singleLineOnlyRow,
@@ -1040,6 +1064,15 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             previewMultiTextViews += view.findViewById<TextView>(id)
         }
         previewHeader.setOnClickListener { togglePreview() }
+        // 多行模式下向上滑动自动收起预览
+        val scrollView = view.findViewById<NestedScrollView>(R.id.style_content)
+        scrollView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+            if (scrollY > 400 && previewExpanded && FocusPreferences.isMultiLineLyrics(requireContext())) {
+                previewExpanded = false
+                previewContent.visibility = View.GONE
+                previewExpandIcon.animate().rotation(0f).setDuration(350).start()
+            }
+        }
         // 默认展开
         previewContent.visibility = View.VISIBLE
         previewExpandIcon.rotation = 180f
@@ -1062,7 +1095,11 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         if (!previewBound) return
         val ctx = requireContext()
         val isCustomAod = FocusPreferences.isCustomAodLayout(ctx)
-        previewModeLabel.text = if (isCustomAod) "\u4e07\u8c61\u606f\u5c4f AOD" else "\u9501\u5c4f\u901a\u77e5"
+        val isMultiLine = FocusPreferences.isMultiLineLyrics(ctx)
+        previewModeLabel.text = buildString {
+            append(if (isCustomAod) "\u4e07\u8c61\u606f\u5c4f AOD" else "\u9501\u5c4f\u901a\u77e5")
+            if (isMultiLine) append(" \u00b7 \u591a\u884c\u6b4c\u8bcd")
+        }
         if (!previewExpanded) return
         val state = LyricService.previewState
         val hasLyric = state.isPlaying && state.lyricText.isNotBlank()
@@ -1080,53 +1117,24 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     private fun resolvePreviewColors(ctx: android.content.Context): Triple<Int, Int, Int?> {
         val monetEnabled = FocusPreferences.isMonetDynamicColorEnabled(ctx)
         val textExtractionEnabled = FocusPreferences.isTextColorExtractionEnabled(ctx)
-        val extractedColor = if (monetEnabled || textExtractionEnabled) {
-            FocusPreferences.getExtractedTextColor(ctx)
-        } else null
+        val colorModeEnabled = FocusPreferences.isColorModeEnabled(ctx)
+        val hasExtractedColors = monetEnabled || textExtractionEnabled
+        val extractedTextColor = if (hasExtractedColors) FocusPreferences.getExtractedTextColor(ctx) else null
         val extractedBgColor = FocusPreferences.getExtractedBgColor(ctx)
-        val background = FocusPreferences.getFocusBackground(ctx)
+        val extractedAccentColor = FocusPreferences.getExtractedAccentColor(ctx)
         val textColor = FocusPreferences.getLyricTextColor(ctx)
+        val background = FocusPreferences.getFocusBackground(ctx)
 
-        when {
-            monetEnabled && extractedColor != null && extractedBgColor != null -> {
-                val primary = extractedColor
-                val secondary = AlbumColorExtractor.ensureContrast(
-                    AlbumColorExtractor.blendSecondary(extractedColor, extractedBgColor),
-                    extractedBgColor,
-                    3.0
-                )
-                return Triple(primary, secondary, extractedBgColor)
-            }
-            textExtractionEnabled && extractedColor != null -> {
-                val (primary, secondary) = AlbumColorExtractor.resolveTextColors(
-                    accent = extractedColor,
-                    backgroundEstimate = extractedBgColor ?: android.graphics.Color.GRAY,
-                    backgroundMode = background
-                )
-                val bg = when (background) {
-                    FocusPreferences.BACKGROUND_BLACK -> android.graphics.Color.BLACK
-                    FocusPreferences.BACKGROUND_WHITE -> android.graphics.Color.WHITE
-                    else -> null
-                }
-                return Triple(primary, secondary, bg)
-            }
-            textColor == "black" -> {
-                val bg = when (background) {
-                    FocusPreferences.BACKGROUND_BLACK -> android.graphics.Color.BLACK
-                    FocusPreferences.BACKGROUND_WHITE -> android.graphics.Color.WHITE
-                    else -> null
-                }
-                return Triple(android.graphics.Color.BLACK, 0xFF333333.toInt(), bg)
-            }
-            else -> {
-                val bg = when (background) {
-                    FocusPreferences.BACKGROUND_BLACK -> android.graphics.Color.BLACK
-                    FocusPreferences.BACKGROUND_WHITE -> android.graphics.Color.WHITE
-                    else -> null
-                }
-                return Triple(android.graphics.Color.WHITE, 0xFFE0E0E0.toInt(), bg)
-            }
-        }
+        return com.leowalk.LyricFocus.notification.HyperFocusLyricStyle.resolveLockScreenColors(
+            monetEnabled = monetEnabled,
+            textExtractionEnabled = textExtractionEnabled,
+            colorModeEnabled = colorModeEnabled,
+            extractedTextColor = extractedTextColor,
+            extractedBgColor = extractedBgColor,
+            extractedAccentColor = extractedAccentColor,
+            textColor = textColor,
+            background = background
+        )
     }
 
     private fun refreshAodPreview(ctx: android.content.Context, state: LyricService.PreviewState, hasLyric: Boolean) {
@@ -1229,6 +1237,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         previewSongRow.visibility = View.GONE
 
         val multiLine = FocusPreferences.isMultiLineLyrics(ctx)
+        val aodMultiLineOnly = multiLine && FocusPreferences.isAodMultiLineOnly(ctx)
         val singleLineOnly = FocusPreferences.isSingleLineOnly(ctx)
         val swapLyricTranslation = FocusPreferences.isSwapLyricTranslation(ctx)
         val textSize = FocusPreferences.getLyricTextSize(ctx)
@@ -1239,7 +1248,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         val monetEnabled = FocusPreferences.isMonetDynamicColorEnabled(ctx)
         val (primaryColor, secondaryColor, extractedBg) = resolvePreviewColors(ctx)
 
-        // 背景：Monet 取色时优先用提取的背景色，否则用手动设置
+        // 背景：有提取色用提取色，否则按手动设置
         val previewBgColor = if (extractedBg != null) extractedBg
         else when (background) {
             FocusPreferences.BACKGROUND_BLACK -> android.graphics.Color.BLACK
@@ -1272,76 +1281,120 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                 lyricInfo.getCurrentLineIndex(LyricService.currentPlaybackPositionMs, FocusPreferences.getSyncAdvanceMs(ctx))
                     .coerceAtLeast(0)
             } else 0
-
-            val interleaved = showTransPref && allLines.any { it.translation?.isNotBlank() == true }
-            val pairCount = if (interleaved) pageSlots / 2 else pageSlots
-            val pageStart = (currentIndex / pairCount) * pairCount
-            val currentSlot = if (interleaved) (currentIndex - pageStart) * 2 else currentIndex - pageStart
-            val hideSlot = if (hideFirstLine && currentIndex > pageStart) {
-                if (interleaved) 2 else 1
-            } else 0
-
+            val interleaved: Boolean
             val origins: List<String>
             val trans: List<String>
-            if (allLines.isNotEmpty()) {
-                origins = (0 until pairCount).map { allLines.getOrNull(pageStart + it)?.text ?: "" }
-                trans = if (interleaved) {
-                    (0 until pairCount).map { allLines.getOrNull(pageStart + it)?.translation ?: "" }
+            val effectivePageSlots: Int
+            val effectiveHideSlot: Int
+            val effectiveCurrentSlot: Int
+
+            if (allLines.isEmpty()) {
+                interleaved = false
+                origins = List(pageSlots) { "\u6b4c\u8bcd \u7b2c${it + 1}\u53e5" }
+                trans = List(pageSlots) { "" }
+                effectivePageSlots = pageSlots
+                effectiveHideSlot = 0
+                effectiveCurrentSlot = 0
+            } else if (showTransPref) {
+                val testPairCount = pageSlots / 2
+                val testPageStart = (currentIndex / testPairCount) * testPairCount
+                val testOrigins = (0 until testPairCount).map { allLines.getOrNull(testPageStart + it)?.text ?: "" }
+                val testTrans = (0 until testPairCount).map { allLines.getOrNull(testPageStart + it)?.translation ?: "" }
+                val hasPageTranslation = testTrans.any { it.isNotBlank() }
+
+                if (hasPageTranslation) {
+                    interleaved = true
+                    origins = testOrigins
+                    trans = testTrans
+                    effectivePageSlots = pageSlots
+                    effectiveHideSlot = if (hideFirstLine && currentIndex > testPageStart) 2 else 0
+                    effectiveCurrentSlot = if (currentIndex >= testPageStart && currentIndex < testPageStart + testPairCount) {
+                        (currentIndex - testPageStart) * 2
+                    } else -1
                 } else {
-                    List(pairCount) { "" }
+                    interleaved = false
+                    val nonInterleavedPageStart = (currentIndex / pageSlots) * pageSlots
+                    origins = (0 until pageSlots).map { allLines.getOrNull(nonInterleavedPageStart + it)?.text ?: "" }
+                    trans = List(pageSlots) { "" }
+                    effectivePageSlots = pageSlots
+                    effectiveHideSlot = if (hideFirstLine && currentIndex > nonInterleavedPageStart) 1 else 0
+                    effectiveCurrentSlot = if (currentIndex >= nonInterleavedPageStart && currentIndex < nonInterleavedPageStart + pageSlots) {
+                        currentIndex - nonInterleavedPageStart
+                    } else -1
                 }
             } else {
-                origins = List(pairCount) { "\u6b4c\u8bcd \u7b2c${it + 1}\u53e5" }
-                trans = if (interleaved) List(pairCount) { "\u7ffb\u8bd1 \u7b2c${it + 1}\u53e5" } else List(pairCount) { "" }
+                interleaved = false
+                val nonInterleavedPageStart = (currentIndex / pageSlots) * pageSlots
+                origins = (0 until pageSlots).map { allLines.getOrNull(nonInterleavedPageStart + it)?.text ?: "" }
+                trans = List(pageSlots) { "" }
+                effectivePageSlots = pageSlots
+                effectiveHideSlot = if (hideFirstLine && currentIndex > nonInterleavedPageStart) 1 else 0
+                effectiveCurrentSlot = if (currentIndex >= nonInterleavedPageStart && currentIndex < nonInterleavedPageStart + pageSlots) {
+                    currentIndex - nonInterleavedPageStart
+                } else -1
             }
-            // Mirror applyMultiLineStyle colors and sizes exactly
+
+            // 多行取色与 applyMultiLineStyle 完全一致（aodMultiLineOnly 只影响显示场景，不影响颜色）
+            val mlDefaultLine: Int
+            val mlCurrentLine: Int
+            val mlNonCurrentTrans: Int
+            val mlGravity: Int
             val colorModeEnabled = FocusPreferences.isColorModeEnabled(ctx)
             val colorModeBgColor = if (colorModeEnabled) FocusPreferences.getExtractedBgColor(ctx) else null
-            val monetBgColor = if (monetEnabled) extractedBg else null
-            val extractedBg = colorModeBgColor ?: monetBgColor
-            val defaultLineColor = if (extractedBg != null) {
-                AlbumColorExtractor.ensureContrast(
-                    FocusPreferences.getExtractedTextColor(ctx) ?: primaryColor,
-                    extractedBg,
-                    4.0
-                )
+            val mlMonetBgColor = if (monetEnabled) FocusPreferences.getExtractedBgColor(ctx) else null
+            val mlExtractedBg = colorModeBgColor ?: mlMonetBgColor
+            val extractedText = FocusPreferences.getExtractedTextColor(ctx)
+            val extractedAccent = FocusPreferences.getExtractedAccentColor(ctx)
+
+            mlDefaultLine = if (mlExtractedBg != null) {
+                if (colorModeBgColor != null) {
+                    AlbumColorExtractor.ensureContrastColorful(
+                        extractedText ?: primaryColor, mlExtractedBg, 3.5
+                    )
+                } else {
+                    AlbumColorExtractor.ensureContrast(
+                        extractedText ?: primaryColor, mlExtractedBg, 3.5
+                    )
+                }
             } else {
-                FocusPreferences.getExtractedTextColor(ctx) ?: primaryColor
+                extractedText ?: primaryColor
             }
-            val currentLineColor = if (colorModeBgColor != null) {
-                AlbumColorExtractor.ensureContrast(
-                    FocusPreferences.getExtractedAccentColor(ctx) ?: defaultLineColor,
-                    colorModeBgColor,
-                    5.0
+            mlCurrentLine = if (colorModeBgColor != null) {
+                AlbumColorExtractor.ensureContrastColorful(
+                    extractedAccent ?: mlDefaultLine, colorModeBgColor, 3.5
                 )
-            } else if (monetBgColor != null) {
-                AlbumColorExtractor.ensureContrast(defaultLineColor, monetBgColor, 7.0)
-            } else if (background == FocusPreferences.BACKGROUND_WHITE)
-                android.graphics.Color.BLACK else android.graphics.Color.WHITE
-            val nonCurrentTransColor = fadeTextColor(defaultLineColor)
+            } else if (mlMonetBgColor != null) {
+                AlbumColorExtractor.ensureContrast(mlDefaultLine, mlMonetBgColor, 7.0)
+            } else when (background) {
+                FocusPreferences.BACKGROUND_WHITE -> android.graphics.Color.BLACK
+                else -> primaryColor
+            }
+            mlNonCurrentTrans = fadeTextColor(mlDefaultLine)
+            mlGravity = gravity
             for (i in 0 until 8) {
                 val tv = previewMultiTextViews[i]
-                if (i < pageSlots) {
+                if (i < effectivePageSlots) {
                     val isTranslationSlot = interleaved && i % 2 == 1
-                    val pairIdx = i / 2
+                    val pairIdx = if (interleaved) i / 2 else i
                     val swapped = interleaved && swapLyricTranslation
                     val text = if (isTranslationSlot) {
                         if (swapped) origins[pairIdx.coerceAtMost(origins.size - 1)] else trans[pairIdx.coerceAtMost(trans.size - 1)]
                     } else {
                         if (swapped && interleaved) trans[pairIdx.coerceAtMost(trans.size - 1)] else origins[pairIdx.coerceAtMost(origins.size - 1)]
                     }
-                    if (i < hideSlot || text.isBlank()) {
+                    if (i < effectiveHideSlot || text.isBlank()) {
                         tv.visibility = View.INVISIBLE
                     } else {
                         tv.visibility = View.VISIBLE
                         tv.text = text
                         tv.setTextColor(when {
-                            i == currentSlot -> currentLineColor
-                            isTranslationSlot -> nonCurrentTransColor
-                            else -> defaultLineColor
+                            i == effectiveCurrentSlot -> mlCurrentLine
+                            isTranslationSlot -> mlNonCurrentTrans
+                            else -> mlDefaultLine
                         })
-                        tv.textSize = if (i == currentSlot) mlTextSize else mlTextSize * 0.65f
-                        tv.gravity = gravity
+                        val jpScale = if (isJapaneseText(text)) 0.88f else 1f
+                        tv.textSize = if (i == effectiveCurrentSlot) mlTextSize * jpScale else mlTextSize * 0.65f * jpScale
+                        tv.gravity = mlGravity
                     }
                 } else {
                     tv.visibility = View.GONE

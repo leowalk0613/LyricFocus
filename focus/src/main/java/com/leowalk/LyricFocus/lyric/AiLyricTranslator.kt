@@ -123,13 +123,21 @@ class AiLyricTranslator(context: Context) {
                 return null
             }
             val body = response.body?.string() ?: return null
-            val content = JSONObject(body)
+            val json = JSONObject(body)
+            val content = json
                 .optJSONArray("choices")
                 ?.optJSONObject(0)
                 ?.optJSONObject("message")
                 ?.optString("content")
                 ?.trim()
                 ?: return null.also { Log.w("LyricFocusAI", "AI translate: empty response content") }
+            val usage = json.optJSONObject("usage")
+            if (usage != null) {
+                val totalTokens = usage.optLong("total_tokens", 0)
+                if (totalTokens > 0) {
+                    FocusPreferences.addAiTokens(appContext, totalTokens)
+                }
+            }
             val result = mergeTranslation(lyricInfo, content)
             if (result == null) Log.w("LyricFocusAI", "AI translate: mergeTranslation returned null")
             return result

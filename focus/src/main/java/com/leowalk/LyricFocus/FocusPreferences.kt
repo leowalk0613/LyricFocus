@@ -86,6 +86,8 @@ object FocusPreferences {
     const val PREF_AI_API_MODEL = "ai_api_model"
     const val PREF_AI_TARGET_LANGUAGE = "ai_target_language"
     const val PREF_AI_TRANSLATE_ALL_LYRICS = "ai_translate_all_lyrics"
+    const val PREF_AI_LYRIC_ENABLED = "ai_lyric_enabled"
+    const val PREF_AI_TOTAL_TOKENS = "ai_total_tokens"
     const val PREF_LOCAL_LRC_BOOTSTRAPPED = "local_lrc_bootstrapped"
 
     const val DEFAULT_LOCAL_LRC_DIR = "/sdcard/LyricFocus/lyrics"
@@ -363,6 +365,30 @@ object FocusPreferences {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putBoolean(PREF_AI_TRANSLATE_ALL_LYRICS, enabled)
+            .apply()
+    }
+
+    fun isAiLyricEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_AI_LYRIC_ENABLED, false)
+    }
+
+    fun setAiLyricEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_AI_LYRIC_ENABLED, enabled)
+            .apply()
+    }
+
+    fun getAiTotalTokens(context: Context): Long {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getLong(PREF_AI_TOTAL_TOKENS, 0L)
+    }
+
+    fun addAiTokens(context: Context, tokens: Long) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putLong(PREF_AI_TOTAL_TOKENS, prefs.getLong(PREF_AI_TOTAL_TOKENS, 0L) + tokens)
             .apply()
     }
 

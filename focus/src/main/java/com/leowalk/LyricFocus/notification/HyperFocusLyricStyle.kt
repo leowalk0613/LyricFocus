@@ -129,6 +129,90 @@ object HyperFocusLyricStyle {
         }
     }
 
+    fun resolveLockScreenColors(
+        monetEnabled: Boolean,
+        textExtractionEnabled: Boolean,
+        colorModeEnabled: Boolean,
+        extractedTextColor: Int?,
+        extractedBgColor: Int?,
+        extractedAccentColor: Int?,
+        textColor: String,
+        background: String
+    ): Triple<Int, Int, Int?> {
+        val colorPrimary: Int
+        val colorSecondary: Int
+        val backgroundColor: Int?
+        when {
+            monetEnabled && colorModeEnabled && extractedTextColor != null && extractedBgColor != null -> {
+                colorPrimary = AlbumColorExtractor.ensureContrastColorful(extractedTextColor, extractedBgColor)
+                val accent = extractedAccentColor ?: extractedTextColor
+                colorSecondary = AlbumColorExtractor.ensureContrastColorful(
+                    AlbumColorExtractor.blendSecondary(accent, extractedBgColor),
+                    extractedBgColor, 2.5
+                )
+                backgroundColor = extractedBgColor
+            }
+            monetEnabled && extractedTextColor != null && extractedBgColor != null -> {
+                colorPrimary = extractedTextColor
+                colorSecondary = AlbumColorExtractor.ensureContrast(
+                    AlbumColorExtractor.blendSecondary(extractedTextColor, extractedBgColor),
+                    extractedBgColor, 3.0
+                )
+                backgroundColor = extractedBgColor
+            }
+            textExtractionEnabled && colorModeEnabled && extractedTextColor != null && extractedAccentColor != null -> {
+                val bg = when (background) {
+                    FocusPreferences.BACKGROUND_BLACK -> Color.BLACK
+                    FocusPreferences.BACKGROUND_WHITE -> Color.WHITE
+                    else -> Color.BLACK
+                }
+                colorPrimary = AlbumColorExtractor.ensureContrastColorful(extractedTextColor, bg)
+                colorSecondary = AlbumColorExtractor.ensureContrastColorful(
+                    AlbumColorExtractor.blendSecondary(extractedAccentColor, bg),
+                    bg, 2.5
+                )
+                backgroundColor = when (background) {
+                    FocusPreferences.BACKGROUND_BLACK -> Color.BLACK
+                    FocusPreferences.BACKGROUND_WHITE -> Color.WHITE
+                    else -> null
+                }
+            }
+            textExtractionEnabled && extractedTextColor != null -> {
+                val (primary, secondary) = AlbumColorExtractor.resolveTextColors(
+                    accent = extractedTextColor,
+                    backgroundEstimate = extractedBgColor ?: Color.GRAY,
+                    backgroundMode = background
+                )
+                colorPrimary = primary
+                colorSecondary = secondary
+                backgroundColor = when (background) {
+                    FocusPreferences.BACKGROUND_BLACK -> Color.BLACK
+                    FocusPreferences.BACKGROUND_WHITE -> Color.WHITE
+                    else -> null
+                }
+            }
+            textColor == FocusPreferences.TEXT_COLOR_BLACK -> {
+                colorPrimary = Color.BLACK
+                colorSecondary = 0xFF333333.toInt()
+                backgroundColor = when (background) {
+                    FocusPreferences.BACKGROUND_BLACK -> Color.BLACK
+                    FocusPreferences.BACKGROUND_WHITE -> Color.WHITE
+                    else -> null
+                }
+            }
+            else -> {
+                colorPrimary = COLOR_LYRIC_PRIMARY
+                colorSecondary = COLOR_LYRIC_SECONDARY
+                backgroundColor = when (background) {
+                    FocusPreferences.BACKGROUND_BLACK -> Color.BLACK
+                    FocusPreferences.BACKGROUND_WHITE -> Color.WHITE
+                    else -> null
+                }
+            }
+        }
+        return Triple(colorPrimary, colorSecondary, backgroundColor)
+    }
+
     /** 布局最大槽位数 */
     const val MULTI_LINE_MAX_SLOTS = 8
 
