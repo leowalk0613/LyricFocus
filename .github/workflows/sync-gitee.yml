@@ -15,8 +15,12 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/releases/latest")
           ASSET_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".apk")) | .browser_download_url')
           VERSION=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+          BODY=$(echo "$RELEASE_JSON" | jq -r '.body')
           echo "ASSET_URL=$ASSET_URL" >> $GITHUB_ENV
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "BODY<<EOF" >> $GITHUB_ENV
+          echo "$BODY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
           echo "Release: $VERSION, APK: $ASSET_URL"
 
       - name: Download APK
@@ -35,7 +39,7 @@ jobs:
         run: |
           RESPONSE=$(curl -s -X POST "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases" \
             -H "Content-Type: application/json" \
-            -d "{\"access_token\":\"${{ secrets.GITEE_TOKEN }}\",\"tag_name\":\"$VERSION\",\"name\":\"$VERSION\",\"body\":\"Release $VERSION\",\"target_commitish\":\"main\",\"prerelease\":false}")
+            -d "{\"access_token\":\"${{ secrets.GITEE_TOKEN }}\",\"tag_name\":\"$VERSION\",\"name\":\"$VERSION\",\"body\":$(echo "$BODY" | jq -Rs .),\"target_commitish\":\"main\",\"prerelease\":false}")
           RELEASE_ID=$(echo "$RESPONSE" | jq -r '.id')
           echo "RELEASE_ID=$RELEASE_ID" >> $GITHUB_ENV
           echo "Created release $RELEASE_ID"
