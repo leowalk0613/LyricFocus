@@ -1,13 +1,27 @@
-name: Sync Release to Gitee
+name: Sync Repo to Gitee
 
 on:
+  push:
+    branches: [main]
   release:
     types: [published]
   workflow_dispatch:
 
 jobs:
-  sync-to-gitee:
+  mirror-repo:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: |
+          git remote add gitee "https://leowalk0613:${{ secrets.GITEE_TOKEN }}@gitee.com/leowalk0613/LyricFocus.git"
+          git push gitee main --tags --force
+
+  mirror-release:
+    needs: mirror-repo
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Get latest release info
         run: |
@@ -26,7 +40,7 @@ jobs:
       - name: Download APK
         run: curl -L -o LyricFocus.apk "$ASSET_URL"
 
-      - name: Delete existing Gitee release if exists
+      - name: Delete existing Gitee release
         run: |
           EXISTING=$(curl -s "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases/tags/$VERSION?access_token=${{ secrets.GITEE_TOKEN }}")
           EXISTING_ID=$(echo "$EXISTING" | jq -r '.id // empty')
