@@ -859,3 +859,7 @@ MIT License
 
 <img width="360" height="801" alt="Screenshot_2026-07-02-14-34-10-149_com miui gallery" src="https://github.com/user-attachments/assets/ebaf3dc6-bfb9-47ea-8b90-637d43300e08" />
 
+---
+
+> 关于页面或许藏着点什么。
+
