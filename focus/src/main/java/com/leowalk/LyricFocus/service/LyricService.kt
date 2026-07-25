@@ -1018,19 +1018,31 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
         fetchLyricJob = serviceScope.launch {
             try {
-                val lyricInfo = lyricManager.fetchLyric(title, artist)
+                var lyricInfo = lyricManager.fetchLyric(title, artist)
                 if (lyricInfo != null && !lyricInfo.isEmpty) {
                     applyLyricResult(lyricInfo, title, artist)
 
-                    if (FocusPreferences.isAiLyricEnabled(this@LyricService)) {
+                    if (FocusPreferences.isAiTranslateEnabled(this@LyricService)) {
                         try {
                             lyricNotificationManager.showAiTranslating(title, artist)
                             val translated = lyricManager.translateWithAi(lyricInfo, title, artist)
                             if (translated !== lyricInfo) {
                                 applyLyricResult(translated, title, artist)
+                                lyricInfo = translated
                             }
                         } catch (e: Exception) {
                             Log.e(TAG, "AI translate error", e)
+                        }
+                    }
+
+                    if (FocusPreferences.isAiPolishEnabled(this@LyricService)) {
+                        try {
+                            val polished = lyricManager.polishWithAi(lyricInfo, title, artist)
+                            if (polished !== lyricInfo) {
+                                applyLyricResult(polished, title, artist)
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "AI polish error", e)
                         }
                     }
                 } else {

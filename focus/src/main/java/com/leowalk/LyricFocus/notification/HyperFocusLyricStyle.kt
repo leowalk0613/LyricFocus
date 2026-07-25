@@ -432,6 +432,8 @@ object HyperFocusLyricStyle {
         patchFocusTimeout(focusExtras, TIMEOUT_SEC)
         patchFocusOrdering(focusExtras)
 
+        ensureParamV2(focusExtras)
+
         if (!showOnIsland) {
 
             patchDismissIslandFocusExtras(focusExtras)
@@ -1427,6 +1429,33 @@ object HyperFocusLyricStyle {
 
 
 
+    private fun ensureParamV2(extras: Bundle) {
+        try {
+            val paramKey = "miui.focus.param"
+            val existing = extras.getString(paramKey)
+            if (existing != null && existing.contains("\"param_v2\"")) return
+
+            val customKey = "miui.focus.param.custom"
+            val rawCustom = extras.getString(customKey) ?: return
+            val customRoot = JSONObject(rawCustom)
+
+            val paramV2 = JSONObject()
+            for (key in customRoot.keys()) {
+                paramV2.put(key, customRoot.get(key))
+            }
+            paramV2.put("protocol", 1)
+            paramV2.put("enableFloat", false)
+            paramV2.put("islandFirstFloat", false)
+
+            extras.putString(
+                paramKey,
+                JSONObject().put("param_v2", paramV2).put("protocol", 1).toString()
+            )
+        } catch (_: Throwable) {
+        }
+    }
+
+
     private fun patchDismissIslandFocusExtras(extras: Bundle) {
 
         try {
@@ -1631,13 +1660,23 @@ object HyperFocusLyricStyle {
 
     private fun getModuleContext(systemContext: Context): Context {
 
-        return systemContext.createPackageContext(
-
-            MODULE_PACKAGE,
-
-            Context.CONTEXT_IGNORE_SECURITY
-
-        )
+        try {
+            return systemContext.createPackageContext(
+                MODULE_PACKAGE,
+                Context.CONTEXT_IGNORE_SECURITY
+            )
+        } catch (_: Throwable) {
+        }
+        try {
+            val dataDir = java.io.File("/data/data/$MODULE_PACKAGE")
+            if (!dataDir.exists()) dataDir.mkdirs()
+            return systemContext.createPackageContext(
+                MODULE_PACKAGE,
+                Context.CONTEXT_IGNORE_SECURITY
+            )
+        } catch (_: Throwable) {
+            return systemContext
+        }
 
     }
 

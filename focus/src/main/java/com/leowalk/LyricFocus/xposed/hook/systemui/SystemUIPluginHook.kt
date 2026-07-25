@@ -31,8 +31,9 @@ class SystemUIPluginHook : BaseHook() {
                     is ComponentName -> component.className
                     else -> component?.toString().orEmpty()
                 }
-                if (className.contains("FocusNotificationPluginImpl")) {
-                    bypassFocusPluginClassLoader(result.classLoader, module, "FocusNotificationPluginImpl")
+                if (className.contains("FocusNotification")) {
+                    val label = className.split(".").lastOrNull() ?: "FocusPlugin"
+                    bypassFocusPluginClassLoader(result.classLoader, module, label)
                     FocusIslandSuppressHook.install(result.classLoader, module, tag) { result.applicationContext }
                 }
                 if (className.contains("DozeServicePluginImpl")) {

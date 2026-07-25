@@ -1,11 +1,13 @@
 package com.leowalk.LyricFocus.ui
 
+import android.animation.ValueAnimator
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.ViewGroup
 import android.view.View
 import android.widget.GridLayout
@@ -699,6 +701,12 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             FocusPreferences.setMultiLineLyrics(requireContext(), checked)
             updateMultiLineDependentUi()
             notifyStyleChanged()
+            if (!checked) {
+                previewExpanded = true
+                previewContent.visibility = View.VISIBLE
+                previewExpandIcon.rotation = 180f
+                refreshPreview()
+            }
         }
         switchMultiLineShowTranslation.setOnCheckedChangeListener { _, checked ->
             if (isBindingUi) return@setOnCheckedChangeListener
@@ -1044,6 +1052,8 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     private val previewMultiTextViews = mutableListOf<TextView>()
     private var previewBound = false
     private var previewExpanded = true
+    private var previewFullHeight = 0
+    private var previewHeightAnimator: ValueAnimator? = null
 
     private fun bindPreviewViews(view: View) {
         previewHeader = view.findViewById(R.id.preview_header)
@@ -1063,32 +1073,147 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         )) {
             previewMultiTextViews += view.findViewById<TextView>(id)
         }
-        previewHeader.setOnClickListener { togglePreview() }
-        // 多行模式下向上滑动自动收起预览
+        previewHeader.setOnTouchListener { v, event -> handlePreviewTouch(event) }
+        // 多行模式下向上滑动自动收起预览（带动画）
         val scrollView = view.findViewById<NestedScrollView>(R.id.style_content)
+        var lastScrollY = 0
         scrollView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
-            if (scrollY > 400 && previewExpanded && FocusPreferences.isMultiLineLyrics(requireContext())) {
-                previewExpanded = false
-                previewContent.visibility = View.GONE
-                previewExpandIcon.animate().rotation(0f).setDuration(350).start()
+            val scrollingDown = scrollY > lastScrollY
+            lastScrollY = scrollY
+            if (FocusPreferences.isMultiLineLyrics(requireContext())) {
+                if (scrollingDown && scrollY > 400 && previewExpanded) {
+                    animatePreviewHeight(false)
+                } else if (!scrollingDown && scrollY < 100 && !previewExpanded) {
+                    animatePreviewHeight(true)
+                }
             }
         }
         // 默认展开
         previewContent.visibility = View.VISIBLE
         previewExpandIcon.rotation = 180f
+        previewContent.post {
+            previewFullHeight = measureFullHeight(previewContent)
+        }
         previewBound = true
     }
 
-    private fun togglePreview() {
-        previewExpanded = !previewExpanded
-        if (previewExpanded) {
-            previewContent.visibility = View.VISIBLE
-            previewExpandIcon.animate().rotation(180f).setDuration(200).start()
-            refreshPreview()
-        } else {
-            previewContent.visibility = View.GONE
-            previewExpandIcon.animate().rotation(0f).setDuration(200).start()
+    private fun measureFullHeight(view: View): Int {
+        val widthSpec = View.MeasureSpec.makeMeasureSpec(view.width.coerceAtLeast(1), View.MeasureSpec.EXACTLY)
+        val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        view.measure(widthSpec, heightSpec)
+        return view.measuredHeight
+    }
+
+    private var dragStartY = 0f
+    private var dragStartExpanded = false
+    private var dragActive = false
+
+    private fun handlePreviewTouch(event: MotionEvent): Boolean {
+        return when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                dragStartY = event.rawY
+                dragStartExpanded = previewExpanded
+                dragActive = false
+                previewHeightAnimator?.cancel()
+                true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val deltaY = event.rawY - dragStartY
+                if (!dragActive && kotlin.math.abs(deltaY) > 10f) {
+                    dragActive = true
+                }
+                if (!dragActive) return@handlePreviewTouch true
+                val fh = previewFullHeight
+                if (fh <= 0) return@handlePreviewTouch true
+                if (previewContent.visibility != View.VISIBLE) {
+                    previewContent.visibility = View.VISIBLE
+                    previewContent.layoutParams = previewContent.layoutParams.apply { height = 0 }
+                }
+                val baseHeight = if (dragStartExpanded) fh else 0
+                val targetHeight = (baseHeight - deltaY).toInt().coerceIn(0, fh)
+                previewContent.layoutParams = previewContent.layoutParams.apply { height = targetHeight }
+                previewExpandIcon.rotation = 180f * targetHeight / fh
+                true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (dragActive) {
+                    dragActive = false
+                    val deltaY = event.rawY - dragStartY
+                    val threshold = (80 * resources.displayMetrics.density).toInt()
+                    val newState = when {
+                        deltaY < -threshold -> true
+                        deltaY > threshold -> false
+                        else -> dragStartExpanded
+                    }
+                    previewExpanded = newState
+                    animatePreviewHeight(newState)
+                } else {
+                    // no drag → treat as click
+                    togglePreview()
+                }
+                true
+            }
+            else -> false
         }
+    }
+
+    private fun togglePreview() {
+        val newExpanded = !previewExpanded
+        previewExpanded = newExpanded
+        animatePreviewHeight(newExpanded)
+    }
+
+    private fun animatePreviewHeight(show: Boolean, animate: Boolean = true) {
+        val content = previewContent
+        val fullHeight = previewFullHeight
+        val icon = previewExpandIcon
+        val duration = if (animate) 300L else 0L
+
+        previewHeightAnimator?.cancel()
+        previewExpanded = show
+
+        if (fullHeight <= 0 || duration <= 0) {
+            val lp = content.layoutParams
+            lp.height = if (show) ViewGroup.LayoutParams.WRAP_CONTENT else 0
+            content.layoutParams = lp
+            content.visibility = if (show) View.VISIBLE else View.GONE
+            icon.rotation = if (show) 180f else 0f
+            if (show) refreshPreview()
+            return
+        }
+
+        val startHeight = content.height.coerceAtLeast(0)
+        val endHeight = if (show) fullHeight else 0
+
+        if (show) {
+            content.visibility = View.VISIBLE
+        }
+
+        val anim = ValueAnimator.ofInt(startHeight, endHeight).apply {
+            this.duration = duration
+            interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener { a ->
+                val lp = content.layoutParams
+                lp.height = a.animatedValue as Int
+                content.layoutParams = lp
+            }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    if (show) {
+                        val lp = content.layoutParams
+                        lp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                        content.layoutParams = lp
+                    } else {
+                        content.visibility = View.GONE
+                    }
+                }
+            })
+        }
+        previewHeightAnimator = anim
+        anim.start()
+
+        icon.animate().rotation(if (show) 180f else 0f).setDuration(duration).start()
+        if (show) refreshPreview()
     }
 
     private fun refreshPreview() {

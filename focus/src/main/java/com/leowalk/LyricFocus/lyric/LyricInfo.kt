@@ -187,6 +187,7 @@ data class LyricInfo(
             obj.put("text", line.text)
 
             line.translation?.let { obj.put("translation", it) }
+            line.polished?.let { obj.put("polished", it) }
             line.reading?.let { obj.put("reading", it) }
 
             array.put(obj)

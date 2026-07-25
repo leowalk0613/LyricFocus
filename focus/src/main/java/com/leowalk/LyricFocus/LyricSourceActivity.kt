@@ -458,11 +458,18 @@ class LyricSourceActivity : AppCompatActivity() {
             if (scrollContent.getChildAt(i).tag == aiTag) scrollContent.removeViewAt(i)
         }
 
+        // AI 功能作为选项下的增强功能（非单独源）
+        // 仅在完整歌词源下显示（排除 SuperLyric / Lyricon）
+        val currentSource = FocusPreferences.getLyricSource(ctx)
+        if (currentSource == FocusPreferences.LYRIC_SOURCE_SUPERLYRIC ||
+            currentSource == FocusPreferences.LYRIC_SOURCE_LYRICON) {
+            return
+        }
+
         val surfaceColor = MaterialColors.getColor(ctx, com.google.android.material.R.attr.colorSurfaceContainerLow, "LyricFocus")
         val onSurfaceColor = MaterialColors.getColor(ctx, com.google.android.material.R.attr.colorOnSurface, "LyricFocus")
         val variantColor = MaterialColors.getColor(ctx, com.google.android.material.R.attr.colorOnSurfaceVariant, "LyricFocus")
         val primaryColor = MaterialColors.getColor(ctx, com.google.android.material.R.attr.colorPrimary, "LyricFocus")
-        val aiEnabled = FocusPreferences.isAiLyricEnabled(ctx)
 
         val card = MaterialCardView(android.view.ContextThemeWrapper(ctx, com.google.android.material.R.style.Widget_Material3_CardView_Filled)).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(12) }
@@ -487,31 +494,20 @@ class LyricSourceActivity : AppCompatActivity() {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         titleCol.addView(TextView(ctx).apply {
-            text = "AI 歌词翻译"
+            text = "AI功能"
             setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleMedium)
             setTextColor(onSurfaceColor)
         })
         titleCol.addView(TextView(ctx).apply {
-            text = "使用 AI 在线为歌词生成翻译"
+            text = "翻译与润色，需配置 API"
             setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
             setTextColor(variantColor)
         })
         headerRow.addView(titleCol)
-        val switch = MaterialSwitch(ctx).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = dpToPx(16) }
-            isChecked = aiEnabled
-            setOnCheckedChangeListener { _, checked ->
-                FocusPreferences.setAiLyricEnabled(ctx, checked)
-                broadcastSettingsChanged()
-                updateLyricSourceUi()
-            }
-        }
-        headerRow.addView(switch)
         inner.addView(headerRow)
 
-        // 内联配置区域（开关打开时显示）
-        if (aiEnabled) {
-            inner.addView(createDivider(ctx, dpToPx(12)))
+        // API 配置区域（始终显示）
+        inner.addView(createDivider(ctx, dpToPx(12)))
 
             val fields = listOf(
                 "Base URL" to FocusPreferences.getAiApiBaseUrl(ctx),
@@ -566,36 +562,7 @@ class LyricSourceActivity : AppCompatActivity() {
                 }
             }
 
-            // Translate All 开关
-            val taRow = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = android.view.Gravity.CENTER_VERTICAL
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(8) }
-            }
-            taRow.addView(TextView(ctx).apply {
-                text = "强制翻译全部行"
-                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
-                setTextColor(onSurfaceColor)
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            })
-            val switchTranslateAll = MaterialSwitch(ctx).apply {
-                isChecked = FocusPreferences.isAiTranslateAllLyrics(ctx)
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = dpToPx(16) }
-            }
-            taRow.addView(switchTranslateAll)
-            inner.addView(taRow)
-
-            // Token 显示
-            val tokens = FocusPreferences.getAiTotalTokens(ctx)
-            val tokenLabel = if (tokens > 0) "已消耗 $tokens Token" else "暂无消耗"
-            inner.addView(TextView(ctx).apply {
-                text = "Token: $tokenLabel"
-                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
-                setTextColor(variantColor)
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(8) }
-            })
-
-            // 检测连通性按钮 + 保存
+            // 检测连通性按钮 + 保存（表单下方）
             val btnRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
             val tvResult = TextView(ctx).apply {
                 visibility = View.GONE
@@ -641,7 +608,6 @@ class LyricSourceActivity : AppCompatActivity() {
                     FocusPreferences.setAiApiKey(ctx, inputs[1].text?.toString().orEmpty())
                     FocusPreferences.setAiApiModel(ctx, inputs[2].text?.toString().orEmpty())
                     FocusPreferences.setAiTargetLanguage(ctx, inputs[3].text?.toString().orEmpty())
-                    FocusPreferences.setAiTranslateAllLyrics(ctx, switchTranslateAll.isChecked)
                     broadcastSettingsChanged()
                     updateLyricSourceUi()
                 }
@@ -649,7 +615,161 @@ class LyricSourceActivity : AppCompatActivity() {
             btnRow.addView(btnTest)
             btnRow.addView(btnSave)
             inner.addView(btnRow)
-        }
+
+            inner.addView(createDivider(ctx, dpToPx(8)))
+
+            // ── 翻译 ──
+            inner.addView(TextView(ctx).apply {
+                text = "\u7ffb\u8bd1"
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleSmall)
+                setTextColor(onSurfaceColor)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(4) }
+            })
+            val translateRow = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(4) }
+            }
+            translateRow.addView(TextView(ctx).apply {
+                text = "AI 翻译"
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
+                setTextColor(onSurfaceColor)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            val switchTranslate = MaterialSwitch(ctx).apply {
+                isChecked = FocusPreferences.isAiTranslateEnabled(ctx)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = dpToPx(16) }
+            }
+            translateRow.addView(switchTranslate)
+            inner.addView(translateRow)
+            // Translate All 开关
+            val taRow = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(8) }
+            }
+            val taLabel = TextView(ctx).apply {
+                text = "强制翻译全部行"
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
+                setTextColor(onSurfaceColor)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            taRow.addView(taLabel)
+            val switchTranslateAll = MaterialSwitch(ctx).apply {
+                isChecked = FocusPreferences.isAiTranslateAllLyrics(ctx)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = dpToPx(16) }
+                setOnCheckedChangeListener { _, checked ->
+                    FocusPreferences.setAiTranslateAllLyrics(ctx, checked)
+                }
+            }
+            taRow.addView(switchTranslateAll)
+            inner.addView(taRow)
+            // 初始灰显状态
+            val translateEnabled = switchTranslate.isChecked
+            switchTranslateAll.isEnabled = translateEnabled
+            taLabel.alpha = if (translateEnabled) 1f else 0.38f
+            switchTranslateAll.alpha = if (translateEnabled) 1f else 0.38f
+            switchTranslate.setOnCheckedChangeListener { _, checked ->
+                FocusPreferences.setAiTranslateEnabled(ctx, checked)
+                switchTranslateAll.isEnabled = checked
+                taLabel.alpha = if (checked) 1f else 0.38f
+                switchTranslateAll.alpha = if (checked) 1f else 0.38f
+            }
+
+            inner.addView(createDivider(ctx, dpToPx(6)))
+
+            // ── 润色 ──
+            inner.addView(TextView(ctx).apply {
+                text = "\u6da6\u8272"
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleSmall)
+                setTextColor(onSurfaceColor)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(4) }
+            })
+            // Polish 开关
+            val polishRow = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(8) }
+            }
+            polishRow.addView(TextView(ctx).apply {
+                text = "歌词润色"
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
+                setTextColor(onSurfaceColor)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            val switchPolish = MaterialSwitch(ctx).apply {
+                isChecked = FocusPreferences.isAiPolishEnabled(ctx)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = dpToPx(16) }
+                setOnCheckedChangeListener { _, checked ->
+                    FocusPreferences.setAiPolishEnabled(ctx, checked)
+                }
+            }
+            polishRow.addView(switchPolish)
+            inner.addView(polishRow)
+
+            inner.addView(createDivider(ctx, dpToPx(6)))
+
+            // 缓存开关
+            val cacheRow = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(8) }
+            }
+            cacheRow.addView(TextView(ctx).apply {
+                text = "启用缓存"
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
+                setTextColor(onSurfaceColor)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            val switchCache = MaterialSwitch(ctx).apply {
+                isChecked = FocusPreferences.isAiCacheEnabled(ctx)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = dpToPx(16) }
+                setOnCheckedChangeListener { _, checked ->
+                    FocusPreferences.setAiCacheEnabled(ctx, checked)
+                    if (!checked) {
+                        AiLyricTranslator(ctx).clearCache()
+                    }
+                    updateLyricSourceUi()
+                }
+            }
+            cacheRow.addView(switchCache)
+            inner.addView(cacheRow)
+
+            // Token 显示
+            val tokens = FocusPreferences.getAiTotalTokens(ctx)
+            val tokenLabel = if (tokens > 0) "已消耗 $tokens Token" else "暂无消耗"
+            inner.addView(TextView(ctx).apply {
+                text = "Token: $tokenLabel"
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
+                setTextColor(variantColor)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(8) }
+            })
+
+            // 缓存显示
+            val translator = AiLyricTranslator(ctx)
+            val cacheBytes = translator.getCacheSizeBytes()
+            val cacheCount = translator.getCacheCount()
+            val cacheKb = cacheBytes / 1024
+            val cacheText = if (cacheCount > 0) "缓存: ${cacheKb}KB / ${cacheCount}条记录" else "缓存: 暂无"
+            inner.addView(TextView(ctx).apply {
+                text = cacheText
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
+                setTextColor(variantColor)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(8) }
+            })
+
+            // 清缓存按钮
+            inner.addView(MaterialButton(android.view.ContextThemeWrapper(ctx, com.google.android.material.R.style.Widget_Material3_Button_TonalButton)).apply {
+                text = "清除缓存"
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dpToPx(12) }
+                if (cacheCount == 0) isEnabled = false
+                setOnClickListener {
+                    AiLyricTranslator(ctx).clearCache()
+                    isEnabled = false
+                    text = "已清除"
+                    updateLyricSourceUi()
+                }
+            })
 
         card.addView(inner)
         scrollContent.addView(card)

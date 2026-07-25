@@ -432,6 +432,14 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 
 ## 版本更新
 
+### v1.8.7
+
+- **尝试修复某些 HyperOS 3.0 焦点通知不显示**：`createPackageContext` data 目录缺失兜底 + 插件类名适配 + `param_v2` 协议补齐
+- **AI 功能升级**：翻译/润色双独立开关，文件缓存（含开关），润色不改变原文
+- **多行预览动画**：高度动画展开收起，拖拽跟随手指，回顶自动展开
+- **版本号**：`1.8.7` (versionCode 27)
+- [完整更新日志](release-notes/release-notes-v1.8.7.md)
+
 ### v1.8.5
 
 - **多行歌词重设计**：行数滑块 3~8 替代固定选项，奇数隐藏首行已播；通知高度自适应；字号统一 0.65x；新增「仅 AOD 显示多行」开关

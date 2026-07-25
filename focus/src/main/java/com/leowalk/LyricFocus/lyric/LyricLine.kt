@@ -4,6 +4,7 @@ data class LyricLine(
     val time: Long,
     val text: String,
     val translation: String? = null,
+    val polished: String? = null,
     val reading: String? = null
 ) {
     companion object {

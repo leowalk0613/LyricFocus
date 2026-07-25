@@ -88,6 +88,10 @@ object FocusPreferences {
     const val PREF_AI_TRANSLATE_ALL_LYRICS = "ai_translate_all_lyrics"
     const val PREF_AI_LYRIC_ENABLED = "ai_lyric_enabled"
     const val PREF_AI_TOTAL_TOKENS = "ai_total_tokens"
+    const val PREF_AI_POLISH_ENABLED = "ai_polish_enabled"
+    const val PREF_AI_TRANSLATE_ENABLED = "ai_translate_enabled"
+    const val PREF_AI_CACHE_ENABLED = "ai_cache_enabled"
+    const val PREF_AI_CACHE_SIZE = "ai_cache_size_bytes"
     const val PREF_LOCAL_LRC_BOOTSTRAPPED = "local_lrc_bootstrapped"
 
     const val DEFAULT_LOCAL_LRC_DIR = "/sdcard/LyricFocus/lyrics"
@@ -249,8 +253,7 @@ object FocusPreferences {
         LYRIC_SOURCE_SUPERLYRIC to formatLyricSourceLabel(LYRIC_SOURCE_SUPERLYRIC),
         LYRIC_SOURCE_LYRICON to formatLyricSourceLabel(LYRIC_SOURCE_LYRICON),
         LYRIC_SOURCE_LYRICINFO to formatLyricSourceLabel(LYRIC_SOURCE_LYRICINFO),
-        LYRIC_SOURCE_LOCAL to formatLyricSourceLabel(LYRIC_SOURCE_LOCAL),
-        LYRIC_SOURCE_AI to formatLyricSourceLabel(LYRIC_SOURCE_AI)
+        LYRIC_SOURCE_LOCAL to formatLyricSourceLabel(LYRIC_SOURCE_LOCAL)
     )
 
     fun getLocalLrcDirectory(context: Context): String {
@@ -389,6 +392,54 @@ object FocusPreferences {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit()
             .putLong(PREF_AI_TOTAL_TOKENS, prefs.getLong(PREF_AI_TOTAL_TOKENS, 0L) + tokens)
+            .apply()
+    }
+
+    fun isAiPolishEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_AI_POLISH_ENABLED, false)
+    }
+
+    fun setAiPolishEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_AI_POLISH_ENABLED, enabled)
+            .apply()
+    }
+
+    fun isAiTranslateEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_AI_TRANSLATE_ENABLED, false)
+    }
+
+    fun setAiTranslateEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_AI_TRANSLATE_ENABLED, enabled)
+            .apply()
+    }
+
+    fun isAiCacheEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_AI_CACHE_ENABLED, true)
+    }
+
+    fun setAiCacheEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_AI_CACHE_ENABLED, enabled)
+            .apply()
+    }
+
+    fun getAiCacheSizeBytes(context: Context): Long {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getLong(PREF_AI_CACHE_SIZE, 0L)
+    }
+
+    fun setAiCacheSizeBytes(context: Context, bytes: Long) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(PREF_AI_CACHE_SIZE, bytes)
             .apply()
     }
 

@@ -35,6 +35,12 @@ class LyricManager(context: Context) {
         }
     }
 
+    suspend fun polishWithAi(lyricInfo: LyricInfo, title: String, artist: String): LyricInfo {
+        return withContext(Dispatchers.IO) {
+            aiTranslator.polishIfNeeded(lyricInfo, title, artist)
+        }
+    }
+
     fun getProviderNames(): List<String> = buildList {
         addAll(onlineProviders.map { it.name })
         add(localProvider.name)
