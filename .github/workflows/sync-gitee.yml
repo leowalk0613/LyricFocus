@@ -9,32 +9,40 @@ jobs:
   sync-to-gitee:
     runs-on: ubuntu-latest
     steps:
-      - name: Download release APK
+      - name: Get latest release info
         run: |
-          ASSET_URL=$(jq -r '.release.assets[] | select(.name | endswith(".apk")) | .browser_download_url' $GITHUB_EVENT_PATH)
-          curl -L -o LyricFocus.apk "$ASSET_URL"
+          RELEASE_JSON=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/latest")
+          ASSET_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".apk")) | .browser_download_url')
+          VERSION=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+          echo "ASSET_URL=$ASSET_URL" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Release: $VERSION, APK: $ASSET_URL"
 
-      - name: Get release info
+      - name: Download APK
+        run: curl -L -o LyricFocus.apk "$ASSET_URL"
+
+      - name: Delete existing Gitee release if exists
         run: |
-          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-          echo "TITLE=$(jq -r '.release.name' $GITHUB_EVENT_PATH)" >> $GITHUB_ENV
-          echo "BODY=$(jq -r '.release.body' $GITHUB_EVENT_PATH)" >> $GITHUB_ENV
+          EXISTING=$(curl -s "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases/tags/$VERSION?access_token=${{ secrets.GITEE_TOKEN }}")
+          EXISTING_ID=$(echo "$EXISTING" | jq -r '.id // empty')
+          if [ -n "$EXISTING_ID" ]; then
+            echo "Deleting existing release $EXISTING_ID"
+            curl -s -X DELETE "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases/$EXISTING_ID?access_token=${{ secrets.GITEE_TOKEN }}"
+          fi
 
       - name: Create Gitee release
         run: |
           RESPONSE=$(curl -s -X POST "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"access_token\": \"${{ secrets.GITEE_TOKEN }}\",
-              \"tag_name\": \"$VERSION\",
-              \"name\": \"$VERSION\",
-              \"body\": \"$TITLE\n\n$BODY\"
-            }")
+            -d "{\"access_token\":\"${{ secrets.GITEE_TOKEN }}\",\"tag_name\":\"$VERSION\",\"name\":\"$VERSION\",\"body\":\"Release $VERSION\",\"target_commitish\":\"main\",\"prerelease\":false}")
           RELEASE_ID=$(echo "$RESPONSE" | jq -r '.id')
           echo "RELEASE_ID=$RELEASE_ID" >> $GITHUB_ENV
+          echo "Created release $RELEASE_ID"
 
       - name: Upload APK to Gitee
         run: |
           curl -s -X POST "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases/$RELEASE_ID/attach_files" \
             -F "access_token=${{ secrets.GITEE_TOKEN }}" \
             -F "file=@LyricFocus.apk"
+          echo "Upload done"
