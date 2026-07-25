@@ -13,10 +13,12 @@
    - `--title "vX.X.X - 简短描述"`
    - `--notes-file release-notes/release-notes-vX.X.X.md`
    - 附加 release APK 文件
-7. 返回 Release URL
+7. **触发 Gitee 同步**：`gh workflow run sync-gitee.yml`
+8. 返回 Release URL
 
 ### 注意事项
 - release APK 路径：`focus\build\outputs\apk\release\LyricFocus.vX.X.X.apk`
 - debug APK 路径：`focus\build\outputs\apk\debug\LyricFocus.vX.X.X.apk`
-- Release 编译耗时较长（含 R8 混淆），正常约 2~3 分钟
-- 推送时 `--tags` 可能因旧标签冲突报错，忽略警告，只关注 main 和新 tag 是否推送成功
+- Release 编译含 R8 混淆 + 资源收缩，正常约 2~3 分钟，APK 约 6MB
+- 推送时 `--tags` 可能因旧标签冲突报错，拒绝的 tag 用 `git push origin :refs/tags/xxx` 删除远端后重新 `git push origin vX.X.X`
+- Gitee 同步由 GitHub Actions 自动完成（需已配置 `GITEE_TOKEN` secret）
