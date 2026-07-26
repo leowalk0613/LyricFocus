@@ -1094,10 +1094,7 @@ class SystemUIHyperFocusHook : BaseHook() {
             val interleaved = ArrayList<String>(maxSlots)
             var hasAnyTranslation = false
             var fwdIdx = currentIndex
-            var bwdIdx = currentIndex - 1
-            // 线性填充：原文 + 译文依次填入，直到填满 pageSlots，跳过空行
-            var safety = 0
-            while (interleaved.size < pageSlots && safety++ < 200) {
+            while (interleaved.size < pageSlots && fwdIdx < lyricLines.size) {
                 val line = lyricLines.getOrNull(fwdIdx)
                 val orig = line?.text?.trim()?.takeIf { it.isNotBlank() } ?: ""
                 if (orig.isNotEmpty()) {
@@ -1111,10 +1108,6 @@ class SystemUIHyperFocusHook : BaseHook() {
                     if (interleaved.size >= pageSlots) break
                 }
                 fwdIdx++
-                if (fwdIdx >= lyricLines.size) {
-                    if (bwdIdx < 0) bwdIdx = lyricLines.size - 1
-                    if (bwdIdx < 0) fwdIdx = 0 else { fwdIdx = bwdIdx; bwdIdx-- }
-                }
             }
             if (!hasAnyTranslation) {
                 val fallback = currentLineTranslation
@@ -1134,16 +1127,10 @@ class SystemUIHyperFocusHook : BaseHook() {
 
         val lines = ArrayList<String>(maxSlots)
         var fwdIdx = currentIndex
-        var bwdIdx = currentIndex - 1
-        var safety = 0
-        while (lines.size < pageSlots && safety++ < 200) {
+        while (lines.size < pageSlots && fwdIdx < lyricLines.size) {
             val text = lyricLines.getOrNull(fwdIdx)?.text?.trim()?.takeIf { it.isNotBlank() } ?: ""
             if (text.isNotEmpty()) lines += text
             fwdIdx++
-            if (fwdIdx >= lyricLines.size) {
-                if (bwdIdx < 0) bwdIdx = lyricLines.size - 1
-                if (bwdIdx < 0) fwdIdx = 0 else { fwdIdx = bwdIdx; bwdIdx-- }
-            }
         }
         while (lines.size < maxSlots) lines += ""
         return HyperFocusLyricStyle.MultiLineWindow(
