@@ -19,6 +19,7 @@ class AiLyricTranslator(context: Context) {
     private val client = HttpClient.instance
     private val cacheDir = File(appContext.cacheDir, "AiLyricCache").also { it.mkdirs() }
     private val memoryCache = mutableMapOf<String, LyricInfo>()
+    private val inFlightKeys = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     data class ApiConfig(
         val baseUrl: String,
@@ -49,12 +50,20 @@ class AiLyricTranslator(context: Context) {
             loadCached(cacheKey)?.let { memoryCache[cacheKey] = it; return it }
         }
 
-        val translated = requestTranslation(lyricInfo, title, artist) ?: return lyricInfo
-        memoryCache[cacheKey] = translated
-        if (FocusPreferences.isAiCacheEnabled(appContext)) {
-            saveCache(cacheKey, translated, "translate")
+        if (!inFlightKeys.add(cacheKey)) {
+            kotlinx.coroutines.delay(300)
+            return memoryCache[cacheKey] ?: lyricInfo
         }
-        return translated
+        try {
+            val translated = requestTranslation(lyricInfo, title, artist) ?: return lyricInfo
+            memoryCache[cacheKey] = translated
+            if (FocusPreferences.isAiCacheEnabled(appContext)) {
+                saveCache(cacheKey, translated, "translate")
+            }
+            return translated
+        } finally {
+            inFlightKeys.remove(cacheKey)
+        }
     }
 
     suspend fun polishIfNeeded(lyricInfo: LyricInfo, title: String, artist: String): LyricInfo {
@@ -74,12 +83,20 @@ class AiLyricTranslator(context: Context) {
             loadCached(cacheKey)?.let { memoryCache[cacheKey] = it; return it }
         }
 
-        val polished = requestPolishing(lyricInfo, title, artist) ?: return lyricInfo
-        memoryCache[cacheKey] = polished
-        if (FocusPreferences.isAiCacheEnabled(appContext)) {
-            saveCache(cacheKey, polished, "polish")
+        if (!inFlightKeys.add(cacheKey)) {
+            kotlinx.coroutines.delay(300)
+            return memoryCache[cacheKey] ?: lyricInfo
         }
-        return polished
+        try {
+            val polished = requestPolishing(lyricInfo, title, artist) ?: return lyricInfo
+            memoryCache[cacheKey] = polished
+            if (FocusPreferences.isAiCacheEnabled(appContext)) {
+                saveCache(cacheKey, polished, "polish")
+            }
+            return polished
+        } finally {
+            inFlightKeys.remove(cacheKey)
+        }
     }
 
     fun hasConfiguredApi(): Boolean {

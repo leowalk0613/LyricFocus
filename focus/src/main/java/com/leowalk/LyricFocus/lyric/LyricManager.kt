@@ -47,6 +47,10 @@ class LyricManager(context: Context) {
         add("Super Lyric")
     }
 
+    fun clearCache() {
+        aiTranslator.clearCache()
+    }
+
     private suspend fun fetchBaseForAi(
         title: String,
         artist: String,

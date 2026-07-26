@@ -27,6 +27,7 @@ import com.leowalk.LyricFocus.xposed.ReflectUtil
 import com.leowalk.LyricFocus.xposed.hook.BaseHook
 import io.github.libxposed.api.XposedModule
 import org.json.JSONArray
+import java.lang.ref.WeakReference
 
 /**
  * HyperOS 焦点通知歌词（miui.focus.param），锁屏/AOD 通过 updatable 焦点通知刷新。
@@ -58,7 +59,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         private const val EXTRA_MUSIC_PACKAGE = "music_package"
         private const val EXTRA_FORCE_RESYNC = "force_resync"
 
-        private var cachedFocusRow: View? = null
+        private var cachedFocusRow: WeakReference<View>? = null
 
         private var musicPackage = ""
 
@@ -89,6 +90,8 @@ class SystemUIHyperFocusHook : BaseHook() {
         /** 用于 AOD↔锁屏过渡时检测多行状态切换 */
         private var lastMultiLineWasActive = false
         private var lastCancelAndRepostTime = 0L
+        /** 切歌标记：true 时下一次 AOD LINE_CHANGE 走 cancel+notify 重建 */
+        private var aodNeedsRecreate = false
 
         private const val MIN_TICK_MS = 500L
         private const val LAYOUT_REFLOW_DEBOUNCE_MS = 2_000L
@@ -291,7 +294,7 @@ class SystemUIHyperFocusHook : BaseHook() {
     private fun applyFocusRowShadeVisibility(view: View?) {
         if (showInShade || view == null) return
         val row = findFocusNotificationRow(view) ?: return
-        cachedFocusRow = row
+        cachedFocusRow = WeakReference(row)
         if (shouldShowFocusOnLockScreen()) {
             row.visibility = View.VISIBLE
             row.layoutParams?.let { lp ->
@@ -343,7 +346,7 @@ class SystemUIHyperFocusHook : BaseHook() {
 
     private fun hideFocusRowsInUnlockedShade() {
         if (showInShade) return
-        cachedFocusRow?.let { applyFocusRowShadeVisibility(it) }
+        cachedFocusRow?.get()?.let { applyFocusRowShadeVisibility(it) }
     }
 
     private fun isPlaceholderLyric(text: String): Boolean {
@@ -464,7 +467,7 @@ class SystemUIHyperFocusHook : BaseHook() {
 
     private fun scheduleLyricFocusReorder() {
         syncFocusPinState()
-        FocusPinAboveHook.scheduleViewReorder(cachedFocusRow)
+        cachedFocusRow?.get()?.let { FocusPinAboveHook.scheduleViewReorder(it) }
     }
 
     private fun invalidateLayoutCache() {
@@ -812,6 +815,7 @@ class SystemUIHyperFocusHook : BaseHook() {
             val prevTitle = currentTitle
             val prevArtist = currentArtist
             val songChanged = newTitle != prevTitle || newArtist != prevArtist
+        if (songChanged) aodNeedsRecreate = true
             val lyricChanged = lyricText != prevLyric
             val forceResync = intent.getBooleanExtra(EXTRA_FORCE_RESYNC, false)
             val leavingPlaceholder = isPlaceholderLyric(prevLyric) &&
@@ -826,8 +830,8 @@ class SystemUIHyperFocusHook : BaseHook() {
                 val incomingPlaying = intent.getBooleanExtra(EXTRA_IS_PLAYING, false)
                 isPlaying = if (incomingPlaying) {
                     true
-                } else if (isPlaceholderLyric(lyricText) && (forceResync || isPlaying)) {
-                    // 占位歌词推送时避免 isPlaying 竞态导致锁屏不显示
+                } else if (isPlaceholderLyric(lyricText) || songChanged || isPlaying) {
+                    // 占位歌词、切歌或正在播放时不改变播放状态
                     isPlaying
                 } else {
                     incomingPlaying
@@ -890,7 +894,7 @@ class SystemUIHyperFocusHook : BaseHook() {
             val lyric = intent.getStringExtra(EXTRA_LYRIC_TEXT) ?: ""
             val secondLine = intent.getStringExtra(EXTRA_SECOND_LINE) ?: ""
             val lineTranslation = intent.getStringExtra(EXTRA_LINE_TRANSLATION)?.takeIf { it.isNotBlank() }
-            isPlaying = intent.getBooleanExtra(EXTRA_IS_PLAYING, false)
+            val incomingPlaying = intent.getBooleanExtra(EXTRA_IS_PLAYING, false)
             val title = intent.getStringExtra(EXTRA_TITLE) ?: ""
             val artist = intent.getStringExtra(EXTRA_ARTIST) ?: ""
             if (intent.hasExtra(EXTRA_POSITION)) {
@@ -926,6 +930,13 @@ class SystemUIHyperFocusHook : BaseHook() {
                 currentSecondLine = secondLine
                 currentLineTranslation = lineTranslation
             }
+            isPlaying = incomingPlaying
+
+            // 切歌时不取消通知，避免出现空白；占位歌词也不取消
+            if (!incomingPlaying && !songChanged && !isPlaceholderLyric(currentLyricText)) {
+                cancelFocusNotification()
+                return
+            }
 
             val contentChanged = lyric.isNotBlank() && isPlaying && (
                 songChanged || isLyricDisplayContentChanged()
@@ -945,8 +956,6 @@ class SystemUIHyperFocusHook : BaseHook() {
                             leavingPlaceholder || contentChanged || styleChanged
                     )
                 }
-            } else if (!isPlaying) {
-                cancelFocusNotification()
             }
             scheduleNextUpdate()
             syncFocusPinState()
@@ -1076,88 +1085,71 @@ class SystemUIHyperFocusHook : BaseHook() {
         if (!FocusStyleSnapshot.multiLineLyrics) return null
         if (!hasRealTimedLyrics()) return null
         val currentIndex = getCurrentLineIndex(currentPosition).coerceAtLeast(0)
-        val rawCount = FocusPreferences.coerceMultiLineLineCount(
+        val pageSlots = FocusPreferences.coerceMultiLineLineCount(
             FocusStyleSnapshot.multiLineLineCount
         )
-        val pageSlots = FocusPreferences.multiLinePageSlots(rawCount)
-        val hideFirstLine = rawCount != pageSlots
         val maxSlots = HyperFocusLyricStyle.MULTI_LINE_MAX_SLOTS
 
         if (FocusStyleSnapshot.multiLineShowTranslation) {
-            val pairCount = pageSlots / 2
-            val pageStart = (currentIndex / pairCount) * pairCount
-            val originals = ArrayList<String>(pairCount)
-            val translations = ArrayList<String>(pairCount)
+            val interleaved = ArrayList<String>(maxSlots)
             var hasAnyTranslation = false
-            for (i in 0 until pairCount) {
-                val line = lyricLines.getOrNull(pageStart + i)
-                val text = line?.text?.trim().orEmpty()
-                val secondary = line?.translation
-                    ?.replace('\n', ' ')
-                    ?.trim()
-                    ?.takeIf { it.isNotBlank() }
-                    .orEmpty()
-                originals += text
-                translations += secondary
-                if (secondary.isNotBlank()) hasAnyTranslation = true
+            var fwdIdx = currentIndex
+            var bwdIdx = currentIndex - 1
+            // 线性填充：原文 + 译文依次填入，直到填满 pageSlots，跳过空行
+            var safety = 0
+            while (interleaved.size < pageSlots && safety++ < 200) {
+                val line = lyricLines.getOrNull(fwdIdx)
+                val orig = line?.text?.trim()?.takeIf { it.isNotBlank() } ?: ""
+                if (orig.isNotEmpty()) {
+                    interleaved += orig
+                    if (interleaved.size >= pageSlots) break
+                }
+                val trans = line?.translation?.replace('\n', ' ')?.trim()?.takeIf { it.isNotBlank() } ?: ""
+                if (trans.isNotEmpty()) {
+                    interleaved += trans
+                    hasAnyTranslation = true
+                    if (interleaved.size >= pageSlots) break
+                }
+                fwdIdx++
+                if (fwdIdx >= lyricLines.size) {
+                    if (bwdIdx < 0) bwdIdx = lyricLines.size - 1
+                    if (bwdIdx < 0) fwdIdx = 0 else { fwdIdx = bwdIdx; bwdIdx-- }
+                }
             }
             if (!hasAnyTranslation) {
-                val offsetInPage = currentIndex - pageStart
                 val fallback = currentLineTranslation
-                    ?.replace('\n', ' ')
-                    ?.trim()
-                    ?.takeIf { it.isNotBlank() }
-                if (fallback != null && offsetInPage in 0 until pairCount) {
-                    translations[offsetInPage] = fallback
-                    hasAnyTranslation = true
-                }
+                    ?.replace('\n', ' ')?.trim()?.takeIf { it.isNotBlank() }
+                if (fallback != null) hasAnyTranslation = true
             }
             if (hasAnyTranslation) {
-                val interleaved = ArrayList<String>(maxSlots)
-                for (i in 0 until pairCount) {
-                    interleaved += originals[i]
-                    interleaved += translations[i]
-                }
-                while (interleaved.size < maxSlots) {
-                    interleaved += ""
-                }
-                // 奇数行时隐藏第一个已播行（一对 = 2槽）
-                if (hideFirstLine && currentIndex > pageStart) {
-                    interleaved[0] = ""
-                    interleaved[1] = ""
-                }
-                val currentSlot = if (currentIndex >= pageStart && currentIndex < pageStart + pairCount) {
-                    (currentIndex - pageStart) * 2
-                } else -1
+                while (interleaved.size < maxSlots) interleaved += ""
                 return HyperFocusLyricStyle.MultiLineWindow(
                     lines = interleaved,
                     interleavedTranslations = true,
                     visibleCount = pageSlots,
-                    currentLineSlot = currentSlot
+                    currentLineSlot = 0
                 )
             }
         }
 
-        val pageStart = (currentIndex / pageSlots) * pageSlots
         val lines = ArrayList<String>(maxSlots)
-        for (i in 0 until pageSlots) {
-            val text = lyricLines.getOrNull(pageStart + i)?.text?.trim().orEmpty()
-            lines += text
+        var fwdIdx = currentIndex
+        var bwdIdx = currentIndex - 1
+        var safety = 0
+        while (lines.size < pageSlots && safety++ < 200) {
+            val text = lyricLines.getOrNull(fwdIdx)?.text?.trim()?.takeIf { it.isNotBlank() } ?: ""
+            if (text.isNotEmpty()) lines += text
+            fwdIdx++
+            if (fwdIdx >= lyricLines.size) {
+                if (bwdIdx < 0) bwdIdx = lyricLines.size - 1
+                if (bwdIdx < 0) fwdIdx = 0 else { fwdIdx = bwdIdx; bwdIdx-- }
+            }
         }
-        while (lines.size < maxSlots) {
-            lines += ""
-        }
-        // 奇数行时隐藏第一个已播行
-        if (hideFirstLine && currentIndex > pageStart) {
-            lines[0] = ""
-        }
-        val currentSlot = if (currentIndex >= pageStart && currentIndex < pageStart + pageSlots) {
-            currentIndex - pageStart
-        } else -1
+        while (lines.size < maxSlots) lines += ""
         return HyperFocusLyricStyle.MultiLineWindow(
             lines = lines,
             visibleCount = pageSlots,
-            currentLineSlot = currentSlot
+            currentLineSlot = 0
         )
     }
 
@@ -1294,6 +1286,10 @@ class SystemUIHyperFocusHook : BaseHook() {
             val recreateForTransition = FocusStyleSnapshot.aodMultiLineOnly &&
                 lastMultiLineWasActive && !multiLineActive
             lastMultiLineWasActive = multiLineActive
+            // 切歌后首次 LINE_CHANGE 在 AOD 上走 cancel+notify 避免空白
+            val recreateForSongChange = aodNeedsRecreate &&
+                isAodActive() && refreshKind == HyperFocusLyricStyle.RefreshKind.LINE_CHANGE
+            if (recreateForSongChange) aodNeedsRecreate = false
             HyperFocusLyricStyle.postFocusNotification(
                 systemContext = context,
                 notificationManager = nm,
@@ -1311,7 +1307,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                 showOnIsland = showOnIsland,
                 refreshKind = refreshKind,
                 forceRefresh = forceRefresh,
-                recreateForAod = recreateForTransition
+                recreateForAod = recreateForTransition || recreateForSongChange
             )
             lastFocusNotifyTime = System.currentTimeMillis()
             rememberNotifiedLyricContent()
@@ -1326,6 +1322,7 @@ class SystemUIHyperFocusHook : BaseHook() {
             lastFocusNotifyTime = 0L
             clearNotifiedLyricContent()
             invalidateLayoutCache()
+            cachedFocusRow = null
             notificationManager?.let { HyperFocusLyricStyle.cancelFocusNotification(it) }
         } catch (_: Throwable) {
         }

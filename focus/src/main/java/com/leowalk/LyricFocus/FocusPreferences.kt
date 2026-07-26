@@ -58,9 +58,16 @@ object FocusPreferences {
     const val PREF_EXTRACTED_TEXT_COLOR = "extracted_text_color"
     const val PREF_EXTRACTED_BG_COLOR = "extracted_bg_color"
     const val PREF_EXTRACTED_ACCENT_COLOR = "extracted_accent_color"
+    const val PREF_EXTRACTED_COLOR_OPACITY = "extracted_color_opacity"
+    const val PREF_LYRIC_TEXT_PRESET_COLOR = "lyric_text_preset_color"
+    const val PREF_LYRIC_CUSTOM_COLOR = "lyric_custom_color"
+    const val PREF_FOCUS_BG_CUSTOM_COLOR = "focus_bg_custom_color"
+    const val PREF_CUSTOM_AOD_CUSTOM_COLOR = "custom_aod_custom_color"
 
     const val TEXT_COLOR_BLACK = "black"
     const val TEXT_COLOR_WHITE = "white"
+    const val TEXT_COLOR_PRESET = "preset"
+    const val TEXT_COLOR_CUSTOM = "custom"
 
     const val GRAVITY_LEFT = "left"
     const val GRAVITY_CENTER = "center"
@@ -69,6 +76,7 @@ object FocusPreferences {
     const val BACKGROUND_DEFAULT = "default"
     const val BACKGROUND_BLACK = "black"
     const val BACKGROUND_WHITE = "white"
+    const val BACKGROUND_CUSTOM = "custom"
 
     const val LYRIC_SOURCE_AUTO = "auto"
     const val LYRIC_SOURCE_NETEASE = "netease"
@@ -102,6 +110,7 @@ object FocusPreferences {
     const val CUSTOM_AOD_COLOR_WHITE = "white"
     const val CUSTOM_AOD_COLOR_ALBUM = "album"
     const val CUSTOM_AOD_COLOR_PRESET = "preset"
+    const val CUSTOM_AOD_COLOR_CUSTOM = "custom"
 
     const val CUSTOM_AOD_SONG_INFO_ALL = "all"
     const val CUSTOM_AOD_SONG_INFO_HIDE_TITLE = "hide_title"
@@ -835,10 +844,67 @@ object FocusPreferences {
             ?: com.leowalk.LyricFocus.util.AodColorPresets.defaultPresetColor()
     }
 
+    fun getCustomAodCustomColor(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getInt(PREF_CUSTOM_AOD_CUSTOM_COLOR, Color.WHITE)
+    }
+
+    fun setCustomAodCustomColor(context: Context, color: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(PREF_CUSTOM_AOD_CUSTOM_COLOR, color)
+            .apply()
+    }
+
+    fun getLyricTextPresetColor(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getInt(
+            PREF_LYRIC_TEXT_PRESET_COLOR,
+            com.leowalk.LyricFocus.util.AodColorPresets.defaultPresetColor()
+        )
+    }
+
+    fun setLyricTextPresetColor(context: Context, color: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(PREF_LYRIC_TEXT_PRESET_COLOR, color)
+            .apply()
+    }
+
+    fun readLyricTextPresetColor(context: Context): Int {
+        return readFromModule(context) { getLyricTextPresetColor(it) }
+            ?: com.leowalk.LyricFocus.util.AodColorPresets.defaultPresetColor()
+    }
+
     fun formatCustomAodColorModeLabel(mode: String): String = when (mode) {
         CUSTOM_AOD_COLOR_ALBUM -> "专辑主色取色"
         CUSTOM_AOD_COLOR_PRESET -> "推荐颜色"
+        CUSTOM_AOD_COLOR_CUSTOM -> "自定义颜色"
         else -> "白色"
+    }
+
+    fun getLyricCustomColor(context: Context): Int {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(PREF_LYRIC_CUSTOM_COLOR, Color.WHITE)
+    }
+
+    fun setLyricCustomColor(context: Context, color: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(PREF_LYRIC_CUSTOM_COLOR, color)
+            .apply()
+    }
+
+    fun getFocusBgCustomColor(context: Context): Int {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(PREF_FOCUS_BG_CUSTOM_COLOR, Color.BLACK)
+    }
+
+    fun setFocusBgCustomColor(context: Context, color: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(PREF_FOCUS_BG_CUSTOM_COLOR, color)
+            .apply()
     }
 
     fun getCustomAodGravity(context: Context): String {
@@ -1237,6 +1303,19 @@ object FocusPreferences {
             .commit()
     }
 
+    fun getExtractedColorOpacity(context: Context): Int {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(PREF_EXTRACTED_COLOR_OPACITY, 100)
+            .coerceIn(10, 100)
+    }
+
+    fun setExtractedColorOpacity(context: Context, opacity: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(PREF_EXTRACTED_COLOR_OPACITY, opacity.coerceIn(10, 100))
+            .commit()
+    }
+
     fun readExtractedTextColor(context: Context): Int? {
         return readFromModule(context) { getExtractedTextColor(it) }
     }
@@ -1248,25 +1327,26 @@ object FocusPreferences {
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_MONET_DYNAMIC_COLOR, monet)
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_COLOR_EXTRACTION, textExtraction)
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_COLOR_MODE, colorMode)
+        intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_BACKGROUND, getFocusBackground(context))
         appendExtractedColorExtras(intent, context)
     }
 
     private fun appendExtractedColorExtras(intent: android.content.Intent, context: Context) {
         val color = getExtractedTextColor(context)
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_COLOR_SET, color != null)
-        if (color == null) {
-            intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_ACCENT_SET, false)
-            return
+        if (color != null) {
+            intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_COLOR, color)
         }
-        intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_COLOR, color)
-        getExtractedBgColor(context)?.let {
-            intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_BG_COLOR_SET, true)
-            intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_BG_COLOR, it)
+        val bg = getExtractedBgColor(context)
+        intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_BG_COLOR_SET, bg != null)
+        if (bg != null) {
+            intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_BG_COLOR, bg)
         }
-        getExtractedAccentColor(context)?.let { accent ->
-            intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_ACCENT_SET, true)
+        val accent = getExtractedAccentColor(context)
+        intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_ACCENT_SET, accent != null)
+        if (accent != null) {
             intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_ACCENT, accent)
-        } ?: intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_ACCENT_SET, false)
+        }
     }
 
     fun notifySettingsChanged(context: Context) {
@@ -1346,6 +1426,18 @@ object FocusPreferences {
                 putExtra(
                     FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_PRESET_COLOR,
                     getCustomAodPresetColor(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_BG_CUSTOM_COLOR,
+                    getFocusBgCustomColor(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_COLOR_OPACITY,
+                    getExtractedColorOpacity(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_LYRIC_TEXT_PRESET_COLOR,
+                    getLyricTextPresetColor(context)
                 )
                 putExtra(
                     FocusStyleSnapshot.EXTRA_STYLE_CUSTOM_AOD_GRAVITY,

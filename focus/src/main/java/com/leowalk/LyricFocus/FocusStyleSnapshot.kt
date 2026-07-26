@@ -32,6 +32,11 @@ object FocusStyleSnapshot {
     const val EXTRA_STYLE_CUSTOM_AOD_TRANSLATION_MAX_LINES = "style_custom_aod_translation_max_lines"
     const val EXTRA_STYLE_CUSTOM_AOD_COLOR_MODE = "style_custom_aod_color_mode"
     const val EXTRA_STYLE_CUSTOM_AOD_PRESET_COLOR = "style_custom_aod_preset_color"
+    const val EXTRA_STYLE_CUSTOM_AOD_CUSTOM_COLOR = "style_custom_aod_custom_color"
+    const val EXTRA_STYLE_LYRIC_TEXT_PRESET_COLOR = "style_lyric_text_preset_color"
+    const val EXTRA_STYLE_LYRIC_CUSTOM_COLOR = "style_lyric_custom_color"
+    const val EXTRA_STYLE_BG_CUSTOM_COLOR = "style_bg_custom_color"
+    const val EXTRA_STYLE_EXTRACTED_COLOR_OPACITY = "style_extracted_color_opacity"
     const val EXTRA_STYLE_CUSTOM_AOD_GRAVITY = "style_custom_aod_gravity"
     const val EXTRA_STYLE_CUSTOM_AOD_SONG_INFO = "style_custom_aod_song_info"
     const val EXTRA_STYLE_CUSTOM_AOD_TITLE_ICON_ENABLED = "style_custom_aod_title_icon_enabled"
@@ -53,6 +58,14 @@ object FocusStyleSnapshot {
 
     @Volatile
     var textColor: String = FocusPreferences.TEXT_COLOR_WHITE
+        private set
+
+    @Volatile
+    var lyricCustomColor: Int = Color.WHITE
+        private set
+
+    @Volatile
+    var bgCustomColor: Int = Color.BLACK
         private set
 
     @Volatile
@@ -128,6 +141,14 @@ object FocusStyleSnapshot {
         private set
 
     @Volatile
+    var customAodCustomColor: Int = Color.WHITE
+        private set
+
+    @Volatile
+    var presetTextColor: Int = Color.WHITE
+        private set
+
+    @Volatile
     var customAodGravity: String = FocusPreferences.GRAVITY_CENTER
         private set
 
@@ -176,6 +197,10 @@ object FocusStyleSnapshot {
         private set
 
     @Volatile
+    var extractedColorOpacity: Int = 100
+        private set
+
+    @Volatile
     private var remotePrefs: SharedPreferences? = null
 
     fun attachModule(module: XposedModule) {
@@ -195,6 +220,14 @@ object FocusStyleSnapshot {
             FocusPreferences.PREF_LYRIC_TEXT_COLOR,
             FocusPreferences.TEXT_COLOR_WHITE
         ) ?: FocusPreferences.TEXT_COLOR_WHITE
+        lyricCustomColor = prefs.getInt(
+            FocusPreferences.PREF_LYRIC_CUSTOM_COLOR,
+            Color.WHITE
+        )
+        bgCustomColor = prefs.getInt(
+            FocusPreferences.PREF_FOCUS_BG_CUSTOM_COLOR,
+            Color.BLACK
+        )
         lyricMaxLines = prefs.getInt(
             FocusPreferences.PREF_LYRIC_MAX_LINES,
             FocusPreferences.DEFAULT_LYRIC_MAX_LINES
@@ -278,6 +311,14 @@ object FocusStyleSnapshot {
             FocusPreferences.PREF_CUSTOM_AOD_PRESET_COLOR,
             com.leowalk.LyricFocus.util.AodColorPresets.defaultPresetColor()
         )
+        customAodCustomColor = prefs.getInt(
+            FocusPreferences.PREF_CUSTOM_AOD_CUSTOM_COLOR,
+            Color.WHITE
+        )
+        presetTextColor = prefs.getInt(
+            FocusPreferences.PREF_LYRIC_TEXT_PRESET_COLOR,
+            Color.WHITE
+        )
         customAodGravity = prefs.getString(
             FocusPreferences.PREF_CUSTOM_AOD_GRAVITY,
             FocusPreferences.GRAVITY_CENTER
@@ -329,6 +370,10 @@ object FocusStyleSnapshot {
         } else {
             null
         }
+        extractedColorOpacity = prefs.getInt(
+            FocusPreferences.PREF_EXTRACTED_COLOR_OPACITY,
+            100
+        ).coerceIn(10, 100)
     }
 
     fun applyFromIntent(intent: Intent) {
@@ -449,6 +494,30 @@ object FocusStyleSnapshot {
                 customAodPresetColor
             )
         }
+        if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_CUSTOM_COLOR)) {
+            customAodCustomColor = intent.getIntExtra(
+                EXTRA_STYLE_CUSTOM_AOD_CUSTOM_COLOR,
+                customAodCustomColor
+            )
+        }
+        if (intent.hasExtra(EXTRA_STYLE_LYRIC_TEXT_PRESET_COLOR)) {
+            presetTextColor = intent.getIntExtra(
+                EXTRA_STYLE_LYRIC_TEXT_PRESET_COLOR,
+                presetTextColor
+            )
+        }
+        if (intent.hasExtra(EXTRA_STYLE_LYRIC_CUSTOM_COLOR)) {
+            lyricCustomColor = intent.getIntExtra(
+                EXTRA_STYLE_LYRIC_CUSTOM_COLOR,
+                lyricCustomColor
+            )
+        }
+        if (intent.hasExtra(EXTRA_STYLE_BG_CUSTOM_COLOR)) {
+            bgCustomColor = intent.getIntExtra(
+                EXTRA_STYLE_BG_CUSTOM_COLOR,
+                bgCustomColor
+            )
+        }
         if (intent.hasExtra(EXTRA_STYLE_CUSTOM_AOD_GRAVITY)) {
             customAodGravity = intent.getStringExtra(EXTRA_STYLE_CUSTOM_AOD_GRAVITY)
                 ?: customAodGravity
@@ -507,6 +576,12 @@ object FocusStyleSnapshot {
             }
         } else if (extractedTextColor == null) {
             extractedAccentColor = null
+        }
+        if (intent.hasExtra(EXTRA_STYLE_EXTRACTED_COLOR_OPACITY)) {
+            extractedColorOpacity = intent.getIntExtra(
+                EXTRA_STYLE_EXTRACTED_COLOR_OPACITY,
+                extractedColorOpacity
+            ).coerceIn(10, 100)
         }
     }
 

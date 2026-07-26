@@ -278,6 +278,16 @@
                                 android:layout_weight="1"
                                 android:text="纯黑" />
 
+                        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                        <com.google.android.material.button.MaterialButtonToggleGroup
+                            android:id="@+id/background_group_row2"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            app:selectionRequired="true"
+                            app:singleSelection="true">
+
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/background_white"
                                 style="@style/Widget.Material3.Button.OutlinedButton"
@@ -286,7 +296,24 @@
                                 android:layout_weight="1"
                                 android:text="纯白" />
 
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/background_custom"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="自定义" />
+
                         </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_background_pick_color"
+                            style="@style/Widget.Material3.Button.TextButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:visibility="gone"
+                            android:text="选择背景颜色…" />
 
                     </LinearLayout>
 
@@ -326,7 +353,56 @@
                             android:id="@+id/color_mode_switch"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="16dp" />
+                                android:layout_marginStart="16dp" />
+
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/extracted_opacity_section"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="8dp"
+                            android:text="取色透明度"
+                            android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="数值越低越透明，100 为完全不透明"
+                                android:textAppearance="?attr/textAppearanceBodyMedium"
+                                android:textColor="?attr/colorOnSurfaceVariant" />
+
+                            <TextView
+                                android:id="@+id/extracted_opacity_label"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textAppearance="?attr/textAppearanceBodyMedium"
+                                android:textColor="?attr/colorPrimary" />
+
+                        </LinearLayout>
+
+                        <com.google.android.material.slider.Slider
+                            android:id="@+id/slider_extracted_opacity"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:stepSize="10"
+                            android:value="100"
+                            android:valueFrom="10"
+                            android:valueTo="100" />
 
                     </LinearLayout>
 
@@ -470,7 +546,32 @@
                                 android:layout_weight="1"
                                 android:text="黑色" />
 
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/text_color_preset"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="推荐" />
+
                         </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                        <GridLayout
+                            android:id="@+id/lock_screen_color_palette"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="4dp"
+                            android:columnCount="6"
+                            android:visibility="gone"
+                            android:useDefaultMargins="true" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_lock_screen_pick_color"
+                            style="@style/Widget.Material3.Button.TextButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:visibility="gone"
+                            android:text="自定义颜色…" />
 
                 </LinearLayout>
 

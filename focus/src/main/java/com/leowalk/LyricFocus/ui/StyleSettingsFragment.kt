@@ -69,13 +69,19 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     private lateinit var textColorGroup: MaterialButtonToggleGroup
     private lateinit var textColorWhite: MaterialButton
     private lateinit var textColorBlack: MaterialButton
+    private lateinit var textColorPreset: MaterialButton
+    private lateinit var lockScreenColorPalette: GridLayout
+    private lateinit var btnLockScreenPickColor: MaterialButton
     private lateinit var backgroundSection: View
     private lateinit var backgroundTitle: TextView
     private lateinit var backgroundHint: TextView
     private lateinit var backgroundGroup: MaterialButtonToggleGroup
+    private lateinit var backgroundGroupRow2: MaterialButtonToggleGroup
     private lateinit var backgroundDefault: MaterialButton
     private lateinit var backgroundBlack: MaterialButton
     private lateinit var backgroundWhite: MaterialButton
+    private lateinit var backgroundCustom: MaterialButton
+    private lateinit var btnBackgroundPickColor: MaterialButton
     private lateinit var colorExtractionSection: View
     private lateinit var colorExtractionTitle: TextView
     private lateinit var colorExtractionHint: TextView
@@ -85,6 +91,9 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     private lateinit var colorModeTitle: TextView
     private lateinit var colorModeHint: TextView
     private lateinit var colorModeSwitch: MaterialSwitch
+    private lateinit var extractedOpacitySection: View
+    private lateinit var sliderExtractedOpacity: Slider
+    private lateinit var tvExtractedOpacityLabel: TextView
 
     private lateinit var sliderCustomAodTextSize: Slider
     private lateinit var tvCustomAodTextSizeLabel: TextView
@@ -111,13 +120,15 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     private val lockScreenControls = mutableListOf<View>()
     private val customAodControls = mutableListOf<View>()
     private val colorPresetViews = mutableListOf<View>()
+    private val lockScreenPresetViews = mutableListOf<View>()
+    private var selectedPresetColor = android.graphics.Color.WHITE
+    private var selectedLockScreenPresetColor = android.graphics.Color.WHITE
 
     private var isBindingUi = false
     private var isTextSizeSliderUpdating = false
     private var isMultiLineTextSizeUpdating = false
     private var isCustomAodTextSizeUpdating = false
     private var isCustomAodWidthUpdating = false
-    private var selectedPresetColor: Int = AodColorPresets.defaultPresetColor()
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -134,6 +145,13 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         updateMultiLineDependentUi()
         refreshPreview()
         LyricService.onPreviewStateChanged = { view.post { refreshPreview() } }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        previewHeightAnimator?.cancel()
+        previewHeightAnimator = null
+        LyricService.onPreviewStateChanged = null
     }
 
     override fun onResume() {
@@ -179,6 +197,9 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         textColorGroup = view.findViewById(R.id.text_color_group)
         textColorWhite = view.findViewById(R.id.text_color_white)
         textColorBlack = view.findViewById(R.id.text_color_black)
+        textColorPreset = view.findViewById(R.id.text_color_preset)
+        lockScreenColorPalette = view.findViewById(R.id.lock_screen_color_palette)
+        btnLockScreenPickColor = view.findViewById(R.id.btn_lock_screen_pick_color)
         backgroundSection = view.findViewById(R.id.background_card)
         backgroundTitle = view.findViewById(R.id.background_title)
         backgroundHint = view.findViewById(R.id.background_hint)
@@ -186,6 +207,9 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         backgroundDefault = view.findViewById(R.id.background_default)
         backgroundBlack = view.findViewById(R.id.background_black)
         backgroundWhite = view.findViewById(R.id.background_white)
+        backgroundCustom = view.findViewById(R.id.background_custom)
+        btnBackgroundPickColor = view.findViewById(R.id.btn_background_pick_color)
+        backgroundGroupRow2 = view.findViewById(R.id.background_group_row2)
         colorExtractionSection = view.findViewById(R.id.color_extraction_card)
         colorExtractionTitle = view.findViewById(R.id.color_extraction_title)
         colorExtractionHint = view.findViewById(R.id.color_extraction_hint)
@@ -195,6 +219,9 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         colorModeTitle = view.findViewById(R.id.color_mode_title)
         colorModeHint = view.findViewById(R.id.color_mode_hint)
         colorModeSwitch = view.findViewById(R.id.color_mode_switch)
+        extractedOpacitySection = view.findViewById(R.id.extracted_opacity_section)
+        sliderExtractedOpacity = view.findViewById(R.id.slider_extracted_opacity)
+        tvExtractedOpacityLabel = view.findViewById(R.id.extracted_opacity_label)
 
         sliderCustomAodTextSize = view.findViewById(R.id.slider_custom_aod_text_size)
         tvCustomAodTextSizeLabel = view.findViewById(R.id.custom_aod_text_size_label)
@@ -278,6 +305,34 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             colorPresetViews += chip
             customAodColorPalette.addView(chip)
         }
+
+        // 锁屏文字推荐色
+        lockScreenPresetViews.clear()
+        lockScreenColorPalette.removeAllViews()
+        AodColorPresets.presets.forEach { preset ->
+            val chip = View(requireContext()).apply {
+                layoutParams = GridLayout.LayoutParams().apply {
+                    width = size
+                    height = size
+                    setMargins(margin, margin, margin, margin)
+                }
+                background = chipDrawable(preset.color, false)
+                contentDescription = preset.name
+                setOnClickListener {
+                    selectLockScreenPresetColor(preset.color)
+                    FocusPreferences.setLyricTextColor(requireContext(), FocusPreferences.TEXT_COLOR_PRESET)
+                    FocusPreferences.setLyricTextPresetColor(requireContext(), preset.color)
+                    notifyStyleChanged()
+                }
+            }
+            lockScreenPresetViews += chip
+            lockScreenColorPalette.addView(chip)
+        }
+
+        // 锁屏自定义颜色按钮
+        btnLockScreenPickColor.setOnClickListener {
+            showLockScreenColorPicker()
+        }
     }
 
     private fun chipDrawable(color: Int, selected: Boolean): GradientDrawable {
@@ -307,6 +362,128 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         }
     }
 
+    private fun selectLockScreenPresetColor(color: Int) {
+        selectedLockScreenPresetColor = color
+        var matched = false
+        AodColorPresets.presets.forEachIndexed { index, preset ->
+            val view = lockScreenPresetViews.getOrNull(index) ?: return@forEachIndexed
+            val selected = preset.color == color
+            if (selected) matched = true
+            view.background = chipDrawable(preset.color, selected)
+        }
+        if (!matched) {
+            lockScreenPresetViews.forEach { view ->
+                view.background = chipDrawable(Color.TRANSPARENT, false)
+            }
+        }
+    }
+
+    private fun showLockScreenColorPicker() {
+        val savedColor = FocusPreferences.getLyricTextPresetColor(requireContext())
+        showColorPickerDialog("自定义文字颜色", savedColor,
+            onConfirm = { color ->
+                FocusPreferences.setLyricTextPresetColor(requireContext(), color)
+                FocusPreferences.setLyricTextColor(requireContext(), FocusPreferences.TEXT_COLOR_PRESET)
+                selectedLockScreenPresetColor = color
+                bindUiFromPreferences()
+                notifyStyleChanged()
+            },
+            onReset = {
+                FocusPreferences.setLyricTextColor(requireContext(), FocusPreferences.TEXT_COLOR_WHITE)
+                bindUiFromPreferences()
+                notifyStyleChanged()
+            }
+        )
+    }
+
+    private fun showBackgroundColorPicker() {
+        val currentColor = FocusPreferences.getFocusBgCustomColor(requireContext())
+        showColorPickerDialog("自定义背景颜色", currentColor,
+            onConfirm = { color ->
+                FocusPreferences.setFocusBgCustomColor(requireContext(), color)
+                updateDynamicColorUi()
+                notifyStyleChanged()
+            }
+        )
+    }
+
+    private fun showColorPickerDialog(
+        title: String,
+        initialColor: Int,
+        onConfirm: (Int) -> Unit,
+        onReset: (() -> Unit)? = null
+    ) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_custom_color_picker, null)
+        val preview = dialogView.findViewById<View>(R.id.color_preview)
+        val sliderR = dialogView.findViewById<Slider>(R.id.slider_color_r)
+        val sliderG = dialogView.findViewById<Slider>(R.id.slider_color_g)
+        val sliderB = dialogView.findViewById<Slider>(R.id.slider_color_b)
+        val sliderA = dialogView.findViewById<Slider>(R.id.slider_color_a)
+        val labelR = dialogView.findViewById<TextView>(R.id.label_color_r)
+        val labelG = dialogView.findViewById<TextView>(R.id.label_color_g)
+        val labelB = dialogView.findViewById<TextView>(R.id.label_color_b)
+        val labelA = dialogView.findViewById<TextView>(R.id.label_color_a)
+        val hexInput = dialogView.findViewById<android.widget.EditText>(R.id.hex_color_input)
+
+        var updatingHex = false
+        fun colorArgb() = Color.argb(sliderA.value.toInt(), sliderR.value.toInt(), sliderG.value.toInt(), sliderB.value.toInt())
+        fun toHex(c: Int) = String.format("#%08X", c)
+        fun refreshPreview() {
+            val color = colorArgb()
+            preview.setBackgroundColor(color)
+            labelR.text = "R ${sliderR.value.toInt()}"
+            labelG.text = "G ${sliderG.value.toInt()}"
+            labelB.text = "B ${sliderB.value.toInt()}"
+            labelA.text = "A ${sliderA.value.toInt()}"
+            if (!updatingHex) { updatingHex = true; hexInput.setText(toHex(color)); updatingHex = false }
+        }
+
+        hexInput.addTextChangedListener(object : android.text.TextWatcher {
+            override fun afterTextChanged(s: android.text.Editable?) {
+                if (updatingHex) return
+                val hex = s?.toString()?.trim()?.removePrefix("#") ?: return
+                if (hex.length != 8) return
+                try {
+                    val color = hex.toLong(16).toInt()
+                    updatingHex = true
+                    sliderR.value = Color.red(color).toFloat()
+                    sliderG.value = Color.green(color).toFloat()
+                    sliderB.value = Color.blue(color).toFloat()
+                    sliderA.value = Color.alpha(color).toFloat()
+                    updatingHex = false
+                    refreshPreview()
+                } catch (_: Throwable) {}
+            }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
+
+        sliderR.value = Color.red(initialColor).toFloat()
+        sliderG.value = Color.green(initialColor).toFloat()
+        sliderB.value = Color.blue(initialColor).toFloat()
+        sliderA.value = Color.alpha(initialColor).toFloat()
+        hexInput.setText(toHex(initialColor))
+        refreshPreview()
+
+        val listener = Slider.OnChangeListener { _, _, _ -> refreshPreview() }
+        sliderR.addOnChangeListener(listener)
+        sliderG.addOnChangeListener(listener)
+        sliderB.addOnChangeListener(listener)
+        sliderA.addOnChangeListener(listener)
+
+        val builder = MaterialAlertDialogBuilder(requireContext())
+            .setTitle(title)
+            .setView(dialogView)
+            .setPositiveButton("确定") { _, _ -> onConfirm(colorArgb()) }
+            .setNegativeButton("取消", null)
+
+        if (onReset != null) {
+            builder.setNeutralButton("恢复默认") { _, _ -> onReset() }
+        }
+
+        builder.show()
+    }
+
     private fun bindUiFromPreferences() {
         isBindingUi = true
 
@@ -322,9 +499,12 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         bindMultiLineTextSizeSlider(FocusPreferences.getMultiLineTextSize(requireContext()))
 
         bindTextSizeSlider(FocusPreferences.getLyricTextSize(requireContext()))
+        bindExtractedOpacitySlider(FocusPreferences.getExtractedColorOpacity(requireContext()))
 
         val textColorId = if (FocusPreferences.getLyricTextColor(requireContext()) == FocusPreferences.TEXT_COLOR_BLACK) {
             R.id.text_color_black
+        } else if (FocusPreferences.getLyricTextColor(requireContext()) == FocusPreferences.TEXT_COLOR_PRESET) {
+            R.id.text_color_preset
         } else {
             R.id.text_color_white
         }
@@ -347,13 +527,15 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                 else -> R.id.gravity_center
             }
         )
-        backgroundGroup.check(
-            when (FocusPreferences.getFocusBackground(requireContext())) {
-                FocusPreferences.BACKGROUND_BLACK -> R.id.background_black
-                FocusPreferences.BACKGROUND_WHITE -> R.id.background_white
-                else -> R.id.background_default
-            }
-        )
+        backgroundGroup.clearChecked()
+        backgroundGroupRow2.clearChecked()
+        when (FocusPreferences.getFocusBackground(requireContext())) {
+            FocusPreferences.BACKGROUND_BLACK -> backgroundGroup.check(R.id.background_black)
+            FocusPreferences.BACKGROUND_WHITE -> backgroundGroupRow2.check(R.id.background_white)
+            FocusPreferences.BACKGROUND_CUSTOM -> backgroundGroupRow2.check(R.id.background_custom)
+            else -> backgroundGroup.check(R.id.background_default)
+        }
+        btnBackgroundPickColor.visibility = if (FocusPreferences.getFocusBackground(requireContext()) == FocusPreferences.BACKGROUND_CUSTOM) View.VISIBLE else View.GONE
 
         monetDynamicSwitch.isChecked = FocusPreferences.isMonetDynamicColorEnabled(requireContext())
         colorExtractionSwitch.isChecked = FocusPreferences.isTextColorExtractionEnabled(requireContext())
@@ -387,16 +569,22 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         bindCustomAodTitleIconSize(FocusPreferences.getCustomAodTitleIconSize(requireContext()))
         bindCustomAodSongInfo(FocusPreferences.getCustomAodSongInfo(requireContext()))
 
-        val colorMode = FocusPreferences.getCustomAodColorMode(requireContext())
-        customAodColorModeGroup.check(
-            when (colorMode) {
-                FocusPreferences.CUSTOM_AOD_COLOR_ALBUM -> R.id.custom_aod_color_album
-                FocusPreferences.CUSTOM_AOD_COLOR_PRESET -> R.id.custom_aod_color_preset
-                else -> R.id.custom_aod_color_white
-            }
-        )
+            val colorMode = FocusPreferences.getCustomAodColorMode(requireContext())
+            customAodColorModeGroup.check(
+                when (colorMode) {
+                    FocusPreferences.CUSTOM_AOD_COLOR_ALBUM -> R.id.custom_aod_color_album
+                    FocusPreferences.CUSTOM_AOD_COLOR_PRESET -> R.id.custom_aod_color_preset
+                    else -> R.id.custom_aod_color_white
+                }
+            )
         selectedPresetColor = FocusPreferences.getCustomAodPresetColor(requireContext())
         selectPresetColor(selectedPresetColor)
+
+        val isPresetTextColor = FocusPreferences.getLyricTextColor(requireContext()) == FocusPreferences.TEXT_COLOR_PRESET
+        lockScreenColorPalette.visibility = if (isPresetTextColor) View.VISIBLE else View.GONE
+        btnLockScreenPickColor.visibility = if (isPresetTextColor) View.VISIBLE else View.GONE
+        selectedLockScreenPresetColor = FocusPreferences.getLyricTextPresetColor(requireContext())
+        selectLockScreenPresetColor(selectedLockScreenPresetColor)
 
         updateDynamicColorUi()
         isBindingUi = false
@@ -465,6 +653,22 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         val customAodEnabled = FocusPreferences.isCustomAodLayout(requireContext())
         val lockScreenInteractive = !customAodEnabled
         val realtimeSource = isRealtimeSource()
+
+        if (customAodEnabled) {
+            switchMultiLineLyrics.isEnabled = false
+            switchMultiLineLyrics.alpha = 0.38f
+            if (multiLineEnabled) {
+                FocusPreferences.setMultiLineLyrics(requireContext(), false)
+                switchMultiLineLyrics.isChecked = false
+            }
+            multiLineCountRow.visibility = View.GONE
+            multiLineTranslationRow.visibility = View.GONE
+            multiLineTextSizeRow.visibility = View.GONE
+            aodMultiLineOnlyRow.visibility = View.GONE
+            return
+        }
+        switchMultiLineLyrics.isEnabled = true
+        switchMultiLineLyrics.alpha = 1f
 
         if (realtimeSource) {
             multiLineCountRow.visibility = View.GONE
@@ -556,7 +760,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                 else -> null
             },
             enabled = !monetEnabled,
-            controls = listOf(backgroundGroup, backgroundDefault, backgroundBlack, backgroundWhite)
+            controls = listOf(backgroundGroup, backgroundGroupRow2, backgroundDefault, backgroundBlack, backgroundWhite, backgroundCustom, btnBackgroundPickColor)
         )
 
         setSectionEnabled(
@@ -572,6 +776,13 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         )
 
         colorModeSwitch.isEnabled = anyExtraction
+        val bgCustom = FocusPreferences.getFocusBackground(requireContext()) == FocusPreferences.BACKGROUND_CUSTOM
+        extractedOpacitySection.visibility = if (anyExtraction || bgCustom) View.VISIBLE else View.GONE
+        if (bgCustom && !monetEnabled) {
+            btnBackgroundPickColor.visibility = View.VISIBLE
+        } else if (!bgCustom) {
+            btnBackgroundPickColor.visibility = View.GONE
+        }
     }
 
     private fun bindCustomAodSongInfo(mode: String) {
@@ -647,6 +858,11 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         sliderTextSize.value = sizeSp
         tvTextSizeLabel.text = formatTextSizeLabel(sizeSp)
         isTextSizeSliderUpdating = false
+    }
+
+    private fun bindExtractedOpacitySlider(opacity: Int) {
+        sliderExtractedOpacity.value = opacity.toFloat()
+        tvExtractedOpacityLabel.text = "${opacity}%"
     }
 
     private fun bindMultiLineTextSizeSlider(sizeSp: Float) {
@@ -822,9 +1038,16 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             if (isBindingUi || !isChecked || isManualTextColorLocked()) return@addOnButtonCheckedListener
             val color = when (checkedId) {
                 R.id.text_color_black -> FocusPreferences.TEXT_COLOR_BLACK
+                R.id.text_color_preset -> FocusPreferences.TEXT_COLOR_PRESET
                 else -> FocusPreferences.TEXT_COLOR_WHITE
             }
             FocusPreferences.setLyricTextColor(requireContext(), color)
+            val isPreset = color == FocusPreferences.TEXT_COLOR_PRESET
+            lockScreenColorPalette.visibility = if (isPreset) View.VISIBLE else View.GONE
+            btnLockScreenPickColor.visibility = if (isPreset) View.VISIBLE else View.GONE
+            if (isPreset) {
+                FocusPreferences.setLyricTextPresetColor(requireContext(), selectedLockScreenPresetColor)
+            }
             notifyStyleChanged()
         }
 
@@ -867,17 +1090,30 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             notifyStyleChanged()
         }
 
-        backgroundGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+        val bgListener = MaterialButtonToggleGroup.OnButtonCheckedListener { group, checkedId, isChecked ->
             if (isBindingUi || !isChecked || FocusPreferences.isMonetDynamicColorEnabled(requireContext())) {
-                return@addOnButtonCheckedListener
+                return@OnButtonCheckedListener
             }
+            // 互斥：选这组清另一组
+            val otherGroup = if (group === backgroundGroup) backgroundGroupRow2 else backgroundGroup
+            try { otherGroup.clearChecked() } catch (_: Throwable) {}
             val background = when (checkedId) {
                 R.id.background_black -> FocusPreferences.BACKGROUND_BLACK
                 R.id.background_white -> FocusPreferences.BACKGROUND_WHITE
+                R.id.background_custom -> FocusPreferences.BACKGROUND_CUSTOM
                 else -> FocusPreferences.BACKGROUND_DEFAULT
             }
             FocusPreferences.setFocusBackground(requireContext(), background)
+            val isCustom = background == FocusPreferences.BACKGROUND_CUSTOM
+            btnBackgroundPickColor.visibility = if (isCustom) View.VISIBLE else View.GONE
+            updateDynamicColorUi()
             notifyStyleChanged()
+        }
+        backgroundGroup.addOnButtonCheckedListener(bgListener)
+        backgroundGroupRow2.addOnButtonCheckedListener(bgListener)
+
+        btnBackgroundPickColor.setOnClickListener {
+            showBackgroundColorPicker()
         }
 
         monetDynamicSwitch.setOnCheckedChangeListener { _, isChecked ->
@@ -912,6 +1148,20 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             updateDynamicColorUi()
             notifyStyleChanged()
         }
+
+        sliderExtractedOpacity.addOnChangeListener { _, value, fromUser ->
+            if (isBindingUi || !fromUser) return@addOnChangeListener
+            val opacity = value.roundToInt()
+            tvExtractedOpacityLabel.text = "${opacity}%"
+            FocusPreferences.setExtractedColorOpacity(requireContext(), opacity)
+            refreshPreview()
+        }
+        sliderExtractedOpacity.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) = Unit
+            override fun onStopTrackingTouch(slider: Slider) {
+                notifyStyleChanged()
+            }
+        })
 
         customAodLyricLinesGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (isBindingUi || !isChecked) return@addOnButtonCheckedListener
@@ -993,47 +1243,15 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     }
 
     private fun showCustomColorPickerDialog() {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_custom_color_picker, null)
-        val preview = dialogView.findViewById<View>(R.id.color_preview)
-        val sliderR = dialogView.findViewById<Slider>(R.id.slider_color_r)
-        val sliderG = dialogView.findViewById<Slider>(R.id.slider_color_g)
-        val sliderB = dialogView.findViewById<Slider>(R.id.slider_color_b)
-        val labelR = dialogView.findViewById<TextView>(R.id.label_color_r)
-        val labelG = dialogView.findViewById<TextView>(R.id.label_color_g)
-        val labelB = dialogView.findViewById<TextView>(R.id.label_color_b)
-
-        fun refreshPreview() {
-            val color = Color.rgb(sliderR.value.toInt(), sliderG.value.toInt(), sliderB.value.toInt())
-            preview.setBackgroundDrawable(chipDrawable(color, true))
-            labelR.text = "R ${sliderR.value.toInt()}"
-            labelG.text = "G ${sliderG.value.toInt()}"
-            labelB.text = "B ${sliderB.value.toInt()}"
-        }
-
-        sliderR.value = Color.red(selectedPresetColor).toFloat()
-        sliderG.value = Color.green(selectedPresetColor).toFloat()
-        sliderB.value = Color.blue(selectedPresetColor).toFloat()
-        refreshPreview()
-
-        val listener = Slider.OnChangeListener { _, _, _ -> refreshPreview() }
-        sliderR.addOnChangeListener(listener)
-        sliderG.addOnChangeListener(listener)
-        sliderB.addOnChangeListener(listener)
-
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle("自定义颜色")
-            .setView(dialogView)
-            .setPositiveButton("确定") { _, _ ->
-                val color = Color.rgb(sliderR.value.toInt(), sliderG.value.toInt(), sliderB.value.toInt())
+        showColorPickerDialog("自定义颜色", selectedPresetColor,
+            onConfirm = { color ->
                 FocusPreferences.setCustomAodColorMode(requireContext(), FocusPreferences.CUSTOM_AOD_COLOR_PRESET)
                 FocusPreferences.setCustomAodPresetColor(requireContext(), color)
-                customAodColorModeGroup.check(R.id.custom_aod_color_preset)
                 selectPresetColor(color)
                 updateCustomAodColorUi()
                 notifyStyleChanged()
             }
-            .setNegativeButton("取消", null)
-            .show()
+        )
     }
 
     // ── 预览区 ──
@@ -1394,9 +1612,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             previewSecond.visibility = View.GONE
             previewMultiLines.visibility = View.VISIBLE
 
-            val rawCount = FocusPreferences.getMultiLineLineCount(ctx)
-            val pageSlots = FocusPreferences.multiLinePageSlots(rawCount)
-            val hideFirstLine = rawCount != pageSlots
+            val pageSlots = FocusPreferences.coerceMultiLineLineCount(FocusPreferences.getMultiLineLineCount(ctx))
             val mlTextSize = FocusPreferences.getMultiLineTextSize(ctx)
             val showTransPref = FocusPreferences.isMultiLineShowTranslation(ctx)
 
@@ -1406,57 +1622,50 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                 lyricInfo.getCurrentLineIndex(LyricService.currentPlaybackPositionMs, FocusPreferences.getSyncAdvanceMs(ctx))
                     .coerceAtLeast(0)
             } else 0
+            val effectiveCurrentSlot = 0
+            val effectiveHideSlot = 0
             val interleaved: Boolean
-            val origins: List<String>
-            val trans: List<String>
-            val effectivePageSlots: Int
-            val effectiveHideSlot: Int
-            val effectiveCurrentSlot: Int
+            val lines: List<String>
 
             if (allLines.isEmpty()) {
                 interleaved = false
-                origins = List(pageSlots) { "\u6b4c\u8bcd \u7b2c${it + 1}\u53e5" }
-                trans = List(pageSlots) { "" }
-                effectivePageSlots = pageSlots
-                effectiveHideSlot = 0
-                effectiveCurrentSlot = 0
+                lines = List(pageSlots) { "\u6b4c\u8bcd \u7b2c${it + 1}\u53e5" }
             } else if (showTransPref) {
-                val testPairCount = pageSlots / 2
-                val testPageStart = (currentIndex / testPairCount) * testPairCount
-                val testOrigins = (0 until testPairCount).map { allLines.getOrNull(testPageStart + it)?.text ?: "" }
-                val testTrans = (0 until testPairCount).map { allLines.getOrNull(testPageStart + it)?.translation ?: "" }
-                val hasPageTranslation = testTrans.any { it.isNotBlank() }
-
-                if (hasPageTranslation) {
-                    interleaved = true
-                    origins = testOrigins
-                    trans = testTrans
-                    effectivePageSlots = pageSlots
-                    effectiveHideSlot = if (hideFirstLine && currentIndex > testPageStart) 2 else 0
-                    effectiveCurrentSlot = if (currentIndex >= testPageStart && currentIndex < testPageStart + testPairCount) {
-                        (currentIndex - testPageStart) * 2
-                    } else -1
-                } else {
-                    interleaved = false
-                    val nonInterleavedPageStart = (currentIndex / pageSlots) * pageSlots
-                    origins = (0 until pageSlots).map { allLines.getOrNull(nonInterleavedPageStart + it)?.text ?: "" }
-                    trans = List(pageSlots) { "" }
-                    effectivePageSlots = pageSlots
-                    effectiveHideSlot = if (hideFirstLine && currentIndex > nonInterleavedPageStart) 1 else 0
-                    effectiveCurrentSlot = if (currentIndex >= nonInterleavedPageStart && currentIndex < nonInterleavedPageStart + pageSlots) {
-                        currentIndex - nonInterleavedPageStart
-                    } else -1
+                val flat = mutableListOf<String>()
+                var fwdIdx = currentIndex
+                var bwdIdx = currentIndex - 1
+                var hasTrans = false
+                var safety = 0
+                while (flat.size < pageSlots && safety++ < 200) {
+                    val l = allLines.getOrNull(fwdIdx)
+                    val orig = l?.text?.trim()?.takeIf { it.isNotBlank() } ?: ""
+                    if (orig.isNotEmpty()) {
+                        flat += orig
+                        if (flat.size >= pageSlots) break
+                    }
+                    val t = l?.translation?.replace("\n", " ")?.trim()?.takeIf { it.isNotBlank() } ?: ""
+                    if (t.isNotEmpty()) {
+                        flat += t; hasTrans = true
+                        if (flat.size >= pageSlots) break
+                    }
+                    fwdIdx++
+                    if (fwdIdx >= allLines.size) { if (bwdIdx < 0) bwdIdx = allLines.size - 1; if (bwdIdx < 0) fwdIdx = 0 else { fwdIdx = bwdIdx; bwdIdx-- } }
                 }
+                interleaved = hasTrans
+                lines = flat
             } else {
                 interleaved = false
-                val nonInterleavedPageStart = (currentIndex / pageSlots) * pageSlots
-                origins = (0 until pageSlots).map { allLines.getOrNull(nonInterleavedPageStart + it)?.text ?: "" }
-                trans = List(pageSlots) { "" }
-                effectivePageSlots = pageSlots
-                effectiveHideSlot = if (hideFirstLine && currentIndex > nonInterleavedPageStart) 1 else 0
-                effectiveCurrentSlot = if (currentIndex >= nonInterleavedPageStart && currentIndex < nonInterleavedPageStart + pageSlots) {
-                    currentIndex - nonInterleavedPageStart
-                } else -1
+                val flat = mutableListOf<String>()
+                var fwdIdx = currentIndex
+                var bwdIdx = currentIndex - 1
+                var safety = 0
+                while (flat.size < pageSlots && safety++ < 200) {
+                    val text = allLines.getOrNull(fwdIdx)?.text?.trim()?.takeIf { it.isNotBlank() } ?: ""
+                    if (text.isNotEmpty()) flat += text
+                    fwdIdx++
+                    if (fwdIdx >= allLines.size) { if (bwdIdx < 0) bwdIdx = allLines.size - 1; if (bwdIdx < 0) fwdIdx = 0 else { fwdIdx = bwdIdx; bwdIdx-- } }
+                }
+                lines = flat
             }
 
             // 多行取色与 applyMultiLineStyle 完全一致（aodMultiLineOnly 只影响显示场景，不影响颜色）
@@ -1477,8 +1686,8 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                         extractedText ?: primaryColor, mlExtractedBg, 3.5
                     )
                 } else {
-                    AlbumColorExtractor.ensureContrast(
-                        extractedText ?: primaryColor, mlExtractedBg, 3.5
+                    AlbumColorExtractor.ensureContrastSafe(
+                        extractedText ?: primaryColor, mlExtractedBg
                     )
                 }
             } else {
@@ -1489,36 +1698,42 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                     extractedAccent ?: mlDefaultLine, colorModeBgColor, 3.5
                 )
             } else if (mlMonetBgColor != null) {
-                AlbumColorExtractor.ensureContrast(mlDefaultLine, mlMonetBgColor, 7.0)
+                AlbumColorExtractor.ensureContrastSafe(mlDefaultLine, mlMonetBgColor)
             } else when (background) {
                 FocusPreferences.BACKGROUND_WHITE -> android.graphics.Color.BLACK
                 else -> primaryColor
             }
             mlNonCurrentTrans = fadeTextColor(mlDefaultLine)
             mlGravity = gravity
+            val currentTransSlot = if (interleaved) 1 else -1
             for (i in 0 until 8) {
                 val tv = previewMultiTextViews[i]
-                if (i < effectivePageSlots) {
+                if (i < pageSlots) {
                     val isTranslationSlot = interleaved && i % 2 == 1
-                    val pairIdx = if (interleaved) i / 2 else i
-                    val swapped = interleaved && swapLyricTranslation
-                    val text = if (isTranslationSlot) {
-                        if (swapped) origins[pairIdx.coerceAtMost(origins.size - 1)] else trans[pairIdx.coerceAtMost(trans.size - 1)]
-                    } else {
-                        if (swapped && interleaved) trans[pairIdx.coerceAtMost(trans.size - 1)] else origins[pairIdx.coerceAtMost(origins.size - 1)]
-                    }
-                    if (i < effectiveHideSlot || text.isBlank()) {
+                    val text = lines.getOrElse(i) { "" }
+                    if (text.isBlank()) {
                         tv.visibility = View.INVISIBLE
                     } else {
                         tv.visibility = View.VISIBLE
                         tv.text = text
+                        val isCurrent = i == effectiveCurrentSlot
+                        val isCurrentTransLine = i == currentTransSlot && text.isNotBlank()
                         tv.setTextColor(when {
-                            i == effectiveCurrentSlot -> mlCurrentLine
+                            isCurrent || isCurrentTransLine -> mlCurrentLine
                             isTranslationSlot -> mlNonCurrentTrans
                             else -> mlDefaultLine
                         })
                         val jpScale = if (isJapaneseText(text)) 0.88f else 1f
-                        tv.textSize = if (i == effectiveCurrentSlot) mlTextSize * jpScale else mlTextSize * 0.65f * jpScale
+                        tv.textSize = when {
+                            isCurrent -> mlTextSize * jpScale
+                            isCurrentTransLine -> mlTextSize * 0.8f * jpScale
+                            else -> mlTextSize * 0.65f * jpScale
+                        }
+                        tv.typeface = if (isCurrent || isCurrentTransLine) {
+                            android.graphics.Typeface.DEFAULT_BOLD
+                        } else {
+                            android.graphics.Typeface.DEFAULT
+                        }
                         tv.gravity = mlGravity
                     }
                 } else {

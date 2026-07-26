@@ -12,8 +12,12 @@ object AlbumColorExtractor {
 
     // 提高最小对比度要求，确保文字更清晰
     private const val MIN_PRIMARY_CONTRAST = 4.5  // WCAG AA 标准
+    private const val MIN_PRIMARY_CONTRAST_SAFE = 5.5  // 关闭色彩模式时的保守阈值
     private const val MIN_SECONDARY_CONTRAST = 3.5
+    private const val MIN_SECONDARY_CONTRAST_SAFE = 4.0
     private const val TARGET_CONTRAST = 7.0  // WCAG AAA 标准作为目标
+    /** 白底白字 / 黑底黑字的最低亮度差 */
+    private const val MIN_LUMINANCE_DELTA = 0.18
 
     data class LyricColors(
         val accent: Int,
@@ -123,16 +127,15 @@ object AlbumColorExtractor {
         val bg = when (backgroundMode) {
             FocusPreferences.BACKGROUND_BLACK -> Color.BLACK
             FocusPreferences.BACKGROUND_WHITE -> Color.WHITE
-            else -> Color.BLACK  // 焦点通知实际使用系统深色背景
+            else -> Color.BLACK
         }
         val primary = ensureContrast(accent, bg, MIN_PRIMARY_CONTRAST)
         val secondary = ensureContrast(blendSecondary(primary, bg), bg, MIN_SECONDARY_CONTRAST)
-        
-        // 根据背景模式调整纯色
+
         val isDarkBackground = backgroundMode != FocusPreferences.BACKGROUND_WHITE
-        val finalPrimary = avoidPureColor(primary, isDarkBackground)
-        val finalSecondary = avoidPureColor(secondary, isDarkBackground)
-        
+        val finalPrimary = guardSameColor(avoidPureColor(primary, isDarkBackground), bg)
+        val finalSecondary = guardSameColor(avoidPureColor(secondary, isDarkBackground), bg)
+
         return finalPrimary to finalSecondary
     }
 
@@ -174,26 +177,24 @@ object AlbumColorExtractor {
 
     fun ensureContrast(foreground: Int, background: Int, minRatio: Double = MIN_PRIMARY_CONTRAST): Int {
         val currentContrast = contrastRatio(foreground, background)
+        val safeFg = guardSameColor(foreground, background)
         
-        // 如果已经达到目标对比度，直接返回
+        if (safeFg != foreground) return safeFg
+        
         if (currentContrast >= TARGET_CONTRAST) {
             return foreground
         }
         
-        // 如果达到最小对比度但未达到目标，尝试进一步优化
         if (currentContrast >= minRatio) {
-            // 尝试向更极端的方向调整，以达到更高的对比度
             val bgLuminance = relativeLuminance(background)
             val fgLuminance = relativeLuminance(foreground)
             
-            // 如果背景是深色，尝试让文字更亮
             if (bgLuminance < 0.35 && fgLuminance > 0.5) {
                 val brighter = blendColors(foreground, Color.WHITE, 0.25f)
                 if (contrastRatio(brighter, background) > currentContrast) {
                     return brighter
                 }
             }
-            // 如果背景是浅色，尝试让文字更暗
             else if (bgLuminance > 0.65 && fgLuminance < 0.5) {
                 val darker = blendColors(foreground, Color.BLACK, 0.25f)
                 if (contrastRatio(darker, background) > currentContrast) {
@@ -203,14 +204,12 @@ object AlbumColorExtractor {
             return foreground
         }
 
-        // 对比度不足，需要大幅调整
         val lighten = relativeLuminance(background) < 0.45
         val target = if (lighten) Color.WHITE else Color.BLACK
-        var ratio = 0.15f  // 从更高的比例开始
+        var ratio = 0.15f
         while (ratio <= 1f) {
             val candidate = blendColors(foreground, target, ratio)
             if (contrastRatio(candidate, background) >= minRatio) {
-                // 继续尝试更高的比例以达到更好的对比度
                 var bestRatio = ratio
                 var bestColor = candidate
                 var testRatio = ratio + 0.05f
@@ -229,15 +228,22 @@ object AlbumColorExtractor {
         return if (lighten) Color.WHITE else Color.BLACK
     }
 
-    /** 保持色相和饱和度，仅调整明度来满足对比度，比 [ensureContrast] 更鲜艳 */
+    /** 关闭色彩模式时使用更高对比度，增强可读性 */
+    fun ensureContrastSafe(foreground: Int, background: Int): Int {
+        val safeFg = guardSameColor(foreground, background)
+        return ensureContrast(safeFg, background, MIN_PRIMARY_CONTRAST_SAFE)
+    }
+
+    /** 保持色相和饱和度，仅调整明度来满足对比度，比 [ensureContrast] 更鲜艳。
+     *  绝对不允许白底白字或黑底黑字。 */
     fun ensureContrastColorful(foreground: Int, background: Int, minRatio: Double = MIN_PRIMARY_CONTRAST): Int {
+        val safeFg = guardSameColor(foreground, background)
+        if (safeFg != foreground) return safeFg
         if (contrastRatio(foreground, background) >= minRatio) return foreground
         val bgLum = relativeLuminance(background)
-        val fgLum = relativeLuminance(foreground)
         val needLighter = bgLum < 0.45
         val hsv = FloatArray(3)
-        Color.colorToHSV(foreground, hsv)
-        // 逐步调整明度直到满足对比度，保持色相和饱和度不变
+        Color.colorToHSV(safeFg, hsv)
         var step = 0.02f
         var maxSteps = 50
         while (maxSteps-- > 0) {
@@ -252,7 +258,49 @@ object AlbumColorExtractor {
             }
             if (hsv[2] <= 0.02f || hsv[2] >= 0.98f) break
         }
-        // 保底：用传统方法
+        return ensureContrast(foreground, background, minRatio)
+    }
+
+    /** 白底白字或黑底黑字时强制改变文字颜色，确保前景与背景足够区分 */
+    fun guardSameColor(foreground: Int, background: Int): Int {
+        val fgLum = relativeLuminance(foreground)
+        val bgLum = relativeLuminance(background)
+        val delta = kotlin.math.abs(fgLum - bgLum)
+        if (delta >= MIN_LUMINANCE_DELTA) return foreground
+        if (bgLum < 0.35) return Color.rgb(224, 224, 224)
+        return Color.rgb(31, 31, 31)
+    }
+
+    fun applyOpacity(color: Int, opacityPercent: Int): Int {
+        if (opacityPercent >= 100) return color
+        val a = (Color.alpha(color) * opacityPercent / 100f).toInt().coerceIn(0, 255)
+        return Color.argb(a, Color.red(color), Color.green(color), Color.blue(color))
+    }
+
+    /** 取色安全包装：关闭色彩模式时优先可读性（高对比度），开启时保留色彩再兼顾可读性 */
+    fun safeColor(foreground: Int, background: Int, colorfulMode: Boolean, minRatio: Double = 4.5): Int {
+        val adjusted = if (colorfulMode) {
+            ensureContrastColorful(foreground, background, minRatio)
+        } else {
+            determineReadableColor(foreground, background, minRatio)
+        }
+        return guardSameColor(adjusted, background)
+    }
+
+    /** 优先可读性：如果前景色与背景对比度不足，大幅偏向白/黑 */
+    fun determineReadableColor(foreground: Int, background: Int, minRatio: Double = MIN_PRIMARY_CONTRAST): Int {
+        val currentRatio = contrastRatio(foreground, background)
+        if (currentRatio >= TARGET_CONTRAST) return foreground
+        if (currentRatio >= minRatio) {
+            val bgLum = relativeLuminance(background)
+            val fgLum = relativeLuminance(foreground)
+            if (bgLum < 0.35 && fgLum < 0.65) {
+                return blendColors(foreground, Color.WHITE, 0.4f)
+            } else if (bgLum > 0.65 && fgLum > 0.35) {
+                return blendColors(foreground, Color.BLACK, 0.4f)
+            }
+            return foreground
+        }
         return ensureContrast(foreground, background, minRatio)
     }
 

@@ -726,9 +726,6 @@ class LyricSourceActivity : AppCompatActivity() {
                 layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = dpToPx(16) }
                 setOnCheckedChangeListener { _, checked ->
                     FocusPreferences.setAiCacheEnabled(ctx, checked)
-                    if (!checked) {
-                        AiLyricTranslator(ctx).clearCache()
-                    }
                     updateLyricSourceUi()
                 }
             }
