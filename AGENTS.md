@@ -10,11 +10,17 @@
 4. **git tag -f vX.X.X** 打标签（⚠ 用 `-f` 覆盖已存在的本地标签）
 5. **git push origin main --tags**
 6. **gh release create vX.X.X**：
-   - `--title "vX.X.X - 简短描述"`
+   - `--title "VX.X.X"`（大写 V + 版本号，不附加描述）
    - `--notes-file release-notes/release-notes-vX.X.X.md`
    - 附加 release APK 文件
-7. **触发 Gitee 同步**：`gh workflow run sync-gitee.yml`
-8. 返回 Release URL
+7. 返回 Release URL
+8. 等待用户确认后，再触发 Gitee 同步。
+
+### 用户偏好
+- Release 标题只用 `V1.8.8` 格式，不加描述文字
+- 发布前必须等用户测试通过并明确允许
+- **必须**创建应用内更新日志 `focus/src/main/assets/release_notes_x_x_x.md`（点号分隔版本号）
+- 每次版本必须更新 release-notes 目录下的 `release-notes-vX.X.X.md`
 
 ### 注意事项
 - release APK 路径：`focus\build\outputs\apk\release\LyricFocus.vX.X.X.apk`
