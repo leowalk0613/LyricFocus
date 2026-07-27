@@ -925,6 +925,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             currentLyricSourceHit = ""
             resetBroadcastCache()
             clearAlbumColorForNewSong()
+            clearAlbumColorForNewSong()
             fetchLyric(title, artist)
             previewState = PreviewState(
                 lyricText = title,
@@ -1334,4 +1335,5 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         lyricNotificationManager.cancelNotification()
         lyricNotificationManager.sendPlaybackState(false)
     }
+
 }

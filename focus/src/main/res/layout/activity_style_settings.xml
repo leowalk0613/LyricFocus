@@ -192,6 +192,45 @@
                     </LinearLayout>
 
                     <LinearLayout
+                        android:id="@+id/monet_bg_only_row"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:visibility="gone">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="仅背景取色"
+                                android:textAppearance="?attr/textAppearanceBodyLarge" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="Monet 仅提取通知背景色，文字颜色可手动自定义"
+                                android:textAppearance="?attr/textAppearanceBodySmall"
+                                android:textColor="?attr/colorOnSurfaceVariant" />
+
+                        </LinearLayout>
+
+                        <com.google.android.material.materialswitch.MaterialSwitch
+                            android:id="@+id/monet_bg_only_switch"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="16dp" />
+
+                    </LinearLayout>
+
+                    <LinearLayout
                         android:id="@+id/color_extraction_card"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -277,6 +316,14 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="纯黑" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/background_album"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="专辑取色" />
 
                         </com.google.android.material.button.MaterialButtonToggleGroup>
 

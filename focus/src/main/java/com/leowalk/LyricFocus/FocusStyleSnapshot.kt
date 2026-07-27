@@ -181,6 +181,10 @@ object FocusStyleSnapshot {
         private set
 
     @Volatile
+    var monetBgOnly: Boolean = false
+        private set
+
+    @Volatile
     var colorExtractionEnabled: Boolean = false
         private set
 
@@ -582,6 +586,9 @@ object FocusStyleSnapshot {
                 EXTRA_STYLE_EXTRACTED_COLOR_OPACITY,
                 extractedColorOpacity
             ).coerceIn(10, 100)
+        }
+        if (intent.hasExtra("monet_bg_only")) {
+            monetBgOnly = intent.getBooleanExtra("monet_bg_only", false)
         }
     }
 

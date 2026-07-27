@@ -87,6 +87,8 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     private lateinit var colorExtractionHint: TextView
     private lateinit var colorExtractionSwitch: MaterialSwitch
     private lateinit var monetDynamicSwitch: MaterialSwitch
+    private lateinit var monetBgOnlyRow: View
+    private lateinit var monetBgOnlySwitch: MaterialSwitch
     private lateinit var colorModeCard: View
     private lateinit var colorModeTitle: TextView
     private lateinit var colorModeHint: TextView
@@ -215,6 +217,8 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         colorExtractionHint = view.findViewById(R.id.color_extraction_hint)
         colorExtractionSwitch = view.findViewById(R.id.color_extraction_switch)
         monetDynamicSwitch = view.findViewById(R.id.monet_dynamic_switch)
+        monetBgOnlyRow = view.findViewById(R.id.monet_bg_only_row)
+        monetBgOnlySwitch = view.findViewById(R.id.monet_bg_only_switch)
         colorModeCard = view.findViewById(R.id.color_mode_card)
         colorModeTitle = view.findViewById(R.id.color_mode_title)
         colorModeHint = view.findViewById(R.id.color_mode_hint)
@@ -398,7 +402,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
 
     private fun showBackgroundColorPicker() {
         val currentColor = FocusPreferences.getFocusBgCustomColor(requireContext())
-        showColorPickerDialog("自定义背景颜色", currentColor,
+        showColorPickerDialog("自定义背景颜色", currentColor, showAlpha = false,
             onConfirm = { color ->
                 FocusPreferences.setFocusBgCustomColor(requireContext(), color)
                 updateDynamicColorUi()
@@ -410,6 +414,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     private fun showColorPickerDialog(
         title: String,
         initialColor: Int,
+        showAlpha: Boolean = true,
         onConfirm: (Int) -> Unit,
         onReset: (() -> Unit)? = null
     ) {
@@ -425,8 +430,13 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         val labelA = dialogView.findViewById<TextView>(R.id.label_color_a)
         val hexInput = dialogView.findViewById<android.widget.EditText>(R.id.hex_color_input)
 
+        if (!showAlpha) {
+            sliderA.value = 255f; sliderA.visibility = View.GONE
+            labelA.visibility = View.GONE
+        }
+
         var updatingHex = false
-        fun colorArgb() = Color.argb(sliderA.value.toInt(), sliderR.value.toInt(), sliderG.value.toInt(), sliderB.value.toInt())
+        fun colorArgb() = Color.argb(if (showAlpha) sliderA.value.toInt() else 255, sliderR.value.toInt(), sliderG.value.toInt(), sliderB.value.toInt())
         fun toHex(c: Int) = String.format("#%08X", c)
         fun refreshPreview() {
             val color = colorArgb()
@@ -538,6 +548,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         btnBackgroundPickColor.visibility = if (FocusPreferences.getFocusBackground(requireContext()) == FocusPreferences.BACKGROUND_CUSTOM) View.VISIBLE else View.GONE
 
         monetDynamicSwitch.isChecked = FocusPreferences.isMonetDynamicColorEnabled(requireContext())
+        monetBgOnlySwitch.isChecked = FocusPreferences.isMonetBgOnly(requireContext())
         colorExtractionSwitch.isChecked = FocusPreferences.isTextColorExtractionEnabled(requireContext())
         colorModeSwitch.isChecked = FocusPreferences.isColorModeEnabled(requireContext())
 
@@ -734,8 +745,9 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         val textExtractionEnabled = FocusPreferences.isTextColorExtractionEnabled(requireContext())
         val colorModeEnabled = FocusPreferences.isColorModeEnabled(requireContext())
         val anyExtraction = monetEnabled || textExtractionEnabled
-        val manualTextEnabled = !monetEnabled && !textExtractionEnabled
+        val manualTextEnabled = (!monetEnabled || FocusPreferences.isMonetBgOnly(requireContext())) && !textExtractionEnabled
 
+        monetBgOnlyRow.visibility = if (monetEnabled) View.VISIBLE else View.GONE
         colorModeSwitch.isEnabled = anyExtraction
 
         setSectionEnabled(
@@ -743,6 +755,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             title = textColorTitle,
             hint = textColorHint,
             hintText = when {
+                monetEnabled && FocusPreferences.isMonetBgOnly(requireContext()) -> "仅背景取色已接管通知背景，文字颜色可手动设置"
                 monetEnabled -> if (colorModeEnabled) "色彩模式已接管文字颜色" else "Monet 动态取色已接管文字颜色"
                 textExtractionEnabled -> if (colorModeEnabled) "色彩模式已接管文字颜色" else "通知文字取色已接管文字颜色"
                 else -> null
@@ -889,8 +902,9 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     private fun formatTextSizeLabel(sizeSp: Float): String = "${sizeSp.roundToInt()} sp"
 
     private fun isManualTextColorLocked(): Boolean {
-        return FocusPreferences.isMonetDynamicColorEnabled(requireContext()) ||
-            FocusPreferences.isTextColorExtractionEnabled(requireContext())
+        val monetEnabled = FocusPreferences.isMonetDynamicColorEnabled(requireContext())
+        if (monetEnabled && FocusPreferences.isMonetBgOnly(requireContext())) return false
+        return monetEnabled || FocusPreferences.isTextColorExtractionEnabled(requireContext())
     }
 
     private fun setupListeners() {
@@ -1129,6 +1143,13 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             notifyStyleChanged()
         }
 
+        monetBgOnlySwitch.setOnCheckedChangeListener { _, isChecked ->
+            if (isBindingUi) return@setOnCheckedChangeListener
+            FocusPreferences.setMonetBgOnly(requireContext(), isChecked)
+            updateDynamicColorUi()
+            notifyStyleChanged()
+        }
+
         colorExtractionSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (isBindingUi || FocusPreferences.isMonetDynamicColorEnabled(requireContext())) return@setOnCheckedChangeListener
             FocusPreferences.setTextColorExtractionEnabled(requireContext(), isChecked)
@@ -1295,14 +1316,17 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         // 多行模式下向上滑动自动收起预览（带动画）
         val scrollView = view.findViewById<NestedScrollView>(R.id.style_content)
         var lastScrollY = 0
+        var lastToggleTime = 0L
         scrollView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
             val scrollingDown = scrollY > lastScrollY
             lastScrollY = scrollY
             if (FocusPreferences.isMultiLineLyrics(requireContext())) {
-                if (scrollingDown && scrollY > 400 && previewExpanded) {
-                    animatePreviewHeight(false)
-                } else if (!scrollingDown && scrollY < 100 && !previewExpanded) {
-                    animatePreviewHeight(true)
+                val now = System.currentTimeMillis()
+                if (now - lastToggleTime < 400) return@setOnScrollChangeListener
+                if (scrollingDown && scrollY > 500 && previewExpanded) {
+                    animatePreviewHeight(false); lastToggleTime = now
+                } else if (!scrollingDown && scrollY < 80 && !previewExpanded) {
+                    animatePreviewHeight(true); lastToggleTime = now
                 }
             }
         }
@@ -1679,24 +1703,21 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             val mlExtractedBg = colorModeBgColor ?: mlMonetBgColor
             val extractedText = FocusPreferences.getExtractedTextColor(ctx)
             val extractedAccent = FocusPreferences.getExtractedAccentColor(ctx)
+            val monetBgOnly = FocusPreferences.isMonetBgOnly(ctx)
 
+            val defaultTextRef = if (monetBgOnly) primaryColor else (extractedText ?: primaryColor)
             mlDefaultLine = if (mlExtractedBg != null) {
                 if (colorModeBgColor != null) {
-                    AlbumColorExtractor.ensureContrastColorful(
-                        extractedText ?: primaryColor, mlExtractedBg, 3.5
-                    )
+                    AlbumColorExtractor.ensureContrastColorful(defaultTextRef, mlExtractedBg, 3.5)
                 } else {
-                    AlbumColorExtractor.ensureContrastSafe(
-                        extractedText ?: primaryColor, mlExtractedBg
-                    )
+                    AlbumColorExtractor.ensureContrastSafe(defaultTextRef, mlExtractedBg)
                 }
             } else {
-                extractedText ?: primaryColor
+                defaultTextRef
             }
+            val accentRef = if (monetBgOnly) mlDefaultLine else (extractedAccent ?: mlDefaultLine)
             mlCurrentLine = if (colorModeBgColor != null) {
-                AlbumColorExtractor.ensureContrastColorful(
-                    extractedAccent ?: mlDefaultLine, colorModeBgColor, 3.5
-                )
+                AlbumColorExtractor.ensureContrastColorful(accentRef, colorModeBgColor, 3.5)
             } else if (mlMonetBgColor != null) {
                 AlbumColorExtractor.ensureContrastSafe(mlDefaultLine, mlMonetBgColor)
             } else when (background) {

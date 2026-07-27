@@ -54,6 +54,7 @@ object FocusPreferences {
     const val PREF_FOCUS_BACKGROUND = "focus_background"
     const val PREF_LYRIC_COLOR_EXTRACTION = "lyric_color_extraction"
     const val PREF_MONET_DYNAMIC_COLOR = "monet_dynamic_color"
+    const val PREF_MONET_BG_ONLY = "monet_bg_only"
     const val PREF_COLOR_MODE = "color_mode"
     const val PREF_EXTRACTED_TEXT_COLOR = "extracted_text_color"
     const val PREF_EXTRACTED_BG_COLOR = "extracted_bg_color"
@@ -1183,6 +1184,18 @@ object FocusPreferences {
             .commit()
     }
 
+    fun isMonetBgOnly(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_MONET_BG_ONLY, false)
+    }
+
+    fun setMonetBgOnly(context: Context, bgOnly: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_MONET_BG_ONLY, bgOnly)
+            .commit()
+    }
+
     fun isColorModeEnabled(context: Context): Boolean {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean(PREF_COLOR_MODE, false)
@@ -1327,6 +1340,7 @@ object FocusPreferences {
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_MONET_DYNAMIC_COLOR, monet)
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_COLOR_EXTRACTION, textExtraction)
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_COLOR_MODE, colorMode)
+        intent.putExtra("monet_bg_only", isMonetBgOnly(context))
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_BACKGROUND, getFocusBackground(context))
         appendExtractedColorExtras(intent, context)
     }

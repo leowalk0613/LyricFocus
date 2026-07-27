@@ -206,7 +206,7 @@ class WelcomeActivity : AppCompatActivity() {
                 hasRoot = granted
                 btn.isEnabled = granted
                 setStatus(tv, granted, "可使用", "未获取（可选）")
-                if (!granted) tv.setTextColor(getColor(android.graphics.Color.parseColor("#FF9800")))
+                if (!granted) tv.setTextColor(android.graphics.Color.parseColor("#FF9800"))
             }
         }.start()
     }

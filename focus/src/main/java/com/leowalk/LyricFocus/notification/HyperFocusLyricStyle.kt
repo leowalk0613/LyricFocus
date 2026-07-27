@@ -24,8 +24,11 @@ import android.graphics.drawable.Icon
 
 import android.os.Bundle
 
+import android.text.SpannableString
+import android.text.Spanned
 import android.text.TextPaint
 import android.text.TextUtils
+import android.text.style.StyleSpan
 import android.util.TypedValue
 
 import android.view.View
@@ -141,7 +144,7 @@ object HyperFocusLyricStyle {
     ): Triple<Int, Int, Int?> {
         val colorPrimary: Int
         val colorSecondary: Int
-        val backgroundColor: Int?
+        var backgroundColor: Int?
         when {
             monetEnabled && colorModeEnabled && extractedTextColor != null && extractedBgColor != null -> {
                 colorPrimary = AlbumColorExtractor.ensureContrastColorful(extractedTextColor, extractedBgColor)
@@ -152,7 +155,7 @@ object HyperFocusLyricStyle {
                 )
                 backgroundColor = extractedBgColor
             }
-            monetEnabled && extractedTextColor != null && extractedBgColor != null -> {
+            monetEnabled && !FocusStyleSnapshot.monetBgOnly && extractedTextColor != null && extractedBgColor != null -> {
                 colorPrimary = extractedTextColor
                 colorSecondary = AlbumColorExtractor.ensureContrast(
                     AlbumColorExtractor.blendSecondary(extractedTextColor, extractedBgColor),
@@ -208,6 +211,26 @@ object HyperFocusLyricStyle {
                     FocusPreferences.BACKGROUND_WHITE -> Color.WHITE
                     else -> null
                 }
+            }
+        }
+        if (monetEnabled || textExtractionEnabled) {
+            val opacity = FocusStyleSnapshot.extractedColorOpacity
+            if (opacity < 100 && backgroundColor != null) {
+                backgroundColor = AlbumColorExtractor.applyOpacity(backgroundColor, opacity)
+            }
+        }
+        if (monetEnabled && FocusStyleSnapshot.monetBgOnly && FocusStyleSnapshot.extractedBgColor != null) {
+            backgroundColor = FocusStyleSnapshot.extractedBgColor!!
+            val opacity = FocusStyleSnapshot.extractedColorOpacity
+            if (opacity < 100 && backgroundColor != null) {
+                backgroundColor = AlbumColorExtractor.applyOpacity(backgroundColor!!, opacity)
+            }
+        }
+        if (background == FocusPreferences.BACKGROUND_CUSTOM) {
+            backgroundColor = FocusStyleSnapshot.bgCustomColor
+            val opacity = FocusStyleSnapshot.extractedColorOpacity
+            if (opacity < 100) {
+                backgroundColor = AlbumColorExtractor.applyOpacity(backgroundColor, opacity)
             }
         }
         return Triple(colorPrimary, colorSecondary, backgroundColor)
@@ -652,7 +675,7 @@ object HyperFocusLyricStyle {
         val lyricMaxLines: Int,
         val translationMaxLines: Int,
         val gravityValue: Int,
-        val backgroundColor: Int?
+        var backgroundColor: Int?
     )
 
     private fun resolveLyricStyle(moduleContext: Context, layoutId: Int): LyricStyle {
@@ -679,9 +702,9 @@ object HyperFocusLyricStyle {
 
         val colorPrimary: Int
         val colorSecondary: Int
-        val backgroundColor: Int?
+        var backgroundColor: Int?
         when {
-            monetEnabled && colorModeEnabled && extractedColor != null && extractedBgColor != null -> {
+            monetEnabled && !FocusStyleSnapshot.monetBgOnly && colorModeEnabled && extractedColor != null && extractedBgColor != null -> {
                 colorPrimary = AlbumColorExtractor.ensureContrastColorful(extractedColor, extractedBgColor)
                 val accent = extractedAccent ?: extractedColor
                 colorSecondary = AlbumColorExtractor.ensureContrastColorful(
@@ -691,7 +714,7 @@ object HyperFocusLyricStyle {
                 )
                 backgroundColor = extractedBgColor
             }
-            monetEnabled && extractedColor != null && extractedBgColor != null -> {
+            monetEnabled && !FocusStyleSnapshot.monetBgOnly && extractedColor != null && extractedBgColor != null -> {
                 colorPrimary = extractedColor
                 colorSecondary = AlbumColorExtractor.ensureContrast(
                     AlbumColorExtractor.blendSecondary(extractedColor, extractedBgColor),
@@ -741,6 +764,24 @@ object HyperFocusLyricStyle {
                     else -> null
                 }
             }
+            textColor == FocusPreferences.TEXT_COLOR_PRESET -> {
+                colorPrimary = FocusStyleSnapshot.presetTextColor
+                colorSecondary = blendSecondaryTextColor(colorPrimary)
+                backgroundColor = when (background) {
+                    FocusPreferences.BACKGROUND_BLACK -> Color.BLACK
+                    FocusPreferences.BACKGROUND_WHITE -> Color.WHITE
+                    else -> null
+                }
+            }
+            textColor == FocusPreferences.TEXT_COLOR_CUSTOM -> {
+                colorPrimary = FocusStyleSnapshot.lyricCustomColor
+                colorSecondary = blendSecondaryTextColor(colorPrimary)
+                backgroundColor = when (background) {
+                    FocusPreferences.BACKGROUND_BLACK -> Color.BLACK
+                    FocusPreferences.BACKGROUND_WHITE -> Color.WHITE
+                    else -> null
+                }
+            }
             else -> {
                 colorPrimary = COLOR_LYRIC_PRIMARY
                 colorSecondary = COLOR_LYRIC_SECONDARY
@@ -749,6 +790,27 @@ object HyperFocusLyricStyle {
                     FocusPreferences.BACKGROUND_WHITE -> Color.WHITE
                     else -> null
                 }
+            }
+        }
+
+        if (hasExtractedColors) {
+            val opacity = FocusStyleSnapshot.extractedColorOpacity
+            if (opacity < 100 && backgroundColor != null) {
+                backgroundColor = AlbumColorExtractor.applyOpacity(backgroundColor, opacity)
+            }
+        }
+        if (monetEnabled && FocusStyleSnapshot.monetBgOnly && FocusStyleSnapshot.extractedBgColor != null) {
+            backgroundColor = FocusStyleSnapshot.extractedBgColor!!
+            val opacity = FocusStyleSnapshot.extractedColorOpacity
+            if (opacity < 100) {
+                backgroundColor = AlbumColorExtractor.applyOpacity(backgroundColor!!, opacity)
+            }
+        }
+        if (background == FocusPreferences.BACKGROUND_CUSTOM) {
+            backgroundColor = FocusStyleSnapshot.bgCustomColor
+            val opacity = FocusStyleSnapshot.extractedColorOpacity
+            if (opacity < 100) {
+                backgroundColor = AlbumColorExtractor.applyOpacity(backgroundColor, opacity)
             }
         }
 
@@ -892,8 +954,9 @@ object HyperFocusLyricStyle {
         }
 
         if (style.backgroundColor != null) {
+            val bg = style.backgroundColor!!
             safeSetViewVisibility(views, R.id.focus_lyric_bg, View.VISIBLE)
-            safeSetImageViewBitmap(views, R.id.focus_lyric_bg, solidColorBitmap(style.backgroundColor))
+            safeSetImageViewBitmap(views, R.id.focus_lyric_bg, solidColorBitmap(bg))
         } else {
             safeSetViewVisibility(views, R.id.focus_lyric_bg, View.GONE)
         }
@@ -1336,77 +1399,70 @@ object HyperFocusLyricStyle {
         } else null
         val extractedBg = colorModeBgColor ?: monetBgColor
         val defaultLineColor = if (extractedBg != null) {
-            if (colorModeBgColor != null) {
-                AlbumColorExtractor.ensureContrastColorful(
-                    FocusStyleSnapshot.extractedTextColor ?: style.colorPrimary,
-                    extractedBg,
-                    4.0
-                )
+            val refColor = if (FocusStyleSnapshot.monetBgOnly) style.colorPrimary
+                else (FocusStyleSnapshot.extractedTextColor ?: style.colorPrimary)
+            if (FocusStyleSnapshot.monetBgOnly) refColor
+            else if (colorModeBgColor != null) {
+                AlbumColorExtractor.ensureContrastColorful(refColor, extractedBg, 4.0)
             } else {
-                AlbumColorExtractor.ensureContrast(
-                    FocusStyleSnapshot.extractedTextColor ?: style.colorPrimary,
-                    extractedBg,
-                    4.0
-                )
+                AlbumColorExtractor.ensureContrast(refColor, extractedBg, 4.0)
             }
         } else {
             FocusStyleSnapshot.extractedTextColor ?: style.colorPrimary
         }
         val currentLineColor = if (colorModeBgColor != null) {
-            AlbumColorExtractor.ensureContrastColorful(
-                FocusStyleSnapshot.extractedAccentColor ?: defaultLineColor,
-                colorModeBgColor,
-                5.0
-            )
+            val accentRef = if (FocusStyleSnapshot.monetBgOnly) defaultLineColor
+                else (FocusStyleSnapshot.extractedAccentColor ?: defaultLineColor)
+            if (FocusStyleSnapshot.monetBgOnly) accentRef
+            else AlbumColorExtractor.ensureContrastColorful(accentRef, colorModeBgColor, 5.0)
         } else if (monetBgColor != null) {
-            AlbumColorExtractor.ensureContrast(defaultLineColor, monetBgColor, 7.0)
+            if (FocusStyleSnapshot.monetBgOnly) defaultLineColor
+            else AlbumColorExtractor.ensureContrast(defaultLineColor, monetBgColor, 7.0)
         } else when (style.backgroundColor) {
             Color.WHITE -> Color.BLACK
             else -> COLOR_LYRIC_PRIMARY
         }
         val nonCurrentTransColor = fadeTextColor(defaultLineColor)
         val currentLineSlot = multiLine.currentLineSlot.coerceAtLeast(0)
+        val currentTransSlot = if (interleaved && currentLineSlot < visibleCount - 1) currentLineSlot + 1 else -1
 
         for (i in 0 until MULTI_LINE_MAX_SLOTS) {
             val viewId = MULTI_LINE_IDS[i]
             val displayText = displayLines[i]
             val isTranslation = interleaved && i < visibleCount && i % 2 == 1
             val isCurrentLine = i == currentLineSlot
-            if (i >= visibleCount) {
+            val isCurrentTrans = i == currentTransSlot && displayText.isNotBlank()
+            if (i >= visibleCount || displayText.isBlank()) {
                 views.setTextViewText(viewId, " ")
-                views.setViewVisibility(viewId, View.GONE)
-                continue
-            }
-            if (displayText.isBlank()) {
-                views.setTextViewText(viewId, " ")
-                views.setViewVisibility(viewId, View.INVISIBLE)
+                views.setViewVisibility(viewId, View.VISIBLE)
                 continue
             }
             views.setViewVisibility(viewId, View.VISIBLE)
-            views.setTextViewText(viewId, displayText)
-            if (isCurrentLine) {
+            if (isCurrentLine || isCurrentTrans) {
+                views.setCharSequence(viewId, "setText", boldText(displayText))
                 views.setTextColor(viewId, currentLineColor)
-                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp)
-                views.setViewPadding(viewId, 0, 12, 0, 0)
+                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP,
+                    if (isCurrentTrans) textSizeSp * 0.8f else textSizeSp)
+                views.setViewPadding(viewId, 0, 6, 0, 0)
+                views.setInt(viewId, "setMaxLines", if (isCurrentTrans) 1 else 4)
             } else if (isTranslation) {
+                views.setTextViewText(viewId, displayText)
                 views.setTextColor(viewId, nonCurrentTransColor)
                 views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.65f)
-                views.setViewPadding(viewId, 0, 0, 0, 12)
+                views.setInt(viewId, "setMaxLines", 1)
             } else {
+                views.setTextViewText(viewId, displayText)
                 views.setTextColor(viewId, defaultLineColor)
                 views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.65f)
-            }
-            views.setInt(viewId, "setGravity", style.gravityValue)
-            if (isCurrentLine) {
-                views.setInt(viewId, "setMaxLines", 4)
-            } else {
                 views.setInt(viewId, "setMaxLines", 1)
             }
+            views.setInt(viewId, "setGravity", style.gravityValue)
         }
 
         if (style.backgroundColor != null) {
+            val bg = style.backgroundColor!!
             safeSetViewVisibility(views, R.id.focus_lyric_bg, View.VISIBLE)
-            safeSetImageViewBitmap(views, R.id.focus_lyric_bg, solidColorBitmap(style.backgroundColor))
+            safeSetImageViewBitmap(views, R.id.focus_lyric_bg, solidColorBitmap(bg))
         } else {
             safeSetViewVisibility(views, R.id.focus_lyric_bg, View.GONE)
         }
@@ -1416,6 +1472,13 @@ object HyperFocusLyricStyle {
     private fun fadeTextColor(color: Int, factor: Float = 0.72f): Int {
         val a = (Color.alpha(color) * factor).toInt().coerceIn(0, 255)
         return Color.argb(a, Color.red(color), Color.green(color), Color.blue(color))
+    }
+
+    private fun boldText(text: String): CharSequence {
+        if (text.isBlank()) return text
+        val span = SpannableString(text)
+        span.setSpan(StyleSpan(android.graphics.Typeface.BOLD), 0, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        return span
     }
 
     /** 检测文本是否包含日语字符（平假名/片假名/汉字） */
