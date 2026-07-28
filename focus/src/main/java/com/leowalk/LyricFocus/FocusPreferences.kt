@@ -87,6 +87,7 @@ object FocusPreferences {
     const val LYRIC_SOURCE_SUPERLYRIC = "superlyric"
     const val LYRIC_SOURCE_LYRICON = "lyricon"
     const val LYRIC_SOURCE_LYRICINFO = "lyricinfo"
+    const val LYRIC_SOURCE_LRCLIB = "lrclib"
 
     const val PREF_LOCAL_LRC_DIR = "local_lrc_dir"
     const val PREF_LOCAL_LRC_TREE_URI = "local_lrc_tree_uri"
@@ -102,6 +103,7 @@ object FocusPreferences {
     const val PREF_AI_CACHE_ENABLED = "ai_cache_enabled"
     const val PREF_AI_CACHE_SIZE = "ai_cache_size_bytes"
     const val PREF_LOCAL_LRC_BOOTSTRAPPED = "local_lrc_bootstrapped"
+    const val PREF_HIDE_DESKTOP_ICON = "hide_desktop_icon"
 
     const val DEFAULT_LOCAL_LRC_DIR = "/sdcard/LyricFocus/lyrics"
     const val DEFAULT_AI_API_BASE_URL = "https://api.openai.com/v1"
@@ -233,7 +235,8 @@ object FocusPreferences {
             LYRIC_SOURCE_AI,
             LYRIC_SOURCE_SUPERLYRIC,
             LYRIC_SOURCE_LYRICON,
-            LYRIC_SOURCE_LYRICINFO -> source
+            LYRIC_SOURCE_LYRICINFO,
+            LYRIC_SOURCE_LRCLIB -> source
             else -> LYRIC_SOURCE_AUTO
         }
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -252,7 +255,8 @@ object FocusPreferences {
             LYRIC_SOURCE_LYRICON -> "词幕 Lyricon"
             LYRIC_SOURCE_LYRICON -> "词幕 Lyricon"
             LYRIC_SOURCE_LYRICINFO -> "LyricInfo"
-            else -> "自动（网易云 → QQ音乐）"
+            LYRIC_SOURCE_LRCLIB -> "LRCLib（海外）"
+            else -> "自动（QQ确认 → 网易翻译）"
         }
     }
 
@@ -260,6 +264,7 @@ object FocusPreferences {
         LYRIC_SOURCE_AUTO to formatLyricSourceLabel(LYRIC_SOURCE_AUTO),
         LYRIC_SOURCE_NETEASE to formatLyricSourceLabel(LYRIC_SOURCE_NETEASE),
         LYRIC_SOURCE_QQ to formatLyricSourceLabel(LYRIC_SOURCE_QQ),
+        LYRIC_SOURCE_LRCLIB to formatLyricSourceLabel(LYRIC_SOURCE_LRCLIB),
         LYRIC_SOURCE_SUPERLYRIC to formatLyricSourceLabel(LYRIC_SOURCE_SUPERLYRIC),
         LYRIC_SOURCE_LYRICON to formatLyricSourceLabel(LYRIC_SOURCE_LYRICON),
         LYRIC_SOURCE_LYRICINFO to formatLyricSourceLabel(LYRIC_SOURCE_LYRICINFO),
@@ -451,6 +456,41 @@ object FocusPreferences {
             .edit()
             .putLong(PREF_AI_CACHE_SIZE, bytes)
             .apply()
+    }
+
+    fun isHideDesktopIcon(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_HIDE_DESKTOP_ICON, false)
+    }
+
+    fun setHideDesktopIcon(context: Context, hide: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_HIDE_DESKTOP_ICON, hide)
+            .apply()
+        applyDesktopIconVisibility(context, hide)
+    }
+
+    fun applyDesktopIconVisibility(context: Context, hide: Boolean) {
+        try {
+            val aliasComponent = android.content.ComponentName(
+                context.packageName,
+                "${context.packageName}.LauncherAlias"
+            )
+            val state = if (hide) {
+                context.packageManager.getComponentEnabledSetting(aliasComponent).let {
+                    if (it == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED) return
+                }
+                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+            } else {
+                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+            }
+            context.packageManager.setComponentEnabledSetting(
+                aliasComponent, state, android.content.pm.PackageManager.DONT_KILL_APP
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun isLocalLrcBootstrapped(context: Context): Boolean {

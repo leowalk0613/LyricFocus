@@ -42,16 +42,12 @@ class LyricNotificationManager(private val context: Context) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_MIN
             ).apply {
-                description = "用于歌词拉取与服务保活；锁屏 / 息屏歌词由焦点通知展示，不走此渠道"
+                description = "前台服务保活通道；锁屏 / 息屏歌词由焦点通知展示，不走此渠道"
                 setShowBadge(false)
                 enableVibration(false)
                 setSound(null, null)
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    setAllowBubbles(false)
-                }
             }
             notificationManager.createNotificationChannel(channel)
         }
@@ -66,8 +62,9 @@ class LyricNotificationManager(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        return if (showLyricInShade && lastIsPlaying && lastLyricText.isNotBlank()) {
-            RegularLyricNotificationStyle.buildNotification(
+        val isShadeLyric = showLyricInShade && lastIsPlaying && lastLyricText.isNotBlank()
+        if (isShadeLyric) {
+            return RegularLyricNotificationStyle.buildNotification(
                 context = context,
                 channelId = CHANNEL_ID,
                 lyricText = lastLyricText,
@@ -75,42 +72,27 @@ class LyricNotificationManager(private val context: Context) {
             ).apply {
                 contentIntent = pendingIntent
             }
-        } else {
-            val contentText = when {
-                lastIsPlaying && lastTitle.isNotBlank() -> "正在播放: $lastTitle${if (lastArtist.isNotBlank()) " - $lastArtist" else ""}"
-                else -> "正在运行"
-            }
-            NotificationCompat.Builder(context, CHANNEL_ID)
-                .setContentTitle("LyricFocus")
-                .setContentText(contentText)
-                .setSmallIcon(R.drawable.ic_music_note)
-                .setContentIntent(pendingIntent)
-                .setOngoing(true)
-                .setShowWhen(false)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .build()
         }
+        val iconHidden = FocusPreferences.isHideDesktopIcon(context)
+        return NotificationCompat.Builder(context, CHANNEL_ID)
+            .setContentTitle(if (iconHidden) "LyricFocus" else "")
+            .setContentText(if (iconHidden) "点击打开应用" else "")
+            .setSmallIcon(if (iconHidden) R.drawable.ic_music_note else R.drawable.ic_transparent)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .setShowWhen(false)
+            .setPriority(if (iconHidden) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_MIN)
+            .setSilent(true)
+            .build()
     }
 
     @SuppressLint("MissingPermission")
     fun updateForegroundNotification(title: String = "", artist: String = "", isPlaying: Boolean = false) {
-        val sameState = title == lastTitle && artist == lastArtist && isPlaying == lastIsPlaying
-
         lastTitle = title
         lastArtist = artist
         lastIsPlaying = isPlaying
-
-        if (!lastIsPlaying || lastLyricText.isBlank()) {
-            lastLyricText = ""
-            lastSecondLineText = ""
-        }
-
-        if (sameState) return
-
-        if (NotificationPermissionHelper.hasPostNotificationsPermission(context)) {
-            notificationManager.notify(NOTIFICATION_ID, buildForegroundNotification())
-        }
+        lastLyricText = ""
+        lastSecondLineText = ""
     }
 
     @SuppressLint("MissingPermission")

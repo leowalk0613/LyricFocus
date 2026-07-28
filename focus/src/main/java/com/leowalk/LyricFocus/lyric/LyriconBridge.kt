@@ -88,7 +88,7 @@ class LyriconBridge(context: Application) {
             if (song == null) return
             Log.d(tag, "onSongChanged: ${song.name}, ${song.lyrics?.size ?: 0} lines")
 
-            val lines = song.lyrics?.map { line ->
+            val rawLines = song.lyrics?.map { line ->
                 LyricLine(
                     time = line.begin,
                     text = line.text ?: "",
@@ -96,13 +96,15 @@ class LyriconBridge(context: Application) {
                 )
             } ?: emptyList()
 
-            if (lines.isEmpty()) return
+            if (rawLines.isEmpty()) return
+
+            val merged = mergeSameTimeLines(rawLines)
 
             val info = LyricInfo(
                 title = song.name ?: "",
                 artist = song.artist ?: "",
                 album = "",
-                lines = lines.sortedBy { it.time },
+                lines = merged.sortedBy { it.time },
                 source = "词幕 Lyricon"
             )
             callback?.onSongReceived(info)
@@ -133,5 +135,40 @@ class LyriconBridge(context: Application) {
 
         override fun onDisplayTranslationChanged(isDisplayTranslation: Boolean) = Unit
         override fun onDisplayRomaChanged(isDisplayRoma: Boolean) = Unit
+    }
+
+    private fun mergeSameTimeLines(lines: List<LyricLine>): List<LyricLine> {
+        if (lines.size < 2) return lines
+        val sorted = lines.sortedBy { it.time }
+        val result = mutableListOf<LyricLine>()
+        var i = 0
+        while (i < sorted.size) {
+            val current = sorted[i]
+            val group = mutableListOf(current)
+            var j = i + 1
+            while (j < sorted.size && (sorted[j].time - current.time) <= MERGE_TIME_THRESHOLD_MS) {
+                group += sorted[j]
+                j++
+            }
+            if (group.size == 1) {
+                result.add(current)
+            } else {
+                val primary = group.firstOrNull { it.text.isNotBlank() }
+                val trans = group.firstOrNull { it.translation?.isNotBlank() == true }
+                val reading = group.firstOrNull { it.reading?.isNotBlank() == true }
+                result.add(LyricLine(
+                    time = current.time,
+                    text = primary?.text?.takeIf { it.isNotBlank() } ?: group.firstOrNull { it.text.isNotBlank() }?.text ?: current.text,
+                    translation = trans?.translation ?: primary?.translation,
+                    reading = reading?.reading ?: primary?.reading
+                ))
+            }
+            i = j
+        }
+        return result
+    }
+
+    companion object {
+        private const val MERGE_TIME_THRESHOLD_MS = 150L
     }
 }

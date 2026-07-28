@@ -141,6 +141,13 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         setupColorPresetGrid()
         bindUiFromPreferences()
         setupListeners()
+        // Move multi-line card to top of lock screen settings
+        view.findViewById<View>(R.id.multi_line_card)?.let { card ->
+            (card.parent as? ViewGroup)?.also { parent ->
+                parent.removeView(card)
+                parent.addView(card, 0)
+            }
+        }
         updateLockScreenSectionState()
         updateCustomAodSectionState()
         updateCustomAodColorUi()

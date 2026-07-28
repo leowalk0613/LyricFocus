@@ -429,7 +429,7 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="数值越低越透明，100 为完全不透明"
+                                android:text="针对焦点通知背景。数值越低越透明，100 为完全不透明"
                                 android:textAppearance="?attr/textAppearanceBodyMedium"
                                 android:textColor="?attr/colorOnSurfaceVariant" />
 

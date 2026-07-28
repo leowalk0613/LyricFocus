@@ -35,6 +35,7 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
     private lateinit var switchFocusLyric: MaterialSwitch
     private lateinit var switchCustomAodLayout: MaterialSwitch
     private lateinit var switchAppWhitelist: MaterialSwitch
+    private lateinit var switchHideDesktopIcon: MaterialSwitch
     private lateinit var btnManageWhitelist: MaterialButton
     private lateinit var btnManageLyricSource: MaterialButton
     private lateinit var sliderSyncAdvance: Slider
@@ -124,6 +125,7 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         switchFocusLyric = view.findViewById(R.id.switch_focus_lyric)
         switchCustomAodLayout = view.findViewById(R.id.switch_custom_aod_layout)
         switchAppWhitelist = view.findViewById(R.id.switch_app_whitelist)
+        switchHideDesktopIcon = view.findViewById(R.id.switch_hide_desktop_icon)
         btnManageWhitelist = view.findViewById(R.id.btn_manage_whitelist)
         btnManageLyricSource = view.findViewById(R.id.btn_manage_lyric_source)
         sliderSyncAdvance = view.findViewById(R.id.slider_sync_advance)
@@ -154,6 +156,7 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         switchFocusLyric.isChecked = FocusPreferences.isFocusEnabled(ctx)
         switchCustomAodLayout.isChecked = FocusPreferences.isCustomAodLayout(ctx)
         switchAppWhitelist.isChecked = FocusPreferences.isAppWhitelistEnabled(ctx)
+        switchHideDesktopIcon.isChecked = FocusPreferences.isHideDesktopIcon(ctx)
         updateWhitelistUi()
         bindSyncAdvanceSlider(FocusPreferences.getSyncAdvanceMs(ctx))
         updateLyricSourceUi()
@@ -183,6 +186,10 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
                 FocusPreferences.setWhitelistedPackages(ctx, FocusPreferences.defaultMusicPackages())
             }
             updateWhitelistUi()
+            broadcastSettingsChanged()
+        }
+        switchHideDesktopIcon.setOnCheckedChangeListener { _, checked ->
+            FocusPreferences.setHideDesktopIcon(requireContext(), checked)
             broadcastSettingsChanged()
         }
         btnManageWhitelist.setOnClickListener {

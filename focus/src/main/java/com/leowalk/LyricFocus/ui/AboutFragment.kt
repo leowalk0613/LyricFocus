@@ -39,8 +39,7 @@ class AboutFragment : Fragment(R.layout.activity_about) {
     private val contactEmail = "walkalone9990613@gmail.com"
 
     private val LSP_LOG_PATHS = listOf(
-        "/data/adb/lspd/log/",
-        "/data/adb/lspd/log.old/"
+        "/data/adb/lspd/log/"
     )
 
     private val openDocumentLauncher = registerForActivityResult(

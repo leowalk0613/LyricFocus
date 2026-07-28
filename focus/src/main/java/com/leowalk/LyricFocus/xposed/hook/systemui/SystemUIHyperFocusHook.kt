@@ -970,7 +970,7 @@ class SystemUIHyperFocusHook : BaseHook() {
         syncFocusPinState()
         if (isPlaying) {
             lastUpdateTime = System.currentTimeMillis()
-            if (currentLyricText.isNotBlank() && lastNotifiedLyric.isBlank()) {
+            if (currentLyricText.isNotBlank()) {
                 postFocusUpdate(FocusRefreshMode.LINE_CHANGE, force = true)
             }
             scheduleNextUpdate()

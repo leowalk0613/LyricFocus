@@ -14,9 +14,9 @@ object LyricSearchHelper {
 
     private val TRAILING_PAREN = Regex("""[\(\[（【][^)\]）】]*[\)\]）】]\s*$""")
 
-    /** 多艺术家分隔符：/ & 、 以及 " and " / " x " */
+    /** 多艺术家分隔符：/ & 、 ; 以及 " and " / " x " */
     private val ARTIST_SEPARATOR = Regex(
-        """\s*[/&、，,]\s*|\s+(?:and|x|feat\.?|ft\.?)\s+""",
+        """\s*[/&、，,;；]\s*|\s+(?:and|x|feat\.?|ft\.?)\s+""",
         RegexOption.IGNORE_CASE
     )
 
@@ -119,12 +119,19 @@ object LyricSearchHelper {
         return when {
             songName.equals(title, ignoreCase = true) -> 12
             songName.equals(normalized, ignoreCase = true) -> 11
-            title.contains(songName, ignoreCase = true) -> 8
-            normalized.contains(songName, ignoreCase = true) && songName.length >= 3 -> 8
-            songName.contains(normalized, ignoreCase = true) && normalized.length >= 3 -> 7
-            songName.contains(title, ignoreCase = true) -> 6
+            title.contains(songName, ignoreCase = true) && significantContains(songName, title) -> 8
+            normalized.contains(songName, ignoreCase = true) && significantContains(songName, normalized) -> 8
+            songName.contains(normalized, ignoreCase = true) && significantContains(normalized, songName) -> 7
+            songName.contains(title, ignoreCase = true) && significantContains(title, songName) -> 6
             else -> 0
         }
+    }
+
+    /** 防止短字符串（≤1字）匹配到包含它的长标题，导致歌曲张冠李戴 */
+    private fun significantContains(needle: String, haystack: String): Boolean {
+        if (needle.length < 2) return false
+        if (needle.length >= 3) return true
+        return needle.length.toDouble() / haystack.length >= 0.2
     }
 
     /**
@@ -140,15 +147,19 @@ object LyricSearchHelper {
             val c = candidate.trim()
             if (c.isBlank()) continue
             when {
-                // 完全相等（含整体或拆分后任一相等）
                 c.equals(inputArtist, ignoreCase = true) ||
                     inputParts.any { it.equals(c, ignoreCase = true) } -> return 24
-                // 包含匹配（双向）：输入拆分项包含候选，或候选包含输入整体
-                inputParts.any { it.length >= 2 && it.contains(c, ignoreCase = true) } ||
-                    c.contains(inputArtist, ignoreCase = true) -> best = maxOf(best, 12)
+                inputParts.any { it.length >= 2 && it.contains(c, ignoreCase = true) && c.length >= 2 } ||
+                    c.contains(inputArtist, ignoreCase = true) && inputArtist.length >= 2 -> best = maxOf(best, 12)
+                inputParts.any { p -> artistWordsOverlap(p, c) } -> best = maxOf(best, 6)
             }
         }
         return best
+    }
+
+    private fun artistWordsOverlap(a: String, b: String): Boolean {
+        val words = a.lowercase().split(" ").filter { it.length >= 2 }
+        return words.isNotEmpty() && words.any { b.lowercase().contains(it) }
     }
 
     fun scoreAlbumMatch(candidateAlbum: String, inputAlbum: String): Int {
@@ -156,8 +167,11 @@ object LyricSearchHelper {
         val c = candidateAlbum.trim()
         val i = inputAlbum.trim()
         return when {
-            c.equals(i, ignoreCase = true) -> 10
-            c.contains(i, ignoreCase = true) || i.contains(c, ignoreCase = true) -> 5
+            c.equals(i, ignoreCase = true) -> 12
+            c.contains(i, ignoreCase = true) || i.contains(c, ignoreCase = true) -> when {
+                c.length >= 3 && i.length >= 3 && significantContains(i, c) -> 8
+                else -> 4
+            }
             else -> 0
         }
     }

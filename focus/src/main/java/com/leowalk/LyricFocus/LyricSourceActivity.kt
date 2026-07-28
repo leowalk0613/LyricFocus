@@ -167,13 +167,14 @@ class LyricSourceActivity : AppCompatActivity() {
 
             // 获取每个源的描述和图标
             val (desc, iconRes) = when (key) {
-                FocusPreferences.LYRIC_SOURCE_AUTO -> "自动切换网易云、QQ 音乐等在线源" to R.drawable.ic_music_note
+                FocusPreferences.LYRIC_SOURCE_AUTO -> "QQ 确认歌曲 → 网易获取歌词翻译" to R.drawable.ic_music_note
                 FocusPreferences.LYRIC_SOURCE_NETEASE -> "从网易云音乐获取歌词" to R.drawable.ic_app_icon_netease
-                FocusPreferences.LYRIC_SOURCE_QQ -> "从 QQ 音乐获取歌词" to R.drawable.ic_app_icon_qq
+                FocusPreferences.LYRIC_SOURCE_QQ -> "QQ 音乐搜索，仅原文无翻译" to R.drawable.ic_app_icon_qq
                 FocusPreferences.LYRIC_SOURCE_SUPERLYRIC -> "实时推送单行歌词" to R.drawable.ic_music_note
                 FocusPreferences.LYRIC_SOURCE_LYRICON -> "完整歌词含原文+翻译" to R.drawable.ic_music_note
                 FocusPreferences.LYRIC_SOURCE_LYRICINFO -> "读取通知栏歌词字段" to R.drawable.ic_info
                 FocusPreferences.LYRIC_SOURCE_LOCAL -> "从本地 LRC 文件读取" to R.drawable.ic_home
+                FocusPreferences.LYRIC_SOURCE_LRCLIB -> "海外开源歌词库（不保证完全匹配）" to R.drawable.ic_music_note
                 else -> "" to R.drawable.ic_music_note
             }
 

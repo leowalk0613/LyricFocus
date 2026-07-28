@@ -7,5 +7,9 @@ class LyricFocusApp : Application() {
     override fun onCreate() {
         super.onCreate()
         DynamicColors.applyToActivitiesIfAvailable(this)
+        FocusPreferences.applyDesktopIconVisibility(
+            this,
+            FocusPreferences.isHideDesktopIcon(this)
+        )
     }
 }

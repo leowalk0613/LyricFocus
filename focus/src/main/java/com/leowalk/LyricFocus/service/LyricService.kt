@@ -875,21 +875,46 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         Log.d(TAG, "Cleared lyric state for non-whitelisted app: ${currentMusicPackage()}")
     }
 
+    private fun clearLyricStateForStoppedApp() {
+        fetchLyricJob?.cancel()
+        stopLyricUpdate()
+        stopRealtimeBridges()
+        isPlaying = false
+        currentTitle = ""
+        currentArtist = ""
+        currentAlbumArt = null
+        currentAlbumArtKey = ""
+        currentLyricInfo = LyricInfo.EMPTY
+        currentLyricSourceHit = ""
+        currentLyricSongLabel = ""
+        currentFetchedLyricTitle = ""
+        currentFetchedLyricArtist = ""
+        currentFetchedLyricAlbum = ""
+        currentLyricHasTranslation = false
+        currentLyricFromAi = false
+        resetBroadcastCache()
+        lyricNotificationManager.updateForegroundNotification(title = "", artist = "", isPlaying = false)
+        lyricNotificationManager.sendPlaybackState(false)
+        Log.d(TAG, "Cleared lyric state: no active music session")
+    }
+
     override fun onSessionChanged(controller: MediaController?) {
         Log.d(TAG, "Session changed: ${controller?.packageName}")
-        if (controller != null && !FocusPreferences.isPackageAllowed(this, controller.packageName)) {
+        if (controller == null) {
+            clearLyricStateForStoppedApp()
+            return
+        }
+        if (!FocusPreferences.isPackageAllowed(this, controller.packageName)) {
             clearLyricStateForBlockedApp()
             return
         }
-        if (controller != null) {
-            val state = controller.playbackState
-            currentPosition = if (state != null) {
-                extrapolatePlaybackPosition(state)
-            } else {
-                0L
-            }
-            lastUpdateTime = System.currentTimeMillis()
+        val state = controller.playbackState
+        currentPosition = if (state != null) {
+            extrapolatePlaybackPosition(state)
+        } else {
+            0L
         }
+        lastUpdateTime = System.currentTimeMillis()
     }
 
     override fun onMetadataChanged(metadata: MediaMetadata?) {
@@ -922,6 +947,9 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             currentArtist = artist
             currentLyricInfo = LyricInfo.EMPTY
             currentLyricInfoForPreview = LyricInfo.EMPTY
+            currentLyricSourceHit = ""
+            resetBroadcastCache()
+            sendNoLyricStateToSystemUI(title, artist)
             currentLyricSourceHit = ""
             resetBroadcastCache()
             clearAlbumColorForNewSong()
@@ -963,33 +991,33 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             clearLyricStateForBlockedApp()
             return
         }
-        if (state != null) {
-            currentPosition = extrapolatePlaybackPosition(state)
-            lastUpdateTime = System.currentTimeMillis()
-            isPlaying = state.state == PlaybackState.STATE_PLAYING
-            previewState = previewState.copy(isPlaying = isPlaying)
-            notifyPreviewStateChanged()
+        if (state == null) {
+            clearLyricStateForStoppedApp()
+            return
+        }
+        currentPosition = extrapolatePlaybackPosition(state)
+        lastUpdateTime = System.currentTimeMillis()
+        isPlaying = state.state == PlaybackState.STATE_PLAYING
+        previewState = previewState.copy(isPlaying = isPlaying)
+        notifyPreviewStateChanged()
 
-            // notify SystemUI playback state; pause cancels focus notification
-            lyricNotificationManager.sendPlaybackState(isPlaying)
+        lyricNotificationManager.sendPlaybackState(isPlaying)
 
-            if (isPlaying) {
-                startLyricUpdate()
-                if (currentLyricInfo.isEmpty && currentTitle.isNotBlank()) {
-                    if (fetchLyricJob?.isActive == true) {
-                        // ??????loading ???? fetchLyric ???
-                    } else {
-                        sendNoLyricStateToSystemUI(currentTitle, currentArtist)
-                    }
+        if (isPlaying) {
+            startLyricUpdate()
+            if (currentLyricInfo.isEmpty && currentTitle.isNotBlank()) {
+                if (fetchLyricJob?.isActive == true) {
+                } else {
+                    sendNoLyricStateToSystemUI(currentTitle, currentArtist)
                 }
-            } else {
-                stopLyricUpdate()
-                lyricNotificationManager.updateForegroundNotification(
-                    title = currentTitle,
-                    artist = currentArtist,
-                    isPlaying = false
-                )
             }
+        } else {
+            stopLyricUpdate()
+            lyricNotificationManager.updateForegroundNotification(
+                title = currentTitle,
+                artist = currentArtist,
+                isPlaying = false
+            )
         }
     }
 
@@ -1019,14 +1047,14 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
         fetchLyricJob = serviceScope.launch {
             try {
-                var lyricInfo = lyricManager.fetchLyric(title, artist)
+                var lyricInfo = lyricManager.fetchLyric(title, artist, musicPackage = currentMusicPackage())
                 if (lyricInfo != null && !lyricInfo.isEmpty) {
                     applyLyricResult(lyricInfo, title, artist)
 
                     if (FocusPreferences.isAiTranslateEnabled(this@LyricService)) {
                         try {
-                            lyricNotificationManager.showAiTranslating(title, artist)
                             val translated = lyricManager.translateWithAi(lyricInfo, title, artist)
+                            Log.d(TAG, "AI translate: sameRef=${translated === lyricInfo} hasTrans=${translated.lines.any { it.translation != null }} lines=${translated.lines.size}")
                             if (translated !== lyricInfo) {
                                 applyLyricResult(translated, title, artist)
                                 lyricInfo = translated

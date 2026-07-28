@@ -55,7 +55,12 @@ class AiLyricTranslator(context: Context) {
             return memoryCache[cacheKey] ?: lyricInfo
         }
         try {
-            val translated = requestTranslation(lyricInfo, title, artist) ?: return lyricInfo
+            val translated = requestTranslation(lyricInfo, title, artist)
+            if (translated == null) {
+                // API call failed: clear cache entry so next attempt retries
+                memoryCache.remove(cacheKey)
+                return lyricInfo
+            }
             memoryCache[cacheKey] = translated
             if (FocusPreferences.isAiCacheEnabled(appContext)) {
                 saveCache(cacheKey, translated, "translate")
@@ -339,18 +344,28 @@ class AiLyricTranslator(context: Context) {
 
     private fun mergeTranslation(original: LyricInfo, rawOutput: String): LyricInfo? {
         val translatedLrc = extractFinalBlock(rawOutput) ?: rawOutput
-        val translatedLines = LrcParser.parse(translatedLrc).lines
-        if (translatedLines.isEmpty()) return null
+        var translatedLines = LrcParser.parse(translatedLrc).lines
+        if (translatedLines.isEmpty()) {
+            // LRC parsing failed, try plain text split by lines
+            val plainLines = translatedLrc.lines().map { it.trim() }.filter { it.isNotBlank() }
+            if (plainLines.isEmpty()) return null
+            translatedLines = plainLines.mapIndexed { index, text ->
+                LyricLine(time = 0L, text = text)
+            }
+        }
 
+        val useIndexMatch = translatedLines.all { it.time == 0L } || translatedLines.size == original.lines.size
         val merged = original.lines.mapIndexed { index, line ->
             val translation = when {
-                translatedLines.size == original.lines.size ->
-                    translatedLines[index].text
+                useIndexMatch -> translatedLines.getOrNull(index)?.text
                 else -> findClosestLine(line.time, translatedLines)?.text
             }
             line.copy(translation = translation?.takeIf { it.isNotBlank() })
         }
-        if (merged.none { !it.translation.isNullOrBlank() }) return null
+        if (merged.none { !it.translation.isNullOrBlank() }) {
+            Log.w("LyricFocusAI", "AI translate: no translations matched, raw=${translatedLrc.take(200)}")
+            return null
+        }
         return original.copy(
             lines = merged,
             source = "${original.source} + AI翻译"
