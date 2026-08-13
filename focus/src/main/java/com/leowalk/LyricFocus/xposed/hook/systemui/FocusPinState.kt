@@ -13,6 +13,5 @@ object FocusPinState {
 
     @Volatile
     var lyricActive: Boolean = false
-
-    fun shouldPin(): Boolean = pinAboveMedia && isPlaying && lyricActive
+
 }

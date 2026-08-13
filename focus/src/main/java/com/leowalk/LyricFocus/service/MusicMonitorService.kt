@@ -34,7 +34,7 @@ class MusicMonitorService : NotificationListenerService() {
         private const val NOTIFICATION_ID = LyricNotificationManager.NOTIFICATION_ID
         private const val CHANNEL_ID = LyricNotificationManager.CHANNEL_ID
         private const val CHANNEL_NAME = "歌词服务"
-        private const val REFRESH_INTERVAL_MS = 5000L
+        private const val REFRESH_INTERVAL_MS = 1000L
         private const val ALARM_INTERVAL_MS = 30000L
 
         var isServiceRunning = false

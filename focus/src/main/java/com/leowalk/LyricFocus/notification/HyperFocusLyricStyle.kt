@@ -520,9 +520,7 @@ object HyperFocusLyricStyle {
         val notifyId = CHANNEL_ID.hashCode()
 
         if (recreateForAod) {
-
             notificationManager.cancel(notifyId)
-
         }
 
         notificationManager.notify(notifyId, notification)
@@ -546,6 +544,22 @@ object HyperFocusLyricStyle {
         lastPostedLyric = ""
         lastPostedSecond = ""
         lastPostedMultiLineKey = ""
+    }
+
+    /** AOD 去重参考：持久缓存比对外部传入的当前内容是否与上次已 post 的相同 */
+    fun isPostedContentSame(
+        songTitle: String,
+        artist: String,
+        lyricText: String,
+        secondLineText: String,
+        multiLineKey: String
+    ): Boolean {
+        if (multiLineKey.isNotEmpty() && lastPostedMultiLineKey.isNotEmpty()) {
+            return multiLineKey == lastPostedMultiLineKey
+        }
+        return lyricText.isNotEmpty() &&
+            lyricText == lastPostedLyric &&
+            secondLineText == lastPostedSecond
     }
 
 
@@ -844,16 +858,19 @@ object HyperFocusLyricStyle {
         when (FocusStyleSnapshot.customAodColorMode) {
             FocusPreferences.CUSTOM_AOD_COLOR_ALBUM -> {
                 val accent = FocusStyleSnapshot.extractedAccentColor
-                    ?: FocusStyleSnapshot.extractedTextColor
-                if (accent != null) {
-                    // 万象息屏默认全黑背景：用专辑主色按黑底重算对比度，不沿用锁屏 Monet/文字取色结果
-                    val (primary, secondary) = AlbumColorExtractor.resolveTextColors(
-                        accent = accent,
-                        backgroundEstimate = FocusStyleSnapshot.extractedBgColor ?: Color.GRAY,
-                        backgroundMode = FocusPreferences.BACKGROUND_BLACK
-                    )
-                    colorPrimary = primary
-                    colorSecondary = secondary
+                val text = FocusStyleSnapshot.extractedTextColor
+                if (accent != null && text != null && accent != text) {
+                    // 万象息屏色彩模式：黑底双色，accent 与 text 取专辑主色、文字色两组
+                    colorPrimary = AlbumColorExtractor.ensureContrastColorful(accent, Color.BLACK, 4.5)
+                    colorSecondary = AlbumColorExtractor.ensureContrastColorful(text, Color.BLACK, 3.5)
+                } else if (accent != null) {
+                    colorPrimary = AlbumColorExtractor.ensureContrastColorful(accent, Color.BLACK, 4.5)
+                    val blended = AlbumColorExtractor.blendSecondary(accent, Color.BLACK)
+                    colorSecondary = AlbumColorExtractor.ensureContrastColorful(blended, Color.BLACK, 3.5)
+                } else if (text != null) {
+                    colorPrimary = AlbumColorExtractor.ensureContrastColorful(text, Color.BLACK, 4.5)
+                    val blended = AlbumColorExtractor.blendSecondary(text, Color.BLACK)
+                    colorSecondary = AlbumColorExtractor.ensureContrastColorful(blended, Color.BLACK, 3.5)
                 } else {
                     colorPrimary = COLOR_LYRIC_PRIMARY
                     colorSecondary = COLOR_LYRIC_SECONDARY

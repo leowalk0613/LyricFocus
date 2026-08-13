@@ -93,6 +93,11 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
+        <provider
+            android:name=".SettingsProvider"
+            android:authorities="com.leowalk.LyricFocus.settings"
+            android:exported="true" />
+
         <receiver
             android:name=".receiver.FocusResyncReceiver"
             android:exported="true">

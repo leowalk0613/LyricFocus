@@ -54,13 +54,6 @@
                 android:textColor="?attr/colorOnSurfaceVariant" />
 
             <!-- 通用 -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
-                android:text="通用（全部样式）"
-                android:textAppearance="?attr/textAppearanceTitleMedium" />
-
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/global_style_card"
                 android:layout_width="match_parent"
@@ -76,6 +69,13 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:text="通用（全部样式）"
+                        android:textAppearance="?attr/textAppearanceTitleMedium" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -416,7 +416,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginBottom="8dp"
-                            android:text="取色透明度"
+                            android:text="焦点通知背景取色透明度"
                             android:textAppearance="?attr/textAppearanceTitleMedium" />
 
                         <LinearLayout
@@ -429,8 +429,8 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="针对焦点通知背景。数值越低越透明，100 为完全不透明"
-                                android:textAppearance="?attr/textAppearanceBodyMedium"
+                                android:text="数值越低越透明，100 为完全不透明"
+                                android:textAppearance="?attr/textAppearanceBodySmall"
                                 android:textColor="?attr/colorOnSurfaceVariant" />
 
                             <TextView
@@ -458,29 +458,11 @@
             </com.google.android.material.card.MaterialCardView>
 
             <!-- 锁屏样式 AOD -->
-            <TextView
-                android:id="@+id/lock_screen_section_title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="4dp"
-                android:text="锁屏样式 AOD"
-                android:textAppearance="?attr/textAppearanceTitleMedium" />
-
-            <TextView
-                android:id="@+id/lock_screen_section_hint"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
-                android:text="开启主界面「万象息屏（自定义）AOD」后，此项不可调整"
-                android:textAppearance="?attr/textAppearanceBodySmall"
-                android:textColor="?attr/colorOnSurfaceVariant"
-                android:visibility="gone" />
-
             <LinearLayout
                 android:id="@+id/lock_screen_style_section"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
+                android:layout_marginTop="16dp"
                 android:orientation="vertical">
 
                 <com.google.android.material.card.MaterialCardView
@@ -497,6 +479,229 @@
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
                         android:padding="16dp">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="4dp"
+                            android:text="锁屏样式 AOD"
+                            android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+                        <TextView
+                            android:id="@+id/lock_screen_section_hint"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="12dp"
+                            android:text="开启主界面「万象息屏（自定义）AOD」后，此项不可调整"
+                            android:textAppearance="?attr/textAppearanceBodySmall"
+                            android:textColor="?attr/colorOnSurfaceVariant"
+                            android:visibility="gone" />
+
+                        <LinearLayout
+                            android:id="@+id/multi_line_card"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <LinearLayout
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:orientation="vertical">
+
+                                    <TextView
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:text="多行模式"
+                                        android:textAppearance="?attr/textAppearanceBodyLarge" />
+
+                                    <TextView
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginTop="2dp"
+                                        android:text="按所选行数一页刷新锁屏焦点；统一字号。有翻译时原文与翻译交错填满行数（翻译更淡）"
+                                        android:textAppearance="?attr/textAppearanceBodySmall"
+                                        android:textColor="?attr/colorOnSurfaceVariant" />
+
+                                </LinearLayout>
+
+                                <com.google.android.material.materialswitch.MaterialSwitch
+                                    android:id="@+id/switch_multi_line_lyrics"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="16dp" />
+
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/multi_line_count_row"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="16dp"
+                                android:orientation="vertical"
+                                android:visibility="gone">
+
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:gravity="center_vertical"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:text="显示行数"
+                                        android:textAppearance="?attr/textAppearanceBodyMedium"
+                                        android:textColor="?attr/colorOnSurfaceVariant" />
+
+                                    <TextView
+                                        android:id="@+id/multi_line_count_label"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:textAppearance="?attr/textAppearanceBodyMedium"
+                                        android:textColor="?attr/colorPrimary" />
+
+                                </LinearLayout>
+
+                                <com.google.android.material.slider.Slider
+                                    android:id="@+id/slider_multi_line_count"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:stepSize="1"
+                                    android:value="8"
+                                    android:valueFrom="3"
+                                    android:valueTo="8" />
+
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/multi_line_translation_row"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="16dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal"
+                                android:visibility="gone">
+
+                                <LinearLayout
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:orientation="vertical">
+
+                                    <TextView
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:text="显示翻译歌词"
+                                        android:textAppearance="?attr/textAppearanceBodyLarge" />
+
+                                    <TextView
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginTop="2dp"
+                                        android:text="有翻译时原文与翻译交错填满所选行数（同字号、翻译更淡）；关闭后只显示原文"
+                                        android:textAppearance="?attr/textAppearanceBodySmall"
+                                        android:textColor="?attr/colorOnSurfaceVariant" />
+
+                                </LinearLayout>
+
+                                <com.google.android.material.materialswitch.MaterialSwitch
+                                    android:id="@+id/switch_multi_line_show_translation"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="16dp" />
+
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/aod_multi_line_only_row"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="16dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal"
+                                android:visibility="gone">
+
+                                <LinearLayout
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:orientation="vertical">
+
+                                    <TextView
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:text="仅 AOD 显示多行"
+                                        android:textAppearance="?attr/textAppearanceBodyLarge" />
+
+                                    <TextView
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginTop="2dp"
+                                        android:text="锁屏使用双行歌词，AOD 息屏时显示多行歌词"
+                                        android:textAppearance="?attr/textAppearanceBodySmall"
+                                        android:textColor="?attr/colorOnSurfaceVariant" />
+
+                                </LinearLayout>
+
+                                <com.google.android.material.materialswitch.MaterialSwitch
+                                    android:id="@+id/switch_aod_multi_line_only"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="16dp" />
+
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/multi_line_text_size_row"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="16dp"
+                                android:orientation="vertical"
+                                android:visibility="gone">
+
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:gravity="center_vertical"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:text="多行字号"
+                                        android:textAppearance="?attr/textAppearanceBodyMedium"
+                                        android:textColor="?attr/colorOnSurfaceVariant" />
+
+                                    <TextView
+                                        android:id="@+id/multi_line_text_size_label"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:textAppearance="?attr/textAppearanceBodyMedium"
+                                        android:textColor="?attr/colorPrimary" />
+
+                                </LinearLayout>
+
+                                <com.google.android.material.slider.Slider
+                                    android:id="@+id/slider_multi_line_text_size"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:stepSize="1"
+                                    android:value="14"
+                                    android:valueFrom="12"
+                                    android:valueTo="32" />
+
+                            </LinearLayout>
+
+                        </LinearLayout>
 
                 <LinearLayout
                     android:id="@+id/text_size_card"
@@ -764,241 +969,18 @@
 
                 </LinearLayout>
 
-                <LinearLayout
-                    android:id="@+id/multi_line_card"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="多行模式"
-                                android:textAppearance="?attr/textAppearanceBodyLarge" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:text="按所选行数一页刷新锁屏焦点；统一字号。有翻译时原文与翻译交错填满行数（翻译更淡）"
-                                android:textAppearance="?attr/textAppearanceBodySmall"
-                                android:textColor="?attr/colorOnSurfaceVariant" />
-
-                        </LinearLayout>
-
-                        <com.google.android.material.materialswitch.MaterialSwitch
-                            android:id="@+id/switch_multi_line_lyrics"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="16dp" />
-
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/multi_line_count_row"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
-                        android:orientation="vertical"
-                        android:visibility="gone">
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal">
-
-                            <TextView
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="显示行数"
-                                android:textAppearance="?attr/textAppearanceBodyMedium"
-                                android:textColor="?attr/colorOnSurfaceVariant" />
-
-                            <TextView
-                                android:id="@+id/multi_line_count_label"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:textAppearance="?attr/textAppearanceBodyMedium"
-                                android:textColor="?attr/colorPrimary" />
-
-                        </LinearLayout>
-
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/slider_multi_line_count"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:stepSize="1"
-                            android:value="8"
-                            android:valueFrom="3"
-                            android:valueTo="8" />
-
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/multi_line_translation_row"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal"
-                        android:visibility="gone">
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="显示翻译歌词"
-                                android:textAppearance="?attr/textAppearanceBodyLarge" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:text="有翻译时原文与翻译交错填满所选行数（同字号、翻译更淡）；关闭后只显示原文"
-                                android:textAppearance="?attr/textAppearanceBodySmall"
-                                android:textColor="?attr/colorOnSurfaceVariant" />
-
-                        </LinearLayout>
-
-                        <com.google.android.material.materialswitch.MaterialSwitch
-                            android:id="@+id/switch_multi_line_show_translation"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="16dp" />
-
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/aod_multi_line_only_row"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal"
-                        android:visibility="gone">
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="仅 AOD 显示多行"
-                                android:textAppearance="?attr/textAppearanceBodyLarge" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:text="锁屏使用双行歌词，AOD 息屏时显示多行歌词"
-                                android:textAppearance="?attr/textAppearanceBodySmall"
-                                android:textColor="?attr/colorOnSurfaceVariant" />
-
-                        </LinearLayout>
-
-                        <com.google.android.material.materialswitch.MaterialSwitch
-                            android:id="@+id/switch_aod_multi_line_only"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="16dp" />
-
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/multi_line_text_size_row"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
-                        android:orientation="vertical"
-                        android:visibility="gone">
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal">
-
-                            <TextView
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="多行字号"
-                                android:textAppearance="?attr/textAppearanceBodyMedium"
-                                android:textColor="?attr/colorOnSurfaceVariant" />
-
-                            <TextView
-                                android:id="@+id/multi_line_text_size_label"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:textAppearance="?attr/textAppearanceBodyMedium"
-                                android:textColor="?attr/colorPrimary" />
-
-                        </LinearLayout>
-
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/slider_multi_line_text_size"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:stepSize="1"
-                            android:value="14"
-                            android:valueFrom="12"
-                            android:valueTo="32" />
-
-                    </LinearLayout>
-
-                    </LinearLayout>
-
-                </LinearLayout>
+            </LinearLayout>
 
             </com.google.android.material.card.MaterialCardView>
 
             </LinearLayout>
 
             <!-- 万象息屏 AOD -->
-            <TextView
-                android:id="@+id/custom_aod_section_title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="4dp"
-                android:text="万象息屏 AOD"
-                android:textAppearance="?attr/textAppearanceTitleMedium" />
-
-            <TextView
-                android:id="@+id/custom_aod_section_hint"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
-                android:text="开启主界面「万象息屏（自定义）AOD」后，此项才可调整"
-                android:textAppearance="?attr/textAppearanceBodySmall"
-                android:textColor="?attr/colorOnSurfaceVariant"
-                android:visibility="gone" />
-
             <LinearLayout
                 android:id="@+id/custom_aod_style_section"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
                 android:orientation="vertical">
 
             <com.google.android.material.card.MaterialCardView
@@ -1015,6 +997,23 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="4dp"
+                        android:text="万象息屏 AOD"
+                        android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+                    <TextView
+                        android:id="@+id/custom_aod_section_hint"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:text="开启主界面「万象息屏（自定义）AOD」后，此项才可调整"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:visibility="gone" />
 
                     <LinearLayout
                         android:id="@+id/custom_aod_text_size_section"

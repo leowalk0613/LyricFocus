@@ -19,7 +19,6 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.leowalk.LyricFocus.MainActivity
 import com.leowalk.LyricFocus.R
 import com.leowalk.LyricFocus.FocusPreferences
 import com.leowalk.LyricFocus.FocusStyleSnapshot
@@ -67,8 +66,11 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         const val EXTRA_MUSIC_PACKAGE = "music_package"
 
         private const val PACKAGE_SYSTEMUI = "com.android.systemui"
+        private const val AODCHANGE_URI = "content://com.leowalk.aodchange.notifications"
         private const val MIN_SCHEDULE_MS = 100L
         private const val UPDATE_INTERVAL_MS = 250L
+        /** aodchange 状态同步广播间隔：保证 SystemUI 晚启动也能收到 */
+        private const val AODCHANGE_SYNC_INTERVAL_MS = 30_000L
 
         var isServiceRunning = false
             private set
@@ -99,6 +101,11 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
         @Volatile
         var currentLyricFromAi: Boolean = false
+            private set
+
+        /** aodchange 外部渲染开启：仅保留歌词获取与推送，停止其他输出 */
+        @Volatile
+        var aodchangeRenderMode: Boolean = false
             private set
 
         @Volatile
@@ -161,6 +168,10 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     private var albumArtRetryJob: Job? = null
     private var lastBroadcastLyric = ""
     private var lastBroadcastSecond = ""
+    private var lastAodchangeL = ""
+    private var lastAodchangeS = ""
+    private var lastAodchangeCtxIdx = -2
+    private var lastAodchangeLinesKey = ""
 
     private val alarmReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -181,6 +192,8 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         }
     }
 
+    private var aodchangeSyncRunnable: Runnable? = null
+
     private val resyncReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == ACTION_RESYNC) {
@@ -192,6 +205,10 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     private val settingsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == FocusPreferences.ACTION_SETTINGS_CHANGED) {
+                aodchangeRenderMode = FocusPreferences.isAodchangeEnabled(this@LyricService)
+                if (aodchangeRenderMode) {
+                    stopFocusOutputs()
+                }
                 if (!isCurrentAppAllowed()) {
                     clearLyricStateForBlockedApp()
                     return
@@ -236,6 +253,25 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         lyricNotificationManager = LyricNotificationManager(this)
         lyricManager = LyricManager(this)
         lyriconBridge = com.leowalk.LyricFocus.lyric.LyriconBridge(application)
+        aodchangeRenderMode = FocusPreferences.isAodchangeEnabled(this)
+
+        // SystemUI 重启后同步 aodchange 渲染状态（广播到 SystemUI hook）。
+        // SystemUI 可能晚于本服务启动，因此定时重发直至收到回执（简单起见按固定间隔重发）。
+        lateinit var syncRunnable: Runnable
+        syncRunnable = Runnable {
+            if (!isServiceRunning) return@Runnable
+            try {
+                val syncIntent = Intent(FocusPreferences.ACTION_SETTINGS_CHANGED).apply {
+                    putExtra(FocusPreferences.EXTRA_AODCHANGE_MODE, aodchangeRenderMode)
+                }
+                sendBroadcast(syncIntent.setPackage(PACKAGE_SYSTEMUI))
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to sync aodchange mode to SystemUI", e)
+            }
+            handler.postDelayed(syncRunnable, AODCHANGE_SYNC_INTERVAL_MS)
+        }
+        aodchangeSyncRunnable = syncRunnable
+        handler.post(syncRunnable)
 
         powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(
@@ -331,6 +367,11 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     private fun startLyricUpdate() {
         handler.removeCallbacks(lyricUpdateRunnable)
         handler.post(lyricUpdateRunnable)
+        if (aodchangeRenderMode) {
+            // aodchange 外部渲染：无需精确闹钟与 WakeLock，handler 轮询驱动推送
+            Log.d(TAG, "Lyric update started (aodchange render mode), isPlaying=$isPlaying")
+            return
+        }
         scheduleNextAlarm()
         acquireWakeLock()
         Log.d(TAG, "Lyric update started, isPlaying=$isPlaying")
@@ -340,6 +381,26 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         handler.removeCallbacks(lyricUpdateRunnable)
         cancelAlarm()
         releaseWakeLock()
+    }
+
+    /** aodchange 外部渲染模式：停止焦点通知/系统广播等输出，仅保留歌词数据推送 */
+    private fun stopFocusOutputs() {
+        try {
+            stopLyricUpdate()
+            lastBroadcastLyric = ""
+            lastBroadcastSecond = ""
+            lastAodchangeL = ""
+            lastAodchangeS = ""
+            // -2：确保前奏 idx=-1 也能推送一次（-1 与初始值冲突会导致前奏被去重跳过）
+            lastAodchangeCtxIdx = -2
+            lyricNotificationManager.sendPlaybackState(false)
+            if (FocusPreferences.isShowInShade(this)) {
+                lyricNotificationManager.cancelRegularNotification()
+                lyricNotificationManager.cancelLiveNotification()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to stop focus outputs", e)
+        }
     }
 
     private fun acquireWakeLock() {
@@ -387,7 +448,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
     private fun scheduleNextLyricUpdate() {
         try {
-            val syncAdvanceMs = FocusPreferences.getSyncAdvanceMs(this)
+            val syncAdvanceMs = effectiveSyncAdvanceMs()
             val delayMs = if (isPlaying && !currentLyricInfo.isEmpty) {
                 currentLyricInfo.getNextLineSwitchDelay(currentPosition, syncAdvanceMs)
             } else {
@@ -478,6 +539,10 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         resolveCurrentPosition()
         currentPlaybackPositionMs = currentPosition
         updateNotification()
+        if (aodchangeRenderMode) {
+            // 仅推送歌词数据（handler 250ms 轮询驱动，去重后按句推送），无需精确闹钟保活
+            return
+        }
         scheduleNextLyricUpdate()
     }
 
@@ -490,7 +555,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             return
         }
 
-        val syncAdvanceMs = FocusPreferences.getSyncAdvanceMs(this)
+        val syncAdvanceMs = effectiveSyncAdvanceMs()
         val currentLine = currentLyricInfo.getCurrentLine(currentPosition, syncAdvanceMs)
         val currentLyricText: String
         val secondLineText: String
@@ -512,6 +577,12 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             )
         }
 
+        if (aodchangeRenderMode) {
+            // aodchange 外部渲染：仅推送歌词数据，不更新前台歌词通知
+            sendToAodchange(currentLyricText, secondLineText, currentLine?.time ?: 0L)
+            return
+        }
+
         if (FocusPreferences.isShowInShade(this) && isPlaying) {
             lyricNotificationManager.updateLyricNotification(
                 lyricText = currentLyricText,
@@ -529,6 +600,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         }
 
         sendLyricBroadcastIfChanged(currentLyricText, secondLineText, lineTranslation)
+        sendToAodchange(currentLyricText, secondLineText, currentLine?.time ?: 0L)
 
         val (nextLines, nextTrans) = collectNextLyricLines(syncAdvanceMs)
         previewState = PreviewState(
@@ -570,7 +642,9 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         }
         refreshPlaybackFromMonitor()
         resolveCurrentPosition()
-        lyricNotificationManager.sendPlaybackState(isPlaying)
+        if (!aodchangeRenderMode) {
+            lyricNotificationManager.sendPlaybackState(isPlaying)
+        }
         lastBroadcastLyric = ""
         lastBroadcastSecond = ""
         when {
@@ -584,7 +658,9 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             fetchLyric(currentTitle, currentArtist)
             return
         }
-        sendLyricDataToSystemUI(currentLyricInfo, currentTitle, currentArtist, force = true)
+        if (!aodchangeRenderMode) {
+            sendLyricDataToSystemUI(currentLyricInfo, currentTitle, currentArtist, force = true)
+        }
         updateNotification()
         if (isPlaying) {
             startLyricUpdate()
@@ -610,10 +686,13 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     }
 
     private fun forceSendLyricBroadcast() {
+        if (aodchangeRenderMode) {
+            return
+        }
         if (!FocusPreferences.isFocusEnabled(this) || currentLyricInfo.isEmpty) {
             return
         }
-        val syncAdvanceMs = FocusPreferences.getSyncAdvanceMs(this)
+        val syncAdvanceMs = effectiveSyncAdvanceMs()
         val currentLine = currentLyricInfo.getCurrentLine(currentPosition, syncAdvanceMs)
         val lyricText: String
         val secondLineText: String
@@ -642,6 +721,166 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     private fun resetBroadcastCache() {
         lastBroadcastLyric = ""
         lastBroadcastSecond = ""
+        lastAodchangeL = ""
+        lastAodchangeS = ""
+        lastAodchangeCtxIdx = -2
+        lastAodchangeLinesKey = ""
+    }
+
+    private fun sendToAodchange(l: String, s: String, time: Long) {
+        try {
+            val uri = android.net.Uri.parse(AODCHANGE_URI)
+            val context = buildLyricContextJson()
+            // 内容指纹：歌词 lines 变化（切歌/歌词加载）才传全量（文件描述符），
+            // 换行（idx 变化）只推轻量小 Bundle —— 绕开 binder 大数据传输
+            val linesKey = context?.optJSONArray("lines")?.toString() ?: ""
+            val full = !linesKey.equals(lastAodchangeLinesKey) && linesKey.isNotEmpty()
+            if (full) {
+                lastAodchangeLinesKey = linesKey
+            }
+            // 去重：idx 或歌词文本任一变化才推送（保证换行/文本变化即时到达）
+            val ctxKey = context?.optInt("idx", -1) ?: -1
+            if (!full && ctxKey == lastAodchangeCtxIdx && l == lastAodchangeL && s == lastAodchangeS) {
+                return
+            }
+            lastAodchangeCtxIdx = ctxKey
+            lastAodchangeL = l
+            lastAodchangeS = s
+            if (full) {
+                // 全量：写文件 + 传文件描述符（aodchange 端本地读文件，不走 binder 大数据）
+                val json = org.json.JSONObject().apply {
+                    put("l", l)
+                    put("s", s)
+                    put("t", time)
+                    put("title", currentTitle)
+                    put("artist", currentArtist)
+                    if (context != null) {
+                        put("ctx", context)
+                    }
+                }.toString()
+                sendLyricFd(json)
+            } else {
+                // 轻量：仅 l/s/title/artist（多行换行由 aodchange 用缓存 lines + 播放位置实时计算）
+                val json = org.json.JSONObject().apply {
+                    put("l", l)
+                    put("s", s)
+                    put("t", time)
+                    put("title", currentTitle)
+                    put("artist", currentArtist)
+                }
+                val extras = android.os.Bundle().apply {
+                    putString("n", json.toString())
+                }
+                contentResolver.call(uri, "putlyric", null, extras)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send to aodchange", e)
+        }
+    }
+
+    /** 全量歌词写文件并传文件描述符（aodchange 端直接读文件，避免 binder 大数据） */
+    private fun sendLyricFd(json: String) {
+        try {
+            val file = java.io.File(cacheDir, "lyric_${System.currentTimeMillis()}.json")
+            file.writeText(json)
+            val pfd = android.os.ParcelFileDescriptor.open(
+                file, android.os.ParcelFileDescriptor.MODE_READ_ONLY
+            )
+            val extras = android.os.Bundle().apply {
+                putParcelable("fd", pfd)
+            }
+            contentResolver.call(
+                android.net.Uri.parse(AODCHANGE_URI), "putlyricfd", null, extras
+            )
+            pfd.close()
+            // 清理旧文件（保留最近 3 个）
+            try {
+                cacheDir.listFiles { f -> f.name.startsWith("lyric_") }
+                    ?.sortedByDescending { it.lastModified() }
+                    ?.drop(3)
+                    ?.forEach { it.delete() }
+            } catch (_: Throwable) {
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send lyric fd", e)
+        }
+    }
+
+    /**
+     * 推送完整歌词上下文，由 aodchange 端自由排版。
+     * 结构：{ idx: 当前行下标, lines: [ {t: 原文, tm: 时间戳ms, r: 翻译, isCur: 是否当前行} ] }
+     * 包含当前行前后若干行，供 aodchange 自由决定显示行数/字号/翻译。
+     */
+    // 统一歌词同步提前值：优先读 aodchange 侧设置，否则用 LyricFocus 自带值
+    private fun effectiveSyncAdvanceMs(): Long {
+        var syncAdvanceMs = FocusPreferences.getSyncAdvanceMs(this)
+        try {
+            val r = contentResolver.call(
+                android.net.Uri.parse(AODCHANGE_URI), "settings", null, null
+            )
+            val json = r?.getString("n")
+            if (!json.isNullOrBlank() && json != "{}") {
+                val s = org.json.JSONObject(json)
+                if (s.has("lyric_advance_ms")) {
+                    syncAdvanceMs = s.getInt("lyric_advance_ms").toLong()
+                }
+            }
+        } catch (_: Throwable) {
+        }
+        return syncAdvanceMs
+    }
+
+    private fun buildLyricContextJson(): org.json.JSONObject? {
+        if (currentLyricInfo.isEmpty) return null
+        val syncAdvanceMs = effectiveSyncAdvanceMs()
+        val rawLines = currentLyricInfo.lines
+        if (rawLines.isEmpty()) return null
+
+        // 去除首行占位符：部分歌词文件第一句是歌名（实际没唱，仅作占位）。
+        // 判定：首行文本与歌名前缀匹配（歌名常带版本/专辑后缀，如 "歌名 (Live)"），
+        // 且（首行时间靠近开头 ≤1s 占位，或与下一句时间差 >10s 未唱）。
+        // 真唱的歌名其时间等于实际演唱时间（前奏之后，通常 >1s 且与下一句时间差小），不会被误删。
+        var lines = rawLines
+        val titleForCheck = currentTitle
+        if (titleForCheck.isNotBlank() && lines.size >= 2) {
+            val first = lines[0]
+            val second = lines[1]
+            val firstText = first.text?.trim().orEmpty()
+            val t1 = firstText.lowercase().replace(" ", "")
+            val t2 = titleForCheck.lowercase().replace(" ", "")
+            val titleMatches = t1.isNotEmpty() && (t2.startsWith(t1) || t1.startsWith(t2))
+            if (titleMatches) {
+                val nearStart = first.time <= 1000L
+                val farFromNext = second.time - first.time > 10_000L
+                if (nearStart || farFromNext) {
+                    lines = lines.drop(1)
+                }
+            }
+        }
+
+        // 前奏时（尚未到第一句）返回 -1，供 aodchange 显示前奏占位符
+        val currentIndex = currentLyricInfo.getCurrentLineIndex(currentPosition, syncAdvanceMs)
+        val offset = rawLines.size - lines.size
+        val shiftedIndex = if (currentIndex < 0) -1 else currentIndex - offset
+
+        val arr = org.json.JSONArray()
+        val total = lines.size
+        // 推送全部歌词，供 aodchange 自由滚动排版；歌词多时 JSON 较大但仍可接受
+        for (i in 0 until total) {
+            val line = lines[i]
+            val obj = org.json.JSONObject().apply {
+                put("t", line.text?.trim() ?: "")
+                put("tm", line.time)
+                put("r", line.translation?.replace('\n', ' ')?.trim() ?: "")
+                put("isCur", i == shiftedIndex)
+            }
+            arr.put(obj)
+        }
+        if (arr.length() == 0) return null
+        return org.json.JSONObject().apply {
+            put("idx", shiftedIndex)
+            put("lines", arr)
+        }
     }
 
     private fun sendLyricBroadcastIfChanged(
@@ -662,7 +901,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         secondLine: String,
         lineTranslation: String? = null
     ) {
-        if (FocusPreferences.isFocusEnabled(this)) {
+        if (FocusPreferences.isFocusEnabled(this) && !FocusPreferences.isAodchangeEnabled(this)) {
             sendLyricBroadcastTo(PACKAGE_SYSTEMUI, lyricText, secondLine, lineTranslation)
         }
     }
@@ -705,10 +944,10 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         artist: String,
         force: Boolean = false
     ) {
-        if (!FocusPreferences.isFocusEnabled(this)) {
+        if (!FocusPreferences.isFocusEnabled(this) || FocusPreferences.isAodchangeEnabled(this)) {
             return
         }
-        val syncAdvanceMs = FocusPreferences.getSyncAdvanceMs(this)
+        val syncAdvanceMs = effectiveSyncAdvanceMs()
         val lyricJson = lyricInfo.toJson()
         val currentLine = lyricInfo.getCurrentLine(currentPosition, syncAdvanceMs)
         val currentLyricText: String
@@ -950,10 +1189,24 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             currentLyricSourceHit = ""
             resetBroadcastCache()
             sendNoLyricStateToSystemUI(title, artist)
-            currentLyricSourceHit = ""
-            resetBroadcastCache()
             clearAlbumColorForNewSong()
-            clearAlbumColorForNewSong()
+            // aodchange 外部渲染：切歌立即推送一次空数据，避免 AOD 残留上一首歌词
+            if (aodchangeRenderMode) {
+                try {
+                    val uri = android.net.Uri.parse(AODCHANGE_URI)
+                    val empty = org.json.JSONObject().apply {
+                        put("l", "")
+                        put("s", "")
+                        put("t", 0L)
+                        put("title", title)
+                        put("artist", artist)
+                    }
+                    val extras = android.os.Bundle().apply { putString("n", empty.toString()) }
+                    contentResolver.call(uri, "putlyric", null, extras)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to clear aodchange on song change", e)
+                }
+            }
             fetchLyric(title, artist)
             previewState = PreviewState(
                 lyricText = title,
@@ -1260,6 +1513,9 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     }
 
     private fun sendLoadingStateToSystemUI(title: String, artist: String) {
+        if (aodchangeRenderMode) {
+            return
+        }
         val subtitle = lyricNotificationManager.buildSongSubtitle(title, artist)
         if (FocusPreferences.isShowInShade(this)) {
             lyricNotificationManager.showLoadingNotification(title, artist)
@@ -1276,6 +1532,9 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     }
 
     private fun sendNoLyricStateToSystemUI(title: String, artist: String, force: Boolean = true) {
+        if (aodchangeRenderMode) {
+            return
+        }
         if (FocusPreferences.isShowInShade(this)) {
             lyricNotificationManager.showNoLyricNotification(title, artist)
         }
@@ -1339,6 +1598,8 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         stopLyricUpdate()
         albumArtRetryJob?.cancel()
         stopRealtimeBridges()
+        aodchangeSyncRunnable?.let { handler.removeCallbacks(it) }
+        aodchangeSyncRunnable = null
 
         try {
             unregisterReceiver(alarmReceiver)

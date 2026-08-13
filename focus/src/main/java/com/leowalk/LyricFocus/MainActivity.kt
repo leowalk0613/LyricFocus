@@ -241,7 +241,6 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
         val tvVersion = content.findViewById<TextView>(R.id.tv_version_info)
         val tvNotes = content.findViewById<TextView>(R.id.tv_release_notes)
         val btnClose = content.findViewById<MaterialButton>(R.id.btn_update_close)
-        val btnDownload = content.findViewById<MaterialButton>(R.id.btn_update_download)
 
         tvVersion.text = versionBlock
         tvNotes.text = "正在加载更新日志…"
@@ -256,11 +255,18 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
             if (updateDialog === dialog) updateDialog = null
         }
 
-        // 不使用 AlertDialog 底部标准按钮栏，避免与工具栏同一次触摸抬起重合
         btnClose.setOnClickListener { dialog.dismiss() }
-        btnDownload.setOnClickListener {
+        content.findViewById<TextView>(R.id.tv_dl_github).setOnClickListener {
             dialog.dismiss()
-            mainHandler.post { showDownloadChannels(info) }
+            openUrl(info.githubUrl ?: "https://github.com/leowalk0613/LyricFocus/releases")
+        }
+        content.findViewById<TextView>(R.id.tv_dl_gitee).setOnClickListener {
+            dialog.dismiss()
+            openUrl(info.giteeUrl ?: "https://gitee.com/leowalk0613/LyricFocus/releases")
+        }
+        content.findViewById<TextView>(R.id.tv_dl_123pan).setOnClickListener {
+            dialog.dismiss()
+            openUrl("https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3")
         }
 
         updateDialog = dialog
@@ -277,11 +283,9 @@ class MainActivity : AppCompatActivity(), HomeFragment.UpdateCallback {
                 }
             }
             btnClose.isEnabled = false
-            btnDownload.isEnabled = false
             mainHandler.postDelayed({
                 if (dialog.isShowing) {
                     btnClose.isEnabled = true
-                    btnDownload.isEnabled = true
                 }
             }, 520L)
         }

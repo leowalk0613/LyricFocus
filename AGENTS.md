@@ -22,6 +22,14 @@
 - **必须**创建应用内更新日志 `focus/src/main/assets/release_notes_x_x_x.md`（点号分隔版本号）
 - 每次版本必须更新 release-notes 目录下的 `release-notes-vX.X.X.md`
 
+### 发布前检查清单 ⚠
+开始推送前，确认以下三项全部完成：
+1. `focus/build.gradle`：`versionCode` 和 `versionName` 已更新
+2. `focus/src/main/assets/release_notes_x_x_x.md` 已创建并写入内容
+3. `release-notes/release-notes-vX.X.X.md` 已创建并写入内容
+
+
+
 ### 注意事项
 - release APK 路径：`focus\build\outputs\apk\release\LyricFocus.vX.X.X.apk`
 - debug APK 路径：`focus\build\outputs\apk\debug\LyricFocus.vX.X.X.apk`

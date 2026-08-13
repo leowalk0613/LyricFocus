@@ -1,10 +1,8 @@
 package com.leowalk.LyricFocus.ui
 
 import android.animation.ValueAnimator
-import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
-import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -15,10 +13,8 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.widget.NestedScrollView
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
@@ -131,6 +127,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     private var isMultiLineTextSizeUpdating = false
     private var isCustomAodTextSizeUpdating = false
     private var isCustomAodWidthUpdating = false
+    private var aodchangeDimmed = false
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -141,19 +138,36 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         setupColorPresetGrid()
         bindUiFromPreferences()
         setupListeners()
-        // Move multi-line card to top of lock screen settings
-        view.findViewById<View>(R.id.multi_line_card)?.let { card ->
-            (card.parent as? ViewGroup)?.also { parent ->
-                parent.removeView(card)
-                parent.addView(card, 0)
-            }
-        }
         updateLockScreenSectionState()
         updateCustomAodSectionState()
         updateCustomAodColorUi()
         updateMultiLineDependentUi()
         refreshPreview()
         LyricService.onPreviewStateChanged = { view.post { refreshPreview() } }
+        applyAodchangeDim(view)
+    }
+
+    /** aodchange 外部渲染开启：本页全部设置（依赖 hook）变灰禁用 */
+    private fun applyAodchangeDim(view: View) {
+        try {
+            val dimmed = FocusPreferences.isAodchangeEnabled(requireContext())
+            if (dimmed == aodchangeDimmed) return
+            aodchangeDimmed = dimmed
+            SettingsDim.apply(view, dimmed)
+            if (dimmed) {
+                android.widget.Toast.makeText(
+                    requireContext(),
+                    "外部渲染模式下样式设置不可用，关闭“aodchange 外部渲染”后恢复",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            } else {
+                // 恢复后重新应用控件依赖状态（多行开关联动等）
+                updateLockScreenSectionState()
+                updateCustomAodSectionState()
+                updateMultiLineDependentUi()
+            }
+        } catch (_: Throwable) {
+        }
     }
 
     override fun onDestroyView() {
@@ -169,6 +183,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         updateCustomAodSectionState()
         updateMultiLineDependentUi()
         refreshPreview()
+        applyAodchangeDim(requireView())
     }
 
     private fun bindViews(view: View) {
@@ -1654,7 +1669,6 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                     .coerceAtLeast(0)
             } else 0
             val effectiveCurrentSlot = 0
-            val effectiveHideSlot = 0
             val interleaved: Boolean
             val lines: List<String>
 

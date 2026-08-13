@@ -21,16 +21,6 @@ class LyriconBridge(context: Application) {
         fun onStop()
     }
 
-    val isAvailable: Boolean
-        get() = try {
-            val sub = LyriconFactory.createSubscriber(appContext)
-            sub.destroy()
-            true
-        } catch (e: Exception) {
-            Log.w(tag, "Lyricon not available", e)
-            false
-        }
-
     fun start(cb: Callback) {
         stop()
         this.callback = cb
@@ -137,6 +127,12 @@ class LyriconBridge(context: Application) {
         override fun onDisplayRomaChanged(isDisplayRoma: Boolean) = Unit
     }
 
+    /**
+     * 合并同时间戳的原文/翻译/罗马音行。
+     * 注意：只合并时间戳完全相同的行。快节奏日英混搭歌相邻句可能仅差几十毫秒
+     * （nanana 紧跟日语、rap 短句），按 150ms 容差合并会整句吞掉。
+     * 组内不同文本的行全部保留为独立行，仅当独立行是已附着翻译时才跳过。
+     */
     private fun mergeSameTimeLines(lines: List<LyricLine>): List<LyricLine> {
         if (lines.size < 2) return lines
         val sorted = lines.sortedBy { it.time }
@@ -144,31 +140,39 @@ class LyriconBridge(context: Application) {
         var i = 0
         while (i < sorted.size) {
             val current = sorted[i]
-            val group = mutableListOf(current)
             var j = i + 1
-            while (j < sorted.size && (sorted[j].time - current.time) <= MERGE_TIME_THRESHOLD_MS) {
-                group += sorted[j]
+            while (j < sorted.size && sorted[j].time == current.time) {
                 j++
             }
+            val group = sorted.subList(i, j)
             if (group.size == 1) {
                 result.add(current)
             } else {
                 val primary = group.firstOrNull { it.text.isNotBlank() }
                 val trans = group.firstOrNull { it.translation?.isNotBlank() == true }
                 val reading = group.firstOrNull { it.reading?.isNotBlank() == true }
-                result.add(LyricLine(
+                val merged = LyricLine(
                     time = current.time,
-                    text = primary?.text?.takeIf { it.isNotBlank() } ?: group.firstOrNull { it.text.isNotBlank() }?.text ?: current.text,
+                    text = primary?.text?.takeIf { it.isNotBlank() } ?: current.text.orEmpty(),
                     translation = trans?.translation ?: primary?.translation,
                     reading = reading?.reading ?: primary?.reading
-                ))
+                )
+                result.add(merged)
+                for (extra in group) {
+                    val t = extra.text?.takeIf { it.isNotBlank() } ?: continue
+                    if (t == merged.text) continue
+                    if (merged.translation != null && t == merged.translation) continue
+                    result.add(
+                        LyricLine(
+                            time = extra.time,
+                            text = t,
+                            translation = extra.translation?.takeIf { it.isNotBlank() }
+                        )
+                    )
+                }
             }
             i = j
         }
         return result
-    }
-
-    companion object {
-        private const val MERGE_TIME_THRESHOLD_MS = 150L
     }
 }

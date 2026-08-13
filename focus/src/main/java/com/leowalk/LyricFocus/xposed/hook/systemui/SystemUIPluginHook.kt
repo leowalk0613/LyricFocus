@@ -3,6 +3,7 @@ package com.leowalk.LyricFocus.xposed.hook.systemui
 import android.content.ComponentName
 import android.content.ContextWrapper
 import android.os.Bundle
+import com.leowalk.LyricFocus.xposed.FocusMainHook
 import com.leowalk.LyricFocus.xposed.hook.BaseHook
 import com.leowalk.LyricFocus.xposed.ReflectUtil
 import io.github.libxposed.api.XposedModule
@@ -10,6 +11,10 @@ import io.github.libxposed.api.XposedModule
 class SystemUIPluginHook : BaseHook() {
 
     override val tag: String = "SystemUIPluginHook"
+
+    companion object {
+        private const val SETTINGS_URI = "content://com.leowalk.LyricFocus.settings"
+    }
 
     override fun install(classLoader: ClassLoader, module: XposedModule) {
         hookPluginFactory(classLoader, module)
@@ -24,6 +29,9 @@ class SystemUIPluginHook : BaseHook() {
             )
             module.hook(method).intercept { chain ->
                 val proceeded = chain.proceed()
+                // aodchange 外部渲染 / 焦点通知歌词关闭：不注入任何插件 hook
+                val focusDisabled = FocusMainHook.queryMode(SETTINGS_URI, "focus_mode") == false
+                if (SystemUIHyperFocusHook.aodchangeMode || focusDisabled) return@intercept proceeded
                 val result = proceeded as? ContextWrapper ?: return@intercept proceeded
                 val factory = chain.thisObject
                 val component = ReflectUtil.getField(factory, "mComponentName")
@@ -34,10 +42,12 @@ class SystemUIPluginHook : BaseHook() {
                 if (className.contains("FocusNotification")) {
                     val label = className.split(".").lastOrNull() ?: "FocusPlugin"
                     bypassFocusPluginClassLoader(result.classLoader, module, label)
+                    FocusAntiFlickerHook.install(result.classLoader, module, tag)
                     FocusIslandSuppressHook.install(result.classLoader, module, tag) { result.applicationContext }
                 }
                 if (className.contains("DozeServicePluginImpl")) {
                     bypassFocusPluginClassLoader(result.classLoader, module, "DozeServicePluginImpl")
+                    FocusAntiFlickerHook.install(result.classLoader, module, tag)
                 }
                 result
             }

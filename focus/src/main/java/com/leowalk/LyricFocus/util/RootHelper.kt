@@ -15,7 +15,8 @@ object RootHelper {
     }
 
     /**
-     * 结束 SystemUI 进程，系统会自动拉起新的系统界面。
+     * 结束 SystemUI 与 AOD 进程，系统会自动拉起新的进程。
+     * hook 的启停由进程启动时的开关检测决定，切换开关后重启才能彻底生效。
      */
     fun restartSystemUi(): Boolean {
         if (!checkRootAccess()) {
@@ -23,6 +24,8 @@ object RootHelper {
         }
         runSuCommand("killall com.android.systemui", ignoreExitCode = true)
         runSuCommand("pkill -f com.android.systemui", ignoreExitCode = true)
+        runSuCommand("killall com.miui.aod", ignoreExitCode = true)
+        runSuCommand("pkill -f com.miui.aod", ignoreExitCode = true)
         return true
     }
 

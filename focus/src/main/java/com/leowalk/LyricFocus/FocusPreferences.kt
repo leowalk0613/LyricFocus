@@ -149,6 +149,7 @@ object FocusPreferences {
     const val EXTRA_AOD_KEEPALIVE_SEC = "aod_keepalive_sec"
     const val EXTRA_SYNC_ADVANCE_MS = "sync_advance_ms"
     const val EXTRA_APP_WHITELIST_ENABLED = "app_whitelist_enabled"
+    const val EXTRA_AODCHANGE_MODE = "aodchange_mode"
     const val EXTRA_LYRIC_SOURCE = "lyric_source"
 
     const val DEFAULT_AOD_KEEPALIVE_SEC = 9
@@ -647,6 +648,25 @@ object FocusPreferences {
 
     fun readCustomAodLayout(context: Context): Boolean {
         return readFromModule(context) { isCustomAodLayout(it) } ?: false
+    }
+
+    /** aodchange 外部渲染：开启后歌词通过 ContentProvider 发送到 aodchange，焦点通知不再显示歌词 */
+    const val PREF_AODCHANGE_ENABLED = "aodchange_enabled"
+
+    fun isAodchangeEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_AODCHANGE_ENABLED, false)
+    }
+
+    fun setAodchangeEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_AODCHANGE_ENABLED, enabled)
+            .apply()
+    }
+
+    fun readAodchangeEnabled(context: Context): Boolean {
+        return readFromModule(context) { isAodchangeEnabled(it) } ?: false
     }
 
     fun isSwapLyricTranslation(context: Context): Boolean {

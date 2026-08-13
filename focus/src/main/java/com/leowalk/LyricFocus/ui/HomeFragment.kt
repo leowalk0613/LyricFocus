@@ -34,6 +34,7 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
 
     private lateinit var switchFocusLyric: MaterialSwitch
     private lateinit var switchCustomAodLayout: MaterialSwitch
+    private lateinit var switchAodchange: MaterialSwitch
     private lateinit var switchAppWhitelist: MaterialSwitch
     private lateinit var switchHideDesktopIcon: MaterialSwitch
     private lateinit var btnManageWhitelist: MaterialButton
@@ -62,6 +63,7 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
     private var pendingUpdateInfo: UpdateChecker.UpdateInfo? = null
     private var hasCheckedForUpdates = false
     private var isCheckingRoot = false
+    private var aodchangeDimmed = false
     private val statusHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val statusRefreshRunnable = object : Runnable {
         override fun run() {
@@ -124,6 +126,7 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
     private fun initViews(view: View) {
         switchFocusLyric = view.findViewById(R.id.switch_focus_lyric)
         switchCustomAodLayout = view.findViewById(R.id.switch_custom_aod_layout)
+        switchAodchange = view.findViewById(R.id.switch_aodchange)
         switchAppWhitelist = view.findViewById(R.id.switch_app_whitelist)
         switchHideDesktopIcon = view.findViewById(R.id.switch_hide_desktop_icon)
         btnManageWhitelist = view.findViewById(R.id.btn_manage_whitelist)
@@ -155,6 +158,7 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         val ctx = requireContext()
         switchFocusLyric.isChecked = FocusPreferences.isFocusEnabled(ctx)
         switchCustomAodLayout.isChecked = FocusPreferences.isCustomAodLayout(ctx)
+        switchAodchange.isChecked = FocusPreferences.isAodchangeEnabled(ctx)
         switchAppWhitelist.isChecked = FocusPreferences.isAppWhitelistEnabled(ctx)
         switchHideDesktopIcon.isChecked = FocusPreferences.isHideDesktopIcon(ctx)
         updateWhitelistUi()
@@ -173,11 +177,19 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         switchFocusLyric.setOnCheckedChangeListener { _, checked ->
             FocusPreferences.setFocusEnabled(requireContext(), checked)
             broadcastSettingsChanged()
+            restartForHookChange()
         }
         switchCustomAodLayout.setOnCheckedChangeListener { _, checked ->
             FocusPreferences.setCustomAodLayout(requireContext(), checked)
             FocusPreferences.notifyStyleSettingsChanged(requireContext())
             broadcastSettingsChanged()
+        }
+        switchAodchange.setOnCheckedChangeListener { _, checked ->
+            FocusPreferences.setAodchangeEnabled(requireContext(), checked)
+            FocusPreferences.notifyStyleSettingsChanged(requireContext())
+            broadcastSettingsChanged()
+            updateStatus()
+            restartForHookChange()
         }
         switchAppWhitelist.setOnCheckedChangeListener { _, checked ->
             val ctx = requireContext()
@@ -247,7 +259,9 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
     }
 
     private fun buildAodModeLabel(ctx: android.content.Context): String {
-        return if (FocusPreferences.isCustomAodLayout(ctx)) {
+        return if (FocusPreferences.isAodchangeEnabled(ctx)) {
+            "外部渲染（aodchange）"
+        } else if (FocusPreferences.isCustomAodLayout(ctx)) {
             "万象息屏（自定义）"
         } else if (FocusPreferences.isMultiLineLyrics(ctx)) {
             val lines = FocusPreferences.getMultiLineLineCount(ctx)
@@ -272,6 +286,7 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
                 putExtra(FocusPreferences.EXTRA_SHOW_ON_ISLAND, FocusPreferences.isShowOnIsland(ctx))
                 putExtra(FocusPreferences.EXTRA_SYNC_ADVANCE_MS, FocusPreferences.getSyncAdvanceMs(ctx))
                 putExtra(FocusPreferences.EXTRA_APP_WHITELIST_ENABLED, FocusPreferences.isAppWhitelistEnabled(ctx))
+                putExtra(FocusPreferences.EXTRA_AODCHANGE_MODE, FocusPreferences.isAodchangeEnabled(ctx))
                 if (includeLyricSource) {
                     putExtra(FocusPreferences.EXTRA_LYRIC_SOURCE, FocusPreferences.getLyricSource(ctx))
                 }
@@ -283,12 +298,57 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         startMusicMonitorService()
     }
 
+    /**
+     * hook 开关变化：root 重启 SystemUI 与 AOD，使 hook 装载状态在进程重启后生效。
+     * 重启失败不阻塞（hook 内已有运行时门卫兜底，下次系统重启也会生效）。
+     */
+    private fun restartForHookChange() {
+        val ctx = requireContext()
+        com.leowalk.LyricFocus.util.RootHelper.restartSystemUiAsync { success, _ ->
+            if (!success) {
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    try {
+                        android.widget.Toast.makeText(
+                            ctx,
+                            "未获取 Root 权限，hook 开关将在下次系统重启后生效",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                    } catch (_: Throwable) {
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * aodchange 外部渲染开启：禁用依赖 hook 的设置项（焦点通知歌词、万象息屏、
+     * 白名单、同步提前），仅保留"aodchange 外部渲染"开关本身可操作。
+     */
+    private fun applyAodchangeDim() {
+        try {
+            val dimmed = FocusPreferences.isAodchangeEnabled(requireContext())
+            if (dimmed == aodchangeDimmed) return
+            aodchangeDimmed = dimmed
+            val views = listOf(
+                switchFocusLyric, switchCustomAodLayout, switchAppWhitelist,
+                btnManageWhitelist, sliderSyncAdvance
+            )
+            for (v in views) {
+                v.isEnabled = !dimmed
+                v.alpha = if (dimmed) 0.4f else 1f
+            }
+        } catch (_: Throwable) {
+        }
+    }
+
     private fun updateStatus() {
         val ctx = requireContext()
         val hasNotificationPermission = isNotificationServiceEnabled()
         val hasPostNotificationPermission =
             NotificationPermissionHelper.hasPostNotificationsPermission(ctx)
         val running = LyricService.isServiceRunning
+
+        applyAodchangeDim()
 
         setPermissionStatusIcon(ivNotificationPermission, granted = hasNotificationPermission)
         setPermissionStatusIcon(
