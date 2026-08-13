@@ -14,6 +14,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: main
       - run: |
           git remote add gitee "https://leowalk0613:${{ secrets.GITEE_TOKEN }}@gitee.com/leowalk0613/LyricFocus.git"
           git push gitee main --tags --force
