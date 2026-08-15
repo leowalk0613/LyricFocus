@@ -807,8 +807,8 @@ class SystemUIHyperFocusHook : BaseHook() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
                     Intent.ACTION_SCREEN_OFF -> {
-                        // 进入 AOD：边沿检测，只在 false→true 时触发一次 cancel+repost
-                        handler.postDelayed({ handlePossibleAodStateChange() }, 600L)
+                        // 息屏后 cancel+repost 将歌词通知推到焦点通知第一位（以前的方法）
+                        handler.postDelayed({ forceCancelAndRepostForAod(AodRecreateReason.SCREEN_ENTER_AOD) }, 600L)
                     }
                     Intent.ACTION_SCREEN_ON -> {
                         handler.postDelayed({
@@ -1605,8 +1605,7 @@ class SystemUIHyperFocusHook : BaseHook() {
             return
         }
         lastCancelAndRepostTime = now
-        val aodActive = isAodActive()
-        // 切歌时：清理旧状态后 cancel+repost；AOD 进入时：仅 AOD 下 cancel 确保置顶
+        // 切歌时：清理旧状态后 cancel+repost；息屏时：cancel+repost 置顶
         when (reason) {
             AodRecreateReason.SONG_CHANGED -> {
                 lastSongKey = currentSongKey()
@@ -1616,10 +1615,9 @@ class SystemUIHyperFocusHook : BaseHook() {
                 clearNotifiedLyricContent()
             }
             AodRecreateReason.SCREEN_ENTER_AOD -> {
-                if (aodActive) {
-                    cancelFocusNotification()
-                    HyperFocusLyricStyle.resetPostedCache()
-                }
+                // 息屏置顶：不依赖 AOD 状态检测（HyperOS4 上 isInteractive 在 AOD 下返回 true）
+                cancelFocusNotification()
+                HyperFocusLyricStyle.resetPostedCache()
             }
         }
         clearNotifiedLyricContent()

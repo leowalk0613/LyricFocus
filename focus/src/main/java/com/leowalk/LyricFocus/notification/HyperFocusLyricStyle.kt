@@ -1484,7 +1484,8 @@ object HyperFocusLyricStyle {
             views.setViewVisibility(viewId, View.VISIBLE)
             if (isCurrentLine || isCurrentTrans) {
                 views.setCharSequence(viewId, "setText", boldText(displayText))
-                views.setTextColor(viewId, currentLineColor)
+                // 当前行翻译与其他翻译行一样用淡化色，避免与原文抢视觉
+                views.setTextColor(viewId, if (isCurrentTrans) nonCurrentTransColor else currentLineColor)
                 views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP,
                     if (isCurrentTrans) textSizeSp * 0.62f else textSizeSp)
                 views.setInt(viewId, "setMaxLines", if (isCurrentTrans) 1 else 4)
