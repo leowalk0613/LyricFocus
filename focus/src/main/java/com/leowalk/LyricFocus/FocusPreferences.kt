@@ -23,8 +23,8 @@ object FocusPreferences {
     const val PREF_MULTI_LINE_LYRICS = "multi_line_lyrics"
     /** 多行模式下是否显示翻译（有翻译时交错显示原文与翻译） */
     const val PREF_MULTI_LINE_SHOW_TRANSLATION = "multi_line_show_translation"
-    /** 多行模式一页行数：4~8 */
-    const val PREF_MULTI_LINE_LINE_COUNT = "multi_line_line_count"
+    /** 多行歌词区域固定高度（dp）：200~450 */
+    const val PREF_MULTI_LINE_HEIGHT = "multi_line_height"
     /** 仅 AOD 显示多行歌词，锁屏保持双行 */
     const val PREF_AOD_MULTI_LINE_ONLY = "aod_multi_line_only"
     /** 多行歌词独立字号（原文/翻译统一） */
@@ -78,6 +78,7 @@ object FocusPreferences {
     const val BACKGROUND_BLACK = "black"
     const val BACKGROUND_WHITE = "white"
     const val BACKGROUND_CUSTOM = "custom"
+    const val BACKGROUND_ALBUM = "album"
 
     const val LYRIC_SOURCE_AUTO = "auto"
     const val LYRIC_SOURCE_NETEASE = "netease"
@@ -163,18 +164,14 @@ object FocusPreferences {
     const val MAX_SYNC_ADVANCE_MS = 3000L
 
     const val DEFAULT_LYRIC_TEXT_SIZE_SP = 18f
-    const val DEFAULT_MULTI_LINE_TEXT_SIZE_SP = 14f
+    const val DEFAULT_MULTI_LINE_TEXT_SIZE_SP = 20f
 
-    const val DEFAULT_MULTI_LINE_LINE_COUNT = 8
-    const val MIN_MULTI_LINE_COUNT = 3
-    const val MAX_MULTI_LINE_COUNT = 8
+    const val DEFAULT_MULTI_LINE_HEIGHT_DP = 400
+    const val MIN_MULTI_LINE_HEIGHT_DP = 200
+    const val MAX_MULTI_LINE_HEIGHT_DP = 450
 
-    fun coerceMultiLineLineCount(lines: Int): Int {
-        return lines.coerceIn(MIN_MULTI_LINE_COUNT, MAX_MULTI_LINE_COUNT)
-    }
-    /** 3->4, 4->4, 5->6, 6->6, 7->8, 8->8 */
-    fun multiLinePageSlots(lines: Int): Int {
-        return ((lines + 1) / 2 * 2).coerceIn(4, 8)
+    fun coerceMultiLineHeightDp(dp: Int): Int {
+        return dp.coerceIn(MIN_MULTI_LINE_HEIGHT_DP, MAX_MULTI_LINE_HEIGHT_DP)
     }
 
     const val MIN_LYRIC_TEXT_SIZE_SP = 12f
@@ -749,22 +746,22 @@ object FocusPreferences {
         return readFromModule(context) { isMultiLineShowTranslation(it) } ?: true
     }
 
-    fun getMultiLineLineCount(context: Context): Int {
-        return coerceMultiLineLineCount(
+    fun getMultiLineHeightDp(context: Context): Int {
+        return coerceMultiLineHeightDp(
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getInt(PREF_MULTI_LINE_LINE_COUNT, DEFAULT_MULTI_LINE_LINE_COUNT)
+                .getInt(PREF_MULTI_LINE_HEIGHT, DEFAULT_MULTI_LINE_HEIGHT_DP)
         )
     }
 
-    fun setMultiLineLineCount(context: Context, lines: Int) {
+    fun setMultiLineHeightDp(context: Context, dp: Int) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
-            .putInt(PREF_MULTI_LINE_LINE_COUNT, coerceMultiLineLineCount(lines))
+            .putInt(PREF_MULTI_LINE_HEIGHT, coerceMultiLineHeightDp(dp))
             .apply()
     }
 
-    fun readMultiLineLineCount(context: Context): Int {
-        return readFromModule(context) { getMultiLineLineCount(it) } ?: DEFAULT_MULTI_LINE_LINE_COUNT
+    fun readMultiLineHeightDp(context: Context): Int {
+        return readFromModule(context) { getMultiLineHeightDp(it) } ?: DEFAULT_MULTI_LINE_HEIGHT_DP
     }
 
     fun getMultiLineTextSize(context: Context): Float {
@@ -1280,6 +1277,7 @@ object FocusPreferences {
 
     fun shouldExtractAlbumColors(context: Context): Boolean {
         return isAlbumColorExtractionActive(context) ||
+            getFocusBackground(context) == BACKGROUND_ALBUM ||
             (isCustomAodLayout(context) && getCustomAodColorMode(context) == CUSTOM_AOD_COLOR_ALBUM)
     }
 
@@ -1402,10 +1400,14 @@ object FocusPreferences {
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_COLOR_MODE, colorMode)
         intent.putExtra("monet_bg_only", isMonetBgOnly(context))
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_BACKGROUND, getFocusBackground(context))
+        intent.putExtra(
+            FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_COLOR_OPACITY,
+            getExtractedColorOpacity(context)
+        )
         appendExtractedColorExtras(intent, context)
     }
 
-    private fun appendExtractedColorExtras(intent: android.content.Intent, context: Context) {
+    fun appendExtractedColorExtras(intent: android.content.Intent, context: Context) {
         val color = getExtractedTextColor(context)
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_COLOR_SET, color != null)
         if (color != null) {
@@ -1432,7 +1434,7 @@ object FocusPreferences {
         }
     }
 
-    fun notifyStyleSettingsChanged(context: Context) {
+    fun notifyStyleSettingsChanged(context: Context, notifySelf: Boolean = true) {
         try {
             val intent = android.content.Intent(ACTION_SETTINGS_CHANGED).apply {
                 putExtra(FocusStyleSnapshot.EXTRA_STYLE_CHANGED, true)
@@ -1466,8 +1468,8 @@ object FocusPreferences {
                     isMultiLineShowTranslation(context)
                 )
                 putExtra(
-                    FocusStyleSnapshot.EXTRA_STYLE_MULTI_LINE_LINE_COUNT,
-                    getMultiLineLineCount(context)
+                    FocusStyleSnapshot.EXTRA_STYLE_MULTI_LINE_HEIGHT,
+                    getMultiLineHeightDp(context)
                 )
                 putExtra(
                     FocusStyleSnapshot.EXTRA_STYLE_MULTI_LINE_TEXT_SIZE,
@@ -1545,10 +1547,13 @@ object FocusPreferences {
                     FocusStyleSnapshot.EXTRA_STYLE_COLOR_MODE,
                     isColorModeEnabled(context)
                 )
+                putExtra("monet_bg_only", isMonetBgOnly(context))
                 appendExtractedColorExtras(this, context)
             }
             context.sendBroadcast(android.content.Intent(intent).setPackage("com.android.systemui"))
-            context.sendBroadcast(android.content.Intent(intent).setPackage(context.packageName))
+            if (notifySelf) {
+                context.sendBroadcast(android.content.Intent(intent).setPackage(context.packageName))
+            }
         } catch (_: Exception) {
         }
     }

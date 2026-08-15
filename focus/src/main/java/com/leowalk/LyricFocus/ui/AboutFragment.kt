@@ -85,13 +85,9 @@ class AboutFragment : Fragment(R.layout.activity_about) {
     }
 
     private fun setupLinks(view: View) {
-        view.findViewById<MaterialButton>(R.id.btn_github_repo).setOnClickListener {
-            openUrl("https://github.com/leowalk0613/LyricFocus")
-        }
-
-        view.findViewById<MaterialButton>(R.id.btn_gitee_repo).setOnClickListener {
-            openUrl("https://gitee.com/leowalk0613/LyricFocus")
-        }
+        setupHyperlink(view.findViewById(R.id.btn_github_repo), "https://github.com/leowalk0613/LyricFocus")
+        setupHyperlink(view.findViewById(R.id.btn_gitee_repo), "https://gitee.com/leowalk0613/LyricFocus")
+        setupHyperlink(view.findViewById(R.id.btn_123pan), "https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3")
 
         view.findViewById<MaterialButton>(R.id.btn_github_issue).setOnClickListener {
             openUrl("https://github.com/leowalk0613/LyricFocus/issues")
@@ -112,6 +108,11 @@ class AboutFragment : Fragment(R.layout.activity_about) {
         view.findViewById<MaterialButton>(R.id.btn_mit_license).setOnClickListener {
             showMitLicenseDialog()
         }
+    }
+
+    private fun setupHyperlink(textView: TextView, url: String) {
+        textView.setTextColor(MaterialColors.getColor(requireContext(), com.google.android.material.R.attr.colorPrimary, "LyricFocus"))
+        textView.setOnClickListener { openUrl(url) }
     }
 
     private fun showContactEmailDialog() {

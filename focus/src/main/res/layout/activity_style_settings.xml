@@ -24,12 +24,6 @@
 
     </com.google.android.material.appbar.AppBarLayout>
 
-    <include
-        android:id="@+id/preview_section"
-        layout="@layout/preview_style_card"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
-
     <androidx.core.widget.NestedScrollView
         android:id="@+id/style_content"
         android:layout_width="match_parent"
@@ -540,7 +534,7 @@
                             </LinearLayout>
 
                             <LinearLayout
-                                android:id="@+id/multi_line_count_row"
+                                android:id="@+id/multi_line_height_row"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="16dp"
@@ -557,12 +551,12 @@
                                         android:layout_width="0dp"
                                         android:layout_height="wrap_content"
                                         android:layout_weight="1"
-                                        android:text="显示行数"
+                                        android:text="通知高度"
                                         android:textAppearance="?attr/textAppearanceBodyMedium"
                                         android:textColor="?attr/colorOnSurfaceVariant" />
 
                                     <TextView
-                                        android:id="@+id/multi_line_count_label"
+                                        android:id="@+id/multi_line_height_label"
                                         android:layout_width="wrap_content"
                                         android:layout_height="wrap_content"
                                         android:textAppearance="?attr/textAppearanceBodyMedium"
@@ -571,13 +565,13 @@
                                 </LinearLayout>
 
                                 <com.google.android.material.slider.Slider
-                                    android:id="@+id/slider_multi_line_count"
+                                    android:id="@+id/slider_multi_line_height"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:stepSize="1"
-                                    android:value="8"
-                                    android:valueFrom="3"
-                                    android:valueTo="8" />
+                                    android:stepSize="10"
+                                    android:value="400"
+                                    android:valueFrom="200"
+                                    android:valueTo="450" />
 
                             </LinearLayout>
 

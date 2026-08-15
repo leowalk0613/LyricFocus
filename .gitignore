@@ -44,3 +44,6 @@ stdout.txt
 
 # Test data
 testdata/
+
+# HyperOS4 反编译分析产物（临时工作文件，不入库）
+analysis/

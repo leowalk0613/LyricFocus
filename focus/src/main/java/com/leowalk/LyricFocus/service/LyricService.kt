@@ -26,6 +26,7 @@ import com.leowalk.LyricFocus.lyric.LyricInfo
 import com.leowalk.LyricFocus.lyric.LyricManager
 import com.leowalk.LyricFocus.util.AlbumColorExtractor
 import com.leowalk.LyricFocus.util.AlbumArtLoader
+import com.leowalk.LyricFocus.util.RootHelper
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlinx.coroutines.CoroutineScope
@@ -36,23 +37,12 @@ import kotlinx.coroutines.launch
 
 class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
-    data class PreviewState(
-        val lyricText: String = "",
-        val secondLine: String = "",
-        val lineTranslation: String? = null,
-        val title: String = "",
-        val artist: String = "",
-        val isPlaying: Boolean = false,
-        val musicPackage: String = "",
-        val nextLyricLines: List<String> = emptyList(),
-        val nextLyricTranslations: List<String> = emptyList()
-    )
-
     companion object {
         private const val TAG = "LyricService"
 
         const val ACTION_START = "com.leowalk.LyricFocus.action.START"
         const val ACTION_STOP = "com.leowalk.LyricFocus.action.STOP"
+        const val ACTION_LYRIC_DATA = "com.leowalk.LyricFocus.action.LYRIC_DATA"
         const val ACTION_UPDATE_LYRIC = "com.leowalk.LyricFocus.action.UPDATE_LYRIC"
         const val ACTION_ALARM_TICK = "com.leowalk.LyricFocus.action.ALARM_TICK"
         const val ACTION_RESYNC = FocusPreferences.ACTION_REQUEST_RESYNC
@@ -64,6 +54,10 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         const val EXTRA_ARTIST = "artist"
         const val EXTRA_POSITION = "position"
         const val EXTRA_MUSIC_PACKAGE = "music_package"
+        const val EXTRA_FORCE_RESYNC = "force_resync"
+        const val EXTRA_LYRIC_JSON = "lyric_json"
+        const val EXTRA_OFFSET = "offset"
+        const val EXTRA_SYNC_ADVANCE = "sync_advance"
 
         private const val PACKAGE_SYSTEMUI = "com.android.systemui"
         private const val AODCHANGE_URI = "content://com.leowalk.aodchange.notifications"
@@ -109,23 +103,8 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             private set
 
         @Volatile
-        var currentLyricInfoForPreview: LyricInfo = LyricInfo.EMPTY
-            private set
-
-        @Volatile
         var currentPlaybackPositionMs: Long = 0L
             private set
-
-        @Volatile
-        var previewState: PreviewState = PreviewState()
-            private set
-
-        @Volatile
-        var onPreviewStateChanged: (() -> Unit)? = null
-
-        private fun notifyPreviewStateChanged() {
-            onPreviewStateChanged?.invoke()
-        }
 
         fun start(context: Context) {
             val intent = Intent(context, LyricService::class.java)
@@ -206,6 +185,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == FocusPreferences.ACTION_SETTINGS_CHANGED) {
                 aodchangeRenderMode = FocusPreferences.isAodchangeEnabled(this@LyricService)
+                syncAodchangeToSystemProperty()
                 if (aodchangeRenderMode) {
                     stopFocusOutputs()
                 }
@@ -254,6 +234,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         lyricManager = LyricManager(this)
         lyriconBridge = com.leowalk.LyricFocus.lyric.LyriconBridge(application)
         aodchangeRenderMode = FocusPreferences.isAodchangeEnabled(this)
+        syncAodchangeToSystemProperty()
 
         // SystemUI 重启后同步 aodchange 渲染状态（广播到 SystemUI hook）。
         // SystemUI 可能晚于本服务启动，因此定时重发直至收到回执（简单起见按固定间隔重发）。
@@ -601,43 +582,11 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
         sendLyricBroadcastIfChanged(currentLyricText, secondLineText, lineTranslation)
         sendToAodchange(currentLyricText, secondLineText, currentLine?.time ?: 0L)
-
-        val (nextLines, nextTrans) = collectNextLyricLines(syncAdvanceMs)
-        previewState = PreviewState(
-            lyricText = currentLyricText,
-            secondLine = secondLineText,
-            lineTranslation = lineTranslation,
-            title = currentTitle,
-            artist = currentArtist,
-            isPlaying = isPlaying,
-            musicPackage = currentMusicPackage(),
-            nextLyricLines = nextLines,
-            nextLyricTranslations = nextTrans
-        )
-        notifyPreviewStateChanged()
-    }
-
-    private fun collectNextLyricLines(syncAdvanceMs: Long): Pair<List<String>, List<String>> {
-        if (currentLyricInfo.isEmpty) return Pair(emptyList(), emptyList())
-        val idx = currentLyricInfo.getCurrentLineIndex(currentPosition, syncAdvanceMs)
-        val lines = currentLyricInfo.lines
-        if (idx < 0) {
-            return Pair(
-                lines.take(8).map { it.text },
-                lines.take(8).map { it.translation ?: "" }
-            )
-        }
-        val texts = mutableListOf<String>()
-        val trans = mutableListOf<String>()
-        for (i in idx until (idx + 8).coerceAtMost(lines.size)) {
-            texts += lines[i].text
-            trans += lines[i].translation ?: ""
-        }
-        return Pair(texts, trans)
     }
 
     private fun resyncFocusState() {
         if (!FocusPreferences.isFocusEnabled(this)) {
+            lyricNotificationManager.sendPlaybackState(false)
             return
         }
         refreshPlaybackFromMonitor()
@@ -659,6 +608,10 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             return
         }
         if (!aodchangeRenderMode) {
+            // SystemUI 进程读不到 app 私有 prefs，样式必须通过广播同步；
+            // resync 时先推一次完整样式，再推歌词数据。
+            // notifySelf=false：避免 app 自身收到广播再次 resync 形成无限广播循环
+            FocusPreferences.notifyStyleSettingsChanged(this, notifySelf = false)
             sendLyricDataToSystemUI(currentLyricInfo, currentTitle, currentArtist, force = true)
         }
         updateNotification()
@@ -725,6 +678,15 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         lastAodchangeS = ""
         lastAodchangeCtxIdx = -2
         lastAodchangeLinesKey = ""
+    }
+
+    /** 将 aodchange 渲染状态写入系统属性，供 SystemUI/AOD 进程（system_app）读取。 */
+    private fun syncAodchangeToSystemProperty() {
+        try {
+            val value = if (aodchangeRenderMode) "1" else "0"
+            RootHelper.runSuCommand("setprop persist.lyricfocus.aodchange $value", ignoreExitCode = true)
+        } catch (_: Exception) {
+        }
     }
 
     private fun sendToAodchange(l: String, s: String, time: Long) {
@@ -914,27 +876,27 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         force: Boolean = false
     ) {
         try {
-            val intent = Intent(ACTION_UPDATE_LYRIC).apply {
+            // 应用进程不再直接发焦点通知，改为广播到 SystemUI，由 SystemUI（uid=1000）发送焦点通知绕过认证
+            val intent = Intent(ACTION_LYRIC_DATA).apply {
                 setPackage(packageName)
                 putExtra(EXTRA_LYRIC_TEXT, lyricText)
                 putExtra(EXTRA_SECOND_LINE, secondLine)
-                if (lineTranslation != null) {
-                    putExtra(EXTRA_LINE_TRANSLATION, lineTranslation)
-                }
-                putExtra(EXTRA_IS_PLAYING, isPlaying)
+                putExtra(EXTRA_LINE_TRANSLATION, lineTranslation)
                 putExtra(EXTRA_TITLE, currentTitle)
                 putExtra(EXTRA_ARTIST, currentArtist)
-                putExtra(EXTRA_POSITION, currentPosition)
                 putExtra(EXTRA_MUSIC_PACKAGE, currentMusicPackage())
-                putExtra("sync_advance", FocusPreferences.getSyncAdvanceMs(this@LyricService))
-                if (force) {
-                    putExtra("force_resync", true)
+                putExtra(EXTRA_IS_PLAYING, isPlaying)
+                putExtra(EXTRA_FORCE_RESYNC, force)
+                if (!currentLyricInfo.isEmpty) {
+                    putExtra(EXTRA_LYRIC_JSON, currentLyricInfo.toJson())
+                    putExtra(EXTRA_POSITION, currentPosition)
+                    putExtra(EXTRA_OFFSET, currentLyricInfo.offset)
+                    putExtra(EXTRA_SYNC_ADVANCE, effectiveSyncAdvanceMs())
                 }
-                FocusPreferences.fillStyleExtras(this, this@LyricService)
             }
             sendBroadcast(intent)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to send broadcast to $packageName", e)
+            Log.e(TAG, "Failed to send lyric broadcast", e)
         }
     }
 
@@ -982,6 +944,59 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             musicPackage = currentMusicPackage(),
             forceResync = force
         )
+        sendLyricDataBroadcastToSystemUI(
+            lyricJson = lyricJson,
+            position = currentPosition,
+            isPlaying = isPlaying,
+            title = title,
+            artist = artist,
+            offset = lyricInfo.offset,
+            syncAdvanceMs = syncAdvanceMs,
+            lyricText = currentLyricText,
+            secondLineText = secondLineText,
+            lineTranslation = lineTranslation,
+            musicPackage = currentMusicPackage(),
+            forceResync = force
+        )
+    }
+
+    /** 广播完整歌词数据到 SystemUI，由 SystemUI（uid=1000）发送焦点通知绕过认证 */
+    private fun sendLyricDataBroadcastToSystemUI(
+        lyricJson: String,
+        position: Long,
+        isPlaying: Boolean,
+        title: String,
+        artist: String,
+        offset: Long,
+        syncAdvanceMs: Long,
+        lyricText: String,
+        secondLineText: String,
+        lineTranslation: String?,
+        musicPackage: String,
+        forceResync: Boolean
+    ) {
+        try {
+            val intent = Intent(ACTION_LYRIC_DATA).apply {
+                setPackage(PACKAGE_SYSTEMUI)
+                putExtra(EXTRA_LYRIC_JSON, lyricJson)
+                putExtra(EXTRA_POSITION, position)
+                putExtra(EXTRA_IS_PLAYING, isPlaying)
+                putExtra(EXTRA_TITLE, title)
+                putExtra(EXTRA_ARTIST, artist)
+                putExtra(EXTRA_OFFSET, offset)
+                putExtra(EXTRA_SYNC_ADVANCE, syncAdvanceMs)
+                putExtra(EXTRA_LYRIC_TEXT, lyricText)
+                putExtra(EXTRA_SECOND_LINE, secondLineText)
+                putExtra(EXTRA_LINE_TRANSLATION, lineTranslation)
+                putExtra(EXTRA_MUSIC_PACKAGE, musicPackage)
+                putExtra(EXTRA_FORCE_RESYNC, forceResync)
+                // 每次歌词广播都携带当前取色/背景样式，SystemUI 渲染时始终拿到最新专辑取色
+                FocusPreferences.fillStyleExtras(this, this@LyricService)
+            }
+            sendBroadcast(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send lyric data to SystemUI", e)
+        }
     }
 
     private fun extractAndSaveAlbumColor(bitmap: Bitmap?, forceNotify: Boolean = false) {
@@ -990,7 +1005,8 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         val colorModeEnabled = FocusPreferences.isColorModeEnabled(this)
         val customAodAlbum = FocusPreferences.isCustomAodLayout(this) &&
             FocusPreferences.getCustomAodColorMode(this) == FocusPreferences.CUSTOM_AOD_COLOR_ALBUM
-        if (!monetEnabled && !textExtractionEnabled && !customAodAlbum) {
+        val albumBackground = FocusPreferences.getFocusBackground(this) == FocusPreferences.BACKGROUND_ALBUM
+        if (!monetEnabled && !textExtractionEnabled && !customAodAlbum && !albumBackground) {
             FocusPreferences.clearExtractedTextColor(this)
             return
         }
@@ -1185,7 +1201,6 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             currentTitle = title
             currentArtist = artist
             currentLyricInfo = LyricInfo.EMPTY
-            currentLyricInfoForPreview = LyricInfo.EMPTY
             currentLyricSourceHit = ""
             resetBroadcastCache()
             sendNoLyricStateToSystemUI(title, artist)
@@ -1208,16 +1223,6 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                 }
             }
             fetchLyric(title, artist)
-            previewState = PreviewState(
-                lyricText = title,
-                secondLine = artist,
-                lineTranslation = null,
-                title = title,
-                artist = artist,
-                isPlaying = isPlaying,
-                musicPackage = currentMusicPackage()
-            )
-            notifyPreviewStateChanged()
             if (isPlaying) {
                 restartLyricTickerIfPlaying()
             }
@@ -1251,8 +1256,6 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         currentPosition = extrapolatePlaybackPosition(state)
         lastUpdateTime = System.currentTimeMillis()
         isPlaying = state.state == PlaybackState.STATE_PLAYING
-        previewState = previewState.copy(isPlaying = isPlaying)
-        notifyPreviewStateChanged()
 
         lyricNotificationManager.sendPlaybackState(isPlaying)
 
@@ -1342,7 +1345,6 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
     private fun applyLyricResult(lyricInfo: LyricInfo, title: String, artist: String, restartTicker: Boolean = true) {
         currentLyricInfo = lyricInfo
-        currentLyricInfoForPreview = lyricInfo
         currentLyricSourceHit = lyricInfo.source
         currentLyricSongLabel = listOf(title, artist)
             .filter { it.isNotBlank() }
@@ -1577,9 +1579,22 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             musicPackage = currentMusicPackage(),
             forceResync = true
         )
+        sendLyricDataBroadcastToSystemUI(
+            lyricJson = lyricJson,
+            position = position,
+            isPlaying = isPlaying,
+            title = title,
+            artist = artist,
+            offset = 0L,
+            syncAdvanceMs = effectiveSyncAdvanceMs(),
+            lyricText = lyricText,
+            secondLineText = secondLine,
+            lineTranslation = null,
+            musicPackage = currentMusicPackage(),
+            forceResync = true
+        )
         lastBroadcastLyric = lyricText
         lastBroadcastSecond = secondLine
-        sendLyricBroadcastTo(PACKAGE_SYSTEMUI, lyricText, secondLine, lineTranslation = null, force = true)
     }
 
     private fun buildSingleLineLyricJson(text: String): String {

@@ -9,6 +9,8 @@
         android:id="@+id/focus_lyric_bg"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:background="@drawable/focus_lyric_bg_rounded"
+        android:clipToOutline="true"
         android:contentDescription="@null"
         android:scaleType="centerCrop"
         android:visibility="gone" />
@@ -16,10 +18,9 @@
     <LinearLayout
         android:id="@+id/focus_lyric_content"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="360dp"
         android:minWidth="220dp"
         android:gravity="center"
-        android:minHeight="180dp"
         android:orientation="vertical"
         android:paddingStart="16dp"
         android:paddingTop="8dp"
@@ -133,6 +134,36 @@
 
         <TextView
             android:id="@+id/focus_ml_line_7"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:minHeight="14sp"
+            android:maxLines="1"
+            android:textColor="@color/focus_lyric_aod_primary"
+            android:textSize="14sp"
+            android:shadowColor="#40000000"
+            android:shadowRadius="3"
+            android:shadowDy="1" />
+
+        <TextView
+            android:id="@+id/focus_ml_line_8"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:minHeight="14sp"
+            android:maxLines="1"
+            android:textColor="@color/focus_lyric_aod_primary"
+            android:textSize="14sp"
+            android:shadowColor="#40000000"
+            android:shadowRadius="3"
+            android:shadowDy="1" />
+
+        <TextView
+            android:id="@+id/focus_ml_line_9"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:ellipsize="end"

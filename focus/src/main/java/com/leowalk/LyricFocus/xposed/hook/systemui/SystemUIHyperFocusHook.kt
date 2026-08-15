@@ -91,6 +91,13 @@ class SystemUIHyperFocusHook : BaseHook() {
         private var syncAdvanceMs = FocusPreferences.DEFAULT_SYNC_ADVANCE_MS
         private var lyricLines: List<LyricLineData> = emptyList()
         private var lyricLinesStale = false
+        /** 缓存最近一次解析的歌词 JSON 哈希，相同 JSON 不重复解析 */
+        private var lastLyricJsonHash: Int = 0
+        /** 缓存 buildMultiLineWindow 结果，避免重复计算 */
+        private var cachedMultiLineWindow: HyperFocusLyricStyle.MultiLineWindow? = null
+        private var cachedMultiLinePosition: Long = -1L
+        private var cachedMultiLineOffset: Long = 0L
+        private var cachedMultiLineSyncAdvance: Long = 0L
         private var preferAppLyric = false
         private var focusEnabled = true
         private var showInShade = false
@@ -110,6 +117,11 @@ class SystemUIHyperFocusHook : BaseHook() {
         private var aodNeedsRecreate = false
         /** 用于边沿检测：上一次检测到 AOD 活跃，避免重复 cancel/repost */
         private var wasAodActive = false
+        /** HyperOS4 上 PowerManager.isInteractive() 在 AOD 下返回 true，改由 MiuiDozeService 回调跟踪 AOD 状态 */
+        @Volatile
+        private var aodState = false
+        /** AOD 状态 hook 是否安装成功；失败时回退到旧的 isInteractive 判断 */
+        private var aodStateTrackingInstalled = false
         /** 歌曲身份 key：只有 key 改变才允许 AOD cancel+notify */
         private var lastSongKey = ""
         private const val MIN_TICK_MS = 500L
@@ -181,8 +193,10 @@ class SystemUIHyperFocusHook : BaseHook() {
         hookHideFromShadeIfNeeded(classLoader, module)
         hookPinAboveMediaCompat(classLoader, module)
         hookSuppressIslandIfNeeded(classLoader, module)
+        FocusAntiFlickerHook.install(classLoader, module, tag)
         hookKeyguardRepost(classLoader, module)
         hookForceAodUpdate(classLoader, module)
+        hookAodStateTracking(classLoader, module)
     }
 
     private fun hookSuppressIslandIfNeeded(classLoader: ClassLoader, module: XposedModule) {
@@ -191,8 +205,9 @@ class SystemUIHyperFocusHook : BaseHook() {
 
     private fun hookSystemUIContext(classLoader: ClassLoader, module: XposedModule) {
         try {
+            // HyperOS4/Android17: SystemUIApplication 更名为 SystemUIApplicationImpl
             val method = ReflectUtil.findMethod(
-                "com.android.systemui.SystemUIApplication",
+                "com.android.systemui.application.impl.SystemUIApplicationImpl",
                 classLoader,
                 "onCreate"
             )
@@ -253,17 +268,101 @@ class SystemUIHyperFocusHook : BaseHook() {
     }
 
     private fun hookFocusPermissionBypass(classLoader: ClassLoader, module: XposedModule) {
-        bypassBooleanMethod(classLoader, module, "miui.systemui.notification.NotificationSettingsManager", "canShowFocus")
-        bypassBooleanMethod(classLoader, module, "miui.systemui.notification.NotificationSettingsManager", "canCustomFocus")
+        // HyperOS4/Android17: canShowFocus/canCustomFocus 更名为 canShowFocusState/canShowFocusStateApp，
+        // 返回类型由 boolean 改为 int（-1 不支持 / 0 关闭 / 1 允许）
+        bypassFocusStateMethod(classLoader, module, "com.miui.systemui.notification.NotificationSettingsManager", "canShowFocusState")
+        bypassFocusStateMethod(classLoader, module, "com.miui.systemui.notification.NotificationSettingsManager", "canShowFocusStateApp")
         tryHookAuthBypass(classLoader, module)
+        // HyperOS4: 焦点通知插件新增 SignatureChecker.checkSignatures 签名检查，
+        // 即使 canShowFocus 通过也会触发 onAuthFailed，必须强制返回 true
+        hookSignatureChecker(classLoader, module)
+        hookPluginClassLoader(classLoader, module)
     }
 
-    private fun bypassBooleanMethod(classLoader: ClassLoader, module: XposedModule, className: String, methodName: String) {
+    /** HyperOS4 焦点通知插件类加载器：NotificationSettingsManager/SignatureChecker 从插件加载 */
+    private fun hookPluginClassLoader(classLoader: ClassLoader, module: XposedModule) {
         try {
-            val method = ReflectUtil.findMethod(className, classLoader, methodName)
+            val factoryClass = classLoader.loadClass(
+                "com.android.systemui.shared.plugins.PluginInstance\$PluginFactory"
+            )
+            val methods = factoryClass.declaredMethods.filter { it.name == "createPluginContext" }
+            if (methods.isEmpty()) {
+                log("PluginFactory.createPluginContext not found")
+                return
+            }
+            methods.forEach { method ->
+                module.hook(method).intercept { chain ->
+                    val result = chain.proceed()
+                    val pluginClassLoader = (result as? Context)?.classLoader
+                    if (pluginClassLoader != null) {
+                        hookSignatureChecker(pluginClassLoader, module)
+                        hookPluginFocusWhitelist(pluginClassLoader, module)
+                    }
+                    result
+                }
+            }
+            log("Waiting for focus notification plugin class loader")
+        } catch (e: Throwable) {
+            log("Plugin class loader hook skipped: ${e.message}")
+        }
+    }
+
+    /** 插件类加载器中的白名单方法（HyperOS4 部分类从插件加载） */
+    private fun hookPluginFocusWhitelist(classLoader: ClassLoader, module: XposedModule) {
+        try {
+            val clazz = classLoader.loadClass(
+                "miui.systemui.notification.NotificationSettingsManager"
+            )
+            clazz.declaredMethods
+                .filter {
+                    (it.name == "canShowFocus" || it.name == "canCustomFocus" ||
+                        it.name == "canShowFocusState" || it.name == "canShowFocusStateApp") &&
+                        it.returnType == Boolean::class.javaPrimitiveType
+                }
+                .forEach { method ->
+                    module.hook(method).intercept { chain ->
+                        if (aodchangeMode) return@intercept chain.proceed()
+                        true
+                    }
+                    log("Plugin bypassed ${method.name}")
+                }
+        } catch (e: Throwable) {
+            log("Plugin focus whitelist skip: ${e.message}")
+        }
+    }
+
+    /** HyperOS4 焦点通知插件签名检查：强制返回 true 绕过 onAuthFailed */
+    private fun hookSignatureChecker(classLoader: ClassLoader, module: XposedModule) {
+        try {
+            val clazz = classLoader.loadClass(
+                "miui.systemui.notification.focus.SignatureChecker"
+            )
+            clazz.declaredMethods
+                .filter {
+                    it.name == "checkSignatures" &&
+                        it.returnType == Boolean::class.javaPrimitiveType
+                }
+                .forEach { method ->
+                    module.hook(method).intercept { chain ->
+                        if (aodchangeMode) return@intercept chain.proceed()
+                        true
+                    }
+                    log("Hooked SignatureChecker.${method.name}")
+                }
+        } catch (e: Throwable) {
+            log("SignatureChecker hook skip: ${e.message}")
+        }
+    }
+
+    private fun bypassFocusStateMethod(classLoader: ClassLoader, module: XposedModule, className: String, methodName: String) {
+        try {
+            val method = ReflectUtil.findMethod(
+                className, classLoader, methodName,
+                Context::class.java, String::class.java
+            )
             module.hook(method).intercept { chain ->
                 if (aodchangeMode) return@intercept chain.proceed()
-                true
+                1
             }
             log("Bypassed $className.$methodName")
         } catch (e: Throwable) {
@@ -390,16 +489,18 @@ class SystemUIHyperFocusHook : BaseHook() {
 
     private fun hookSuppressFocusRowHeightReflow(classLoader: ClassLoader, module: XposedModule) {
         try {
+            // HyperOS4/Android17: notifyHeightChanged(Boolean) 签名变更为 notifyHeightChanged(String, Boolean)
             val method = ReflectUtil.findMethod(
                 "com.android.systemui.statusbar.notification.row.ExpandableNotificationRow",
                 classLoader,
                 "notifyHeightChanged",
+                String::class.java,
                 Boolean::class.java
             )
             module.hook(method).intercept { chain ->
                 if (aodchangeMode) return@intercept chain.proceed()
                 if (!pinAboveMedia || allowLayoutReflow) return@intercept chain.proceed()
-                if (chain.args.getOrNull(0) != true) return@intercept chain.proceed()
+                if (chain.args.getOrNull(1) != true) return@intercept chain.proceed()
                 val entry = ReflectUtil.callMethod(chain.thisObject, "getEntry") ?: return@intercept chain.proceed()
                 val sbn = ReflectUtil.getField(entry, "mSbn") as? StatusBarNotification
                     ?: return@intercept chain.proceed()
@@ -632,6 +733,30 @@ class SystemUIHyperFocusHook : BaseHook() {
 
     /** 锁屏显示时重发，避免亮屏锁屏下 rv 未绑定 */
     private fun hookKeyguardRepost(classLoader: ClassLoader, module: XposedModule) {
+        // HyperOS4/Android17: KeyguardUpdateMonitor.notifyKeyguardStateChanged 已移除，
+        // 改用 KeyguardStateControllerImpl.notifyKeyguardState(boolean showing, boolean occluded)
+        try {
+            val method = ReflectUtil.findMethod(
+                "com.android.systemui.statusbar.policy.KeyguardStateControllerImpl",
+                classLoader,
+                "notifyKeyguardState",
+                Boolean::class.java,
+                Boolean::class.java
+            )
+            module.hook(method).intercept { chain ->
+                val result = chain.proceed()
+                if (aodchangeMode) return@intercept result
+                val showing = chain.args.getOrNull(0) as? Boolean ?: return@intercept result
+                if (!showing) return@intercept result
+                handler.postDelayed({ repostFocusIfNeeded() }, SCREEN_REPOST_DELAY_MS)
+                result
+            }
+            log("Keyguard repost hook: KeyguardStateControllerImpl.notifyKeyguardState")
+            return
+        } catch (_: Throwable) {
+        }
+
+        // 旧版回退：KeyguardUpdateMonitor
         val methodNames = listOf(
             "notifyKeyguardStateChanged",
             "handleKeyguardChanged",
@@ -755,15 +880,11 @@ class SystemUIHyperFocusHook : BaseHook() {
     }
 
     private fun refreshSettings() {
+        // SystemUI 进程（uid=1000）无法直接读取应用私有 prefs，
+        // 样式通过广播（notifyStyleSettingsChanged）实时同步，这里不 reloadFromDisk，
+        // 避免把广播设置的样式覆盖回默认值。
         val context = systemUIContext ?: return
-        focusEnabled = FocusPreferences.readFocusEnabled(context)
-        showInShade = FocusPreferences.readShowInShade(context)
-        pinAboveMedia = FocusPreferences.readPinAboveMedia(context)
-        syncFocusPinState()
-        showOnIsland = FocusPreferences.readShowOnIsland(context)
-        aodKeepaliveSec = FocusPreferences.readAodKeepaliveSec(context)
-        syncAdvanceMs = FocusPreferences.readSyncAdvanceMs(context)
-        FocusStyleSnapshot.reloadFromDisk()
+        queryMode(context, "focus_mode")?.let { focusEnabled = it }
     }
 
     private fun applyIncomingStyleExtras(intent: Intent): Boolean {
@@ -788,8 +909,13 @@ class SystemUIHyperFocusHook : BaseHook() {
     }
 
     private fun handleSettingsChanged(intent: Intent) {
-        // aodchange 外部渲染：通过广播同步状态（不依赖跨进程 prefs 读取）
-        if (intent.hasExtra(EXTRA_AODCHANGE_MODE)) {
+        // aodchange 外部渲染：通过广播同步状态（不依赖跨进程 prefs 读取）。
+        // 纯 aodchange 状态同步广播（App 每 30 秒重发）只同步 mode，
+        // 不继续走下方设置重置逻辑，避免 SystemUI 进程读不到 app prefs 把设置/样式覆盖回默认。
+        if (intent.hasExtra(EXTRA_AODCHANGE_MODE) &&
+            !intent.hasExtra(FocusPreferences.EXTRA_FOCUS_ENABLED) &&
+            !intent.getBooleanExtra(FocusStyleSnapshot.EXTRA_STYLE_CHANGED, false)
+        ) {
             val newMode = intent.getBooleanExtra(EXTRA_AODCHANGE_MODE, false)
             if (newMode != aodchangeMode) {
                 aodchangeMode = newMode
@@ -806,6 +932,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                 }
                 log("aodchange mode changed via broadcast: $newMode")
             }
+            return
         }
         val styleChanged = intent.getBooleanExtra(FocusStyleSnapshot.EXTRA_STYLE_CHANGED, false)
         FocusStyleSnapshot.applyFromIntent(intent)
@@ -913,8 +1040,16 @@ class SystemUIHyperFocusHook : BaseHook() {
                 preferAppLyric = false
                 return
             }
-            lyricLines = parseLyricJson(lyricJson)
-            lyricLinesStale = false
+            // 相同 JSON 不重复解析，减少 CPU 占用（多行模式下每句歌词都发完整 JSON）
+            val jsonHash = lyricJson?.hashCode() ?: 0
+            if (jsonHash != lastLyricJsonHash || lyricLinesStale) {
+                lyricLines = parseLyricJson(lyricJson)
+                lyricLinesStale = false
+                lastLyricJsonHash = jsonHash
+                // 歌词变化时清空多行缓存
+                cachedMultiLineWindow = null
+                cachedMultiLinePosition = -1L
+            }
             val hasAppLyricSource = lyricLines.isNotEmpty() || isPlaceholder
 
             if (hasAppLyricSource || lyricText.isNotBlank()) {
@@ -923,8 +1058,9 @@ class SystemUIHyperFocusHook : BaseHook() {
                     currentLyricText = lyricText
                     currentSecondLine = secondLine
                     currentLineTranslation = lineTranslation
+                    val contentChanged = isLyricDisplayContentChanged()
                     val needsPost = forceResync || songChanged || leavingPlaceholder ||
-                        lastNotifiedLyric.isBlank() || styleChanged
+                        lastNotifiedLyric.isBlank() || styleChanged || contentChanged
                     if (needsPost) {
                         if (songChanged) {
                             forceCancelAndRepostForAod(AodRecreateReason.SONG_CHANGED)
@@ -934,7 +1070,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                                 leavingPlaceholder = leavingPlaceholder,
                                 forceRecreate = forceResync || styleChanged,
                                 forcePost = forceResync || lastNotifiedLyric.isBlank() ||
-                                    leavingPlaceholder || styleChanged
+                                    leavingPlaceholder || styleChanged || contentChanged
                             )
                         }
                     }
@@ -986,6 +1122,9 @@ class SystemUIHyperFocusHook : BaseHook() {
             val songChanged = currentSongKey() != "$musicPackage|$title|$artist"
             if (songChanged) {
                 lyricLinesStale = true
+                lastLyricJsonHash = 0
+                cachedMultiLineWindow = null
+                cachedMultiLinePosition = -1L
             }
             val forceResync = intent.getBooleanExtra(EXTRA_FORCE_RESYNC, false)
             val prevLyric = currentLyricText
@@ -1156,15 +1295,28 @@ class SystemUIHyperFocusHook : BaseHook() {
     }
 
     private fun buildMultiLineWindow(): HyperFocusLyricStyle.MultiLineWindow? {
-        if (!FocusStyleSnapshot.multiLineLyrics) return null
-        if (!hasRealTimedLyrics()) return null
+        if (!FocusStyleSnapshot.multiLineLyrics) {
+            log("buildMultiLine: multiLineLyrics=false")
+            return null
+        }
+        if (!hasRealTimedLyrics()) {
+            log("buildMultiLine: stale=$lyricLinesStale size=${lyricLines.size} placeholder=${isPlaceholderLyric(currentLyricText)}")
+            return null
+        }
         val currentIndex = getCurrentLineIndex(currentPosition).coerceAtLeast(0)
-        val pageSlots = FocusPreferences.coerceMultiLineLineCount(
-            FocusStyleSnapshot.multiLineLineCount
-        )
         val maxSlots = HyperFocusLyricStyle.MULTI_LINE_MAX_SLOTS
+        val pageSlots = maxSlots
 
-        if (FocusStyleSnapshot.multiLineShowTranslation) {
+        // 缓存命中：位置、偏移、预读量都不变时直接返回缓存
+        if (cachedMultiLineWindow != null &&
+            cachedMultiLinePosition == currentPosition &&
+            cachedMultiLineOffset == lyricOffset &&
+            cachedMultiLineSyncAdvance == syncAdvanceMs
+        ) {
+            return cachedMultiLineWindow
+        }
+
+        val result: HyperFocusLyricStyle.MultiLineWindow? = if (FocusStyleSnapshot.multiLineShowTranslation) {
             val interleaved = ArrayList<String>(maxSlots)
             var hasAnyTranslation = false
             var fwdIdx = currentIndex
@@ -1190,28 +1342,49 @@ class SystemUIHyperFocusHook : BaseHook() {
             }
             if (hasAnyTranslation) {
                 while (interleaved.size < maxSlots) interleaved += ""
-                return HyperFocusLyricStyle.MultiLineWindow(
+                HyperFocusLyricStyle.MultiLineWindow(
                     lines = interleaved,
                     interleavedTranslations = true,
                     visibleCount = pageSlots,
                     currentLineSlot = 0
                 )
+            } else {
+                // 无翻译：回退为纯原文多行，避免显示异常
+                val plain = ArrayList<String>(maxSlots)
+                var plainIdx = currentIndex
+                while (plain.size < pageSlots && plainIdx < lyricLines.size) {
+                    val text = lyricLines.getOrNull(plainIdx)?.text?.trim()?.takeIf { it.isNotBlank() } ?: ""
+                    if (text.isNotEmpty()) plain += text
+                    plainIdx++
+                }
+                while (plain.size < maxSlots) plain += ""
+                HyperFocusLyricStyle.MultiLineWindow(
+                    lines = plain,
+                    visibleCount = pageSlots,
+                    currentLineSlot = 0
+                )
             }
+        } else {
+            val lines = ArrayList<String>(maxSlots)
+            var fwdIdx = currentIndex
+            while (lines.size < pageSlots && fwdIdx < lyricLines.size) {
+                val text = lyricLines.getOrNull(fwdIdx)?.text?.trim()?.takeIf { it.isNotBlank() } ?: ""
+                if (text.isNotEmpty()) lines += text
+                fwdIdx++
+            }
+            while (lines.size < maxSlots) lines += ""
+            HyperFocusLyricStyle.MultiLineWindow(
+                lines = lines,
+                visibleCount = pageSlots,
+                currentLineSlot = 0
+            )
         }
 
-        val lines = ArrayList<String>(maxSlots)
-        var fwdIdx = currentIndex
-        while (lines.size < pageSlots && fwdIdx < lyricLines.size) {
-            val text = lyricLines.getOrNull(fwdIdx)?.text?.trim()?.takeIf { it.isNotBlank() } ?: ""
-            if (text.isNotEmpty()) lines += text
-            fwdIdx++
-        }
-        while (lines.size < maxSlots) lines += ""
-        return HyperFocusLyricStyle.MultiLineWindow(
-            lines = lines,
-            visibleCount = pageSlots,
-            currentLineSlot = 0
-        )
+        cachedMultiLineWindow = result
+        cachedMultiLinePosition = currentPosition
+        cachedMultiLineOffset = lyricOffset
+        cachedMultiLineSyncAdvance = syncAdvanceMs
+        return result
     }
 
     private fun multiLineContentKey(): String {
@@ -1251,6 +1424,8 @@ class SystemUIHyperFocusHook : BaseHook() {
         lastNotifiedTitle = ""
         lastNotifiedArtist = ""
         lastNotifiedMultiLineKey = ""
+        cachedMultiLineWindow = null
+        cachedMultiLinePosition = -1L
     }
 
     private fun getCurrentLine(position: Long): LyricLineData? {
@@ -1284,7 +1459,11 @@ class SystemUIHyperFocusHook : BaseHook() {
     }
 
     /** 息屏 AOD：仅首次绑定（needsAodRebind）时 cancel+notify；后续换行靠 notify+enableAlert=true 驱动 AOD 刷新。 */
-    private fun isAodActive(): Boolean = !isScreenInteractive()
+    private fun isAodActive(): Boolean {
+        // HyperOS4 上 PowerManager.isInteractive() 在 AOD 下返回 true，导致 !isInteractive() 判断失效；
+        // 优先使用 MiuiDozeService 回调跟踪的权威状态，hook 未安装时回退旧逻辑。
+        return if (aodStateTrackingInstalled) aodState else !isScreenInteractive()
+    }
 
     /** 边沿触发：仅 AOD 状态从 false→true 时执行一次 cancel+repost，防止系统回调重复触发 */
     private fun handlePossibleAodStateChange() {
@@ -1349,46 +1528,26 @@ class SystemUIHyperFocusHook : BaseHook() {
                 cancelFocusNotification()
                 return
             }
-            // AOD 下无歌词且无歌曲信息时不发通知（有歌曲信息时走展开两行）
+            // AOD 下无歌词且无歌曲信息时不发通知
             if (isAodActive() && isPlaceholderLyric(currentLyricText) && currentTitle.isBlank()) return
-            // 防御性保护：AOD 下不因 KEEPALIVE 触发通知
-            if (isAodActive() && refreshKind == HyperFocusLyricStyle.RefreshKind.KEEPALIVE) {
-                return
-            }
-            // AOD 下 LINE_CHANGE 内容去重：相同歌词不重复 notify，避免 AOD 动画
-            if (isAodActive() && refreshKind == HyperFocusLyricStyle.RefreshKind.LINE_CHANGE) {
-                val multiKey = multiLineContentKey()
-                val localSame = if (multiKey.isNotEmpty()) {
-                    lastNotifiedMultiLineKey.isNotEmpty() && multiKey == lastNotifiedMultiLineKey
-                } else {
-                    currentLyricText == lastNotifiedLyric && currentSecondLine == lastNotifiedSecond
-                }
-                // 也参考 HyperFocusLyricStyle 持久缓存（cancel 不清除），防止 cancel+repost 后去重失效
-                val postedSame = HyperFocusLyricStyle.isPostedContentSame(
-                    songTitle = currentTitle,
-                    artist = currentArtist,
-                    lyricText = currentLyricText,
-                    secondLineText = currentSecondLine,
-                    multiLineKey = multiKey
-                )
-                if ((localSame || postedSame) && currentTitle == lastNotifiedTitle && currentArtist == lastNotifiedArtist) {
-                    return
-                }
-            }
-            val multiLine = if (FocusStyleSnapshot.aodMultiLineOnly) {
-                if (isAodActive()) buildMultiLineWindow() else null
+            // 构建多行窗口
+            val multiLine = buildMultiLineWindow()
+            val aodActive = isAodActive()
+            // 仅 AOD 显示多行：锁屏回退双行；但 HyperOS4 的 AOD 实际显示 rv（锁屏视图）而非 rvAod，
+            // 因此处于 AOD 状态时锁屏视图仍需多行布局，否则 AOD 也会变成双行
+            val lockUsesMultiLine = if (multiLine != null && FocusStyleSnapshot.aodMultiLineOnly) {
+                aodActive
             } else {
-                if (isKeyguardLocked()) buildMultiLineWindow() else null
+                multiLine != null && !FocusStyleSnapshot.aodMultiLineOnly
             }
-            // AOD→锁屏过渡：多行切双行时 cancel 重发确保动画切换
-            val multiLineActive = multiLine != null
-            val recreateForTransition = FocusStyleSnapshot.aodMultiLineOnly &&
-                lastMultiLineWasActive && !multiLineActive
-            lastMultiLineWasActive = multiLineActive
-            // 切歌后首次 LINE_CHANGE 在 AOD 上走 cancel+notify 避免空白
-            val recreateForSongChange = aodNeedsRecreate &&
-                isAodActive() && refreshKind == HyperFocusLyricStyle.RefreshKind.LINE_CHANGE
-            if (recreateForSongChange) aodNeedsRecreate = false
+            val recreateForTransition = wasAodActive != aodActive
+            val recreateForSongChange = aodNeedsRecreate && currentSongKey() != lastSongKey
+            wasAodActive = aodActive
+            log("sendFocus: aodActive=$aodActive aodMultiLineOnly=${FocusStyleSnapshot.aodMultiLineOnly} lockMultiLine=$lockUsesMultiLine multiLine=${multiLine != null}")
+            if (recreateForSongChange) {
+                lastSongKey = currentSongKey()
+                aodNeedsRecreate = false
+            }
             val recreateForAod = recreateForTransition || recreateForSongChange
             HyperFocusLyricStyle.postFocusNotification(
                 systemContext = context,
@@ -1397,10 +1556,11 @@ class SystemUIHyperFocusHook : BaseHook() {
                     songTitle = currentTitle,
                     artist = currentArtist,
                     lyricText = currentLyricText,
-                    secondLineText = if (multiLine != null) "" else currentSecondLine.ifBlank { currentArtist },
-                    lineTranslation = if (multiLine != null) null else currentLineTranslation,
+                    secondLineText = if (lockUsesMultiLine) "" else currentSecondLine.ifBlank { currentArtist },
+                    lineTranslation = if (lockUsesMultiLine) null else currentLineTranslation,
                     musicPackage = musicPackage,
-                    multiLine = multiLine
+                    multiLine = multiLine,
+                    aodActive = aodActive
                 ),
                 showInShade = showInShade,
                 pinAboveMedia = pinAboveMedia,
@@ -1411,7 +1571,6 @@ class SystemUIHyperFocusHook : BaseHook() {
             )
             lastFocusNotifyTime = System.currentTimeMillis()
             rememberNotifiedLyricContent()
-            scheduleLyricFocusReorder()
         } catch (e: Throwable) {
             logE("Failed to send focus notification", e)
         }
@@ -1507,6 +1666,46 @@ class SystemUIHyperFocusHook : BaseHook() {
             }
             log("AodFocusControllerV2 hooks installed")
         } catch (e: Throwable) { log("AodFocusControllerV2 hook skipped: ${e.message}") }
+    }
+
+    /**
+     * HyperOS4 上 PowerManager.isInteractive() 在 AOD 下返回 true，无法用 !isInteractive() 判断 AOD。
+     * MiuiDozeService.onDreamingStarted/Stopped 是 AOD 启停的权威回调（SystemUI 进程），
+     * 回调后读取 AodFocusControllerV2.mAodStart 字段值作为 AOD 状态。
+     */
+    private fun hookAodStateTracking(classLoader: ClassLoader, module: XposedModule) {
+        try {
+            val clazz = ReflectUtil.findClass("com.android.keyguard.doze.MiuiDozeService", classLoader)
+            val started = clazz.getDeclaredMethod("onDreamingStarted")
+            val stopped = clazz.getDeclaredMethod("onDreamingStopped")
+            module.hook(started).intercept { chain ->
+                chain.proceed()
+                aodState = readAodStart(chain.thisObject) ?: true
+                log("AOD state via onDreamingStarted: $aodState")
+            }
+            module.hook(stopped).intercept { chain ->
+                chain.proceed()
+                aodState = readAodStart(chain.thisObject) ?: false
+                log("AOD state via onDreamingStopped: $aodState")
+            }
+            aodStateTrackingInstalled = true
+            log("MiuiDozeService AOD state hooks installed")
+        } catch (e: Throwable) {
+            log("MiuiDozeService AOD state hook skipped: ${e.message}")
+        }
+    }
+
+    /** 读取 AodFocusControllerV2.mAodStart 权威值；任一环节缺失返回 null */
+    private fun readAodStart(dozeService: Any?): Boolean? {
+        if (dozeService == null) return null
+        return try {
+            val injector = ReflectUtil.getField(dozeService, "mDozeServiceHostInjector") ?: return null
+            val listener = ReflectUtil.getField(injector, "mDozeStatusChangedListener") ?: return null
+            val controller = ReflectUtil.getField(listener, "this\$0") ?: return null
+            ReflectUtil.getField(controller, "mAodStart") as? Boolean
+        } catch (_: Throwable) {
+            null
+        }
     }
 
 }

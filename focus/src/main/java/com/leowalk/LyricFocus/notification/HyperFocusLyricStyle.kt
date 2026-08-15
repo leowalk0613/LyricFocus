@@ -37,10 +37,6 @@ import android.widget.RemoteViews
 
 import androidx.core.app.NotificationCompat
 
-import com.hyperfocus.api.FocusApi
-
-import com.hyperfocus.api.IslandApi
-
 import com.leowalk.LyricFocus.R
 import com.leowalk.LyricFocus.FocusPreferences
 import com.leowalk.LyricFocus.FocusStyleSnapshot
@@ -107,7 +103,10 @@ object HyperFocusLyricStyle {
         val musicPackage: String = "",
 
         /** 多行模式窗口；null 时走默认双行布局 */
-        val multiLine: MultiLineWindow? = null
+        val multiLine: MultiLineWindow? = null,
+
+        /** 当前是否处于 AOD 状态（HyperOS4 的 AOD 实际显示 rv 锁屏视图） */
+        val aodActive: Boolean = false
 
     )
 
@@ -115,11 +114,11 @@ object HyperFocusLyricStyle {
         /** 固定 [MULTI_LINE_MAX_SLOTS] 槽，空串表示该位置无歌词 */
         val lines: List<String>,
         /**
-         * true：交错排布 (原文, 翻译)×(lineCount/2)，填满所选行数。
-         * false：所选行数皆为原文。
+         * true：交错排布 (原文, 翻译) 成组，填满固定高度区域。
+         * false：全部为原文行。
          */
         val interleavedTranslations: Boolean = false,
-        /** 实际展示行数：4~8 */
+        /** 实际展示行数：4~10 */
         val visibleCount: Int = MULTI_LINE_MAX_SLOTS,
         /** 当前正在播放的歌词行在 [lines] 中的槽位索引，-1 表示不标识 */
         val currentLineSlot: Int = -1
@@ -146,7 +145,7 @@ object HyperFocusLyricStyle {
         val colorSecondary: Int
         var backgroundColor: Int?
         when {
-            monetEnabled && colorModeEnabled && extractedTextColor != null && extractedBgColor != null -> {
+            monetEnabled && !FocusStyleSnapshot.monetBgOnly && colorModeEnabled && extractedTextColor != null && extractedBgColor != null -> {
                 colorPrimary = AlbumColorExtractor.ensureContrastColorful(extractedTextColor, extractedBgColor)
                 val accent = extractedAccentColor ?: extractedTextColor
                 colorSecondary = AlbumColorExtractor.ensureContrastColorful(
@@ -222,8 +221,15 @@ object HyperFocusLyricStyle {
         if (monetEnabled && FocusStyleSnapshot.monetBgOnly && FocusStyleSnapshot.extractedBgColor != null) {
             backgroundColor = FocusStyleSnapshot.extractedBgColor!!
             val opacity = FocusStyleSnapshot.extractedColorOpacity
-            if (opacity < 100 && backgroundColor != null) {
+            if (opacity < 100) {
                 backgroundColor = AlbumColorExtractor.applyOpacity(backgroundColor!!, opacity)
+            }
+        }
+        if (background == FocusPreferences.BACKGROUND_ALBUM && FocusStyleSnapshot.extractedBgColor != null) {
+            backgroundColor = FocusStyleSnapshot.extractedBgColor!!
+            val opacity = FocusStyleSnapshot.extractedColorOpacity
+            if (opacity < 100) {
+                backgroundColor = AlbumColorExtractor.applyOpacity(backgroundColor, opacity)
             }
         }
         if (background == FocusPreferences.BACKGROUND_CUSTOM) {
@@ -237,7 +243,7 @@ object HyperFocusLyricStyle {
     }
 
     /** 布局最大槽位数 */
-    const val MULTI_LINE_MAX_SLOTS = 8
+    const val MULTI_LINE_MAX_SLOTS = 10
 
     private val MULTI_LINE_IDS = intArrayOf(
         R.id.focus_ml_line_0,
@@ -247,7 +253,9 @@ object HyperFocusLyricStyle {
         R.id.focus_ml_line_4,
         R.id.focus_ml_line_5,
         R.id.focus_ml_line_6,
-        R.id.focus_ml_line_7
+        R.id.focus_ml_line_7,
+        R.id.focus_ml_line_8,
+        R.id.focus_ml_line_9
     )
 
 
@@ -345,11 +353,19 @@ object HyperFocusLyricStyle {
 
 
 
-        val lockViews = if (multiLine != null) {
+        // 仅 AOD 显示多行：锁屏回退双行布局；但 HyperOS4 的 AOD 实际显示 rv（锁屏视图），
+        // 因此 AOD 状态下锁屏视图仍需多行布局，否则 AOD 会退化为单行/双行
+        val lockMultiLine = if (FocusStyleSnapshot.aodMultiLineOnly) {
+            if (content.aodActive) multiLine else null
+        } else {
+            multiLine
+        }
+
+        val lockViews = if (lockMultiLine != null) {
             buildMultiLineRemoteViews(
                 moduleContext,
                 R.layout.focus_lyric_lock_multiline,
-                multiLine,
+                lockMultiLine,
                 hideIcon = true,
                 icon = null
             )
@@ -418,38 +434,17 @@ object HyperFocusLyricStyle {
 
 
 
-        // 自定义 rvAod（白字）+ cancel/re-notify 刷新息屏；不可与 aodTitle 同传
-
-        // 关闭超级岛时传 dismissIsland 模板，避免 HyperOS 3 用 SystemUI 图标生成默认小岛
-
-        val focusExtras = FocusApi.sendDiyFocus(
-
+        // 系统原生焦点通知规则（HyperOS4）：miui.focus.rv 为 RemoteViews 即被判定为焦点通知，
+        // 配合 miui.focus.isFocus=true 显式标记，避免依赖 HyperCeiler 的 HyperFocusApi。
+        val focusExtras = buildSystemFocusExtras(
             picticker = lightIcon,
-
             pictickerdark = darkIcon,
-
             ticker = lyric,
-
             island = islandTemplate,
-
             rv = lockViews,
-
             rvIsLand = islandViews,
-
             rvAod = aodViews,
-
-            addpics = iconsBundle,
-
-            updatable = true,
-
-            enableFloat = false,
-
-            islandFirstFloat = false,
-
-            timeout = TIMEOUT_SEC,
-
-            isShowNotification = true
-
+            addpics = iconsBundle
         )
 
         patchFocusTimeout(focusExtras, TIMEOUT_SEC)
@@ -564,24 +559,62 @@ object HyperFocusLyricStyle {
 
 
 
+    /**
+     * 系统原生焦点通知 extras（HyperOS4）。
+     * 依据反编译的 FocusUtils.isFocusNotification：miui.focus.rv 为 RemoteViews 即判定为焦点通知，
+     * miui.focus.isFocus=true 为显式标记。其余 extras 供 SystemUI 渲染 AOD / 岛 / 状态栏图标。
+     */
+    private fun buildSystemFocusExtras(
+        picticker: Icon,
+        pictickerdark: Icon?,
+        ticker: String,
+        island: JSONObject?,
+        rv: RemoteViews,
+        rvIsLand: RemoteViews?,
+        rvAod: RemoteViews?,
+        addpics: Bundle?
+    ): Bundle {
+        val focus = Bundle()
+        val pics = Bundle()
+        pics.putParcelable("miui.focus.pic_ticker", picticker)
+        if (pictickerdark != null) {
+            pics.putParcelable("miui.focus.pic_ticker_dark", pictickerdark)
+        }
+        addpics?.let { pics.putAll(it) }
+
+        // 自定义焦点参数（JSON），对应 HyperOS 读取的 miui.focus.param.custom
+        val cus = JSONObject()
+        cus.put("ticker", ticker)
+        cus.put("tickerPic", "miui.focus.pic_ticker")
+        cus.put("enableFloat", false)
+        cus.put("updatable", true)
+        cus.put("isShowNotification", true)
+        cus.put("timeout", TIMEOUT_SEC)
+        cus.put("islandFirstFloat", false)
+        island?.let { cus.put("param_island", it) }
+
+        focus.putString("miui.focus.param.custom", cus.toString())
+        focus.putBundle("miui.focus.pics", pics)
+        focus.putParcelable("miui.focus.rv", rv)
+        focus.putString("miui.focus.ticker", ticker)
+        // 显式标记，确保系统判定为焦点通知
+        focus.putBoolean("miui.focus.isFocus", true)
+        rvAod?.let { focus.putParcelable("miui.focus.rvAod", it) }
+        rvIsLand?.let { focus.putParcelable("miui.focus.rv.island.expand", it) }
+        return focus
+    }
+
     private fun buildDismissIslandTemplate(): JSONObject {
 
-        return IslandApi.IslandTemplate(
-
-            dismissIsland = true,
-
-            islandTimeout = 1,
-
-            needCloseAnimation = false,
-
-            islandOrder = false,
-
-            islandProperty = 1,
-
-            bigIslandArea = JSONObject()
-
-        )
-
+        // 关闭小岛：dismissIsland=true，避免 HyperOS 用 SystemUI 图标生成默认小岛
+        val param = JSONObject()
+        param.put("dismissIsland", true)
+        param.put("islandTimeout", 1)
+        param.put("needCloseAnimation", false)
+        param.put("islandOrder", false)
+        param.put("islandProperty", 1)
+        param.put("bigIslandArea", JSONObject())
+        return param
     }
 
 
@@ -594,67 +627,47 @@ object HyperFocusLyricStyle {
     ): org.json.JSONObject {
 
         // 固定单块布局，避免长短句切换时左右分岛变形动画
-
         val displayText = lyric.trim().ifBlank { "\u266A" }
-
         val shareContent = if (musicPackage.isNotBlank()) {
-
             "$musicLabel · $displayText"
-
         } else {
-
             displayText
-
         }
 
-        val shareData = IslandApi.shareData(
+        val shareData = JSONObject()
+        shareData.put("title", "歌词")
+        shareData.put("content", "LyricFocus")
+        shareData.put("pic", "miui.focus.share_icon")
+        shareData.put("shareContent", shareContent)
 
-            title = "歌词",
+        val pic = JSONObject()
+        pic.put("pic", "miui.focus.icon")
+        pic.put("type", 1)
 
-            content = "LyricFocus",
+        val textInfo = JSONObject()
+        textInfo.put("title", displayText)
 
-            pic = "miui.focus.share_icon",
-
-            shareContent = shareContent
-
-        )
-
-        val mainInfo = IslandApi.imageTextInfo(
-
-            picInfo = IslandApi.picInfo(pic = "miui.focus.icon"),
-
-            textInfo = IslandApi.TextInfo(title = displayText)
-
-        )
+        val mainInfo = JSONObject()
+        mainInfo.put("type", 1)
+        mainInfo.put("picInfo", pic)
+        mainInfo.put("textInfo", textInfo)
 
         val islandStyle = resolveLyricStyle(moduleContext, R.layout.focus_lyric_island)
 
-        return IslandApi.IslandTemplate(
+        val bigIslandArea = JSONObject()
+        bigIslandArea.put("imageTextInfoLeft", mainInfo)
 
-            shareData = shareData,
+        val smallIslandArea = JSONObject()
+        smallIslandArea.put("picInfo", pic)
 
-            highlightColor = colorToIslandHex(islandStyle.colorPrimary),
-
-            islandTimeout = TIMEOUT_SEC,
-
-            islandOrder = true,
-
-            bigIslandArea = IslandApi.bigIslandArea(
-
-                imageTextInfoLeft = mainInfo,
-
-                imageTextInfoRight = null
-
-            ),
-
-            smallIslandArea = IslandApi.SmallIslandArea(
-
-                picInfo = IslandApi.picInfo(pic = "miui.focus.icon")
-
-            )
-
-        )
-
+        val param = JSONObject()
+        param.put("shareData", shareData)
+        param.put("highlightColor", colorToIslandHex(islandStyle.colorPrimary))
+        param.put("islandTimeout", TIMEOUT_SEC)
+        param.put("islandOrder", true)
+        param.put("bigIslandArea", bigIslandArea)
+        param.put("smallIslandArea", smallIslandArea)
+        return param
     }
 
 
@@ -818,6 +831,13 @@ object HyperFocusLyricStyle {
             val opacity = FocusStyleSnapshot.extractedColorOpacity
             if (opacity < 100) {
                 backgroundColor = AlbumColorExtractor.applyOpacity(backgroundColor!!, opacity)
+            }
+        }
+        if (background == FocusPreferences.BACKGROUND_ALBUM && FocusStyleSnapshot.extractedBgColor != null) {
+            backgroundColor = FocusStyleSnapshot.extractedBgColor!!
+            val opacity = FocusStyleSnapshot.extractedColorOpacity
+            if (opacity < 100) {
+                backgroundColor = AlbumColorExtractor.applyOpacity(backgroundColor, opacity)
             }
         }
         if (background == FocusPreferences.BACKGROUND_CUSTOM) {
@@ -1379,20 +1399,27 @@ object HyperFocusLyricStyle {
         if (!hideIcon && icon != null) {
             views.setImageViewIcon(R.id.focusicon, icon)
         }
-        applyMultiLineStyle(views, multiLine, style)
+        applyMultiLineStyle(moduleContext, views, multiLine, style)
         return views
     }
 
     private fun applyMultiLineStyle(
+        moduleContext: Context,
         views: RemoteViews,
         multiLine: MultiLineWindow,
         style: LyricStyle
     ) {
-        views.setInt(R.id.focus_lyric_content, "setGravity", style.gravityValue)
+        // 多行歌词顶格显示：内容从区域顶部开始排布（保留水平对齐）
+        val contentGravity = when (style.gravityValue and android.view.Gravity.HORIZONTAL_GRAVITY_MASK) {
+            android.view.Gravity.START -> android.view.Gravity.START or android.view.Gravity.TOP
+            android.view.Gravity.END -> android.view.Gravity.END or android.view.Gravity.TOP
+            else -> android.view.Gravity.CENTER_HORIZONTAL or android.view.Gravity.TOP
+        }
+        views.setInt(R.id.focus_lyric_content, "setGravity", contentGravity)
 
         val interleaved = multiLine.interleavedTranslations
         val rawLines = multiLine.lines
-        val visibleCount = multiLine.visibleCount.coerceIn(4, 8)
+        val visibleCount = multiLine.visibleCount.coerceIn(4, MULTI_LINE_MAX_SLOTS)
         val displayLines = if (interleaved && FocusStyleSnapshot.swapLyricTranslation) {
             // 每对内互换：偶数槽显示翻译（主色），奇数槽显示原文（淡色）
             List(MULTI_LINE_MAX_SLOTS) { i ->
@@ -1459,21 +1486,28 @@ object HyperFocusLyricStyle {
                 views.setCharSequence(viewId, "setText", boldText(displayText))
                 views.setTextColor(viewId, currentLineColor)
                 views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP,
-                    if (isCurrentTrans) textSizeSp * 0.8f else textSizeSp)
-                views.setViewPadding(viewId, 0, 6, 0, 0)
+                    if (isCurrentTrans) textSizeSp * 0.62f else textSizeSp)
                 views.setInt(viewId, "setMaxLines", if (isCurrentTrans) 1 else 4)
             } else if (isTranslation) {
                 views.setTextViewText(viewId, displayText)
                 views.setTextColor(viewId, nonCurrentTransColor)
-                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.65f)
+                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.55f)
                 views.setInt(viewId, "setMaxLines", 1)
             } else {
                 views.setTextViewText(viewId, displayText)
                 views.setTextColor(viewId, defaultLineColor)
-                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.65f)
+                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.75f)
                 views.setInt(viewId, "setMaxLines", 1)
             }
             views.setInt(viewId, "setGravity", style.gravityValue)
+            // 行间距：组内翻译小间距，组间（或普通行）大间距
+            val paddingTop = when {
+                i == 0 -> 0
+                interleaved && i % 2 == 1 -> 4
+                interleaved -> 28
+                else -> 24
+            }
+            views.setViewPadding(viewId, 0, paddingTop, 0, 0)
         }
 
         if (style.backgroundColor != null) {
@@ -1482,6 +1516,16 @@ object HyperFocusLyricStyle {
             safeSetImageViewBitmap(views, R.id.focus_lyric_bg, solidColorBitmap(bg))
         } else {
             safeSetViewVisibility(views, R.id.focus_lyric_bg, View.GONE)
+        }
+
+        // 多行歌词区域高度可调（200-450dp）
+        try {
+            views.setViewLayoutHeight(
+                R.id.focus_lyric_content,
+                FocusStyleSnapshot.multiLineHeightDp.toFloat(),
+                TypedValue.COMPLEX_UNIT_DIP
+            )
+        } catch (_: Throwable) {
         }
     }
 

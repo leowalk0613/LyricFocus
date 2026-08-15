@@ -63,12 +63,16 @@
 
 | 项目 | 要求 |
 |------|------|
-| 系统 | **小米 HyperOS 3.0+ **（验证环境：HyperOS 3.0.x，如 `3.0.302.0.WNCCNXM`） |
+| 系统 | **小米 HyperOS 4.0+ **（验证环境：Xiaomi HyperOS 4.0.0.18，Android 17） |
 | Android | API **31+**，`targetSdk 36` |
 | 框架 | **LSPosed 2.0**（API 102），旧版 LSPosed (API 82) 不再兼容。**必须更新！** |
 | LSPosed 作用域 | `com.android.systemui`（系统界面）、`com.miui.aod`（息屏与锁屏编辑） |
 | 权限 | 通知访问、发送通知、网络、前台服务、读取应用列表（白名单选应用，Android 11+） |
 | 可选 | Root（Magisk / KernelSU）— 应用内重启 SystemUI、查看 LSPosed 日志 |
+
+> ## ⚠️ 重要提醒
+> **v1.9.1 起仅支持 HyperOS4 / Android 17（验证环境：Xiaomi HyperOS 4.0.0.18）。**
+> **HyperOS3 及以下用户请勿更新！** 本版针对 HyperOS4 做了大量适配，未在 HyperOS3 上验证，可能无法正常显示焦点歌词。
 
 ### 额外使用条件
 
@@ -166,7 +170,7 @@ LyricFocus/
 | 网络 | 拉取歌词需联网（网易云 / QQ 音乐 API） |
 | Root（推荐） | 非必须，但 Hook 变更后可在应用内一键重启 SystemUI、查看 LSPosed 日志 |
 
-> 已在 HyperOS **3.0.302.0.WNCCNXM** 环境验证。其他 HyperOS 版本若焦点通知 API 有差异，可能需要适配。
+> 已在 **Xiaomi HyperOS 4.0.0.18（Android 17）** 环境验证。其他 HyperOS 版本若焦点通知 API 有差异，可能需要适配。
 
 ---
 
@@ -431,6 +435,17 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 ---
 
 ## 版本更新
+
+### v1.9.1
+
+> ⚠️ **本版本仅支持 HyperOS4 / Android 17，HyperOS3 及以下用户请勿更新！**
+
+- **HyperOS4 / Android 17 适配（重点）**：焦点通知认证（`SignatureChecker.checkSignatures` Hook，XmsfAuthHook）、防闪烁 Hook 重写（`StatusBarFocusNotifUtils.needAnim`）、岛抑制 Hook 重写（`DynamicIslandController.hasCustomFocusView`）、AOD 状态检测（`MiuiDozeService` + `AodFocusControllerV2.mAodStart`）、RemoteViews 新 API（`setViewLayoutHeight`）
+- **新增**：焦点通知背景专辑取色（独立于 Monet/文字取色）+ 透明度调节；通知高度滑块（200-450dp，默认 400dp）
+- **修复**：歌词样式持续生效、焦点通知卡片圆角裁剪、样式设置崩溃/广播循环、AOD 多行歌词仅显示一行、多行歌词无翻译回退、aodchange 模式系统属性同步
+- **优化**：删除样式预览窗口、AOD 多行歌词布局（固定高度/顶格/行距/固定 10 行）、多行模式性能缓存、关于页改版
+- **版本号**：`1.9.1` (versionCode 31)
+- [完整更新日志](release-notes/release-notes-v1.9.1.md)
 
 ### v1.8.7
 

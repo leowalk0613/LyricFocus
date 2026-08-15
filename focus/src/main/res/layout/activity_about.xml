@@ -142,44 +142,100 @@
                         android:text="项目信息以及联系作者"
                         android:textAppearance="?attr/textAppearanceTitleMedium" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_github_repo"
-                        style="@style/Widget.Material3.Button.TonalButton"
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="8dp"
-                        android:text="GitHub 仓库" />
+                        android:orientation="horizontal">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_gitee_repo"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="8dp"
-                        android:text="Gitee 仓库" />
+                        <TextView
+                            android:id="@+id/btn_github_repo"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:gravity="center"
+                            android:text="GitHub 仓库"
+                            android:textAppearance="?attr/textAppearanceBodyMedium" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_github_issue"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="8dp"
-                        android:text="反馈问题" />
+                        <TextView
+                            android:id="@+id/btn_gitee_repo"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:gravity="center"
+                            android:text="Gitee 仓库"
+                            android:textAppearance="?attr/textAppearanceBodyMedium" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_contact_email"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="8dp"
-                        android:text="联系邮箱" />
+                        <TextView
+                            android:id="@+id/btn_123pan"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:gravity="center"
+                            android:text="123网盘"
+                            android:textAppearance="?attr/textAppearanceBodyMedium" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_coolapk"
-                        style="@style/Widget.Material3.Button.TonalButton"
+                    </LinearLayout>
+
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="酷安作者" />
+                        android:layout_marginTop="12dp"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_github_issue"
+                            style="@style/Widget.Material3.Button.TonalButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:insetLeft="0dp"
+                            android:insetRight="0dp"
+                            android:minWidth="0dp"
+                            android:maxLines="1"
+                            android:ellipsize="none"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="10sp"
+                            android:autoSizeMaxTextSize="14sp"
+                            android:autoSizeStepGranularity="1sp"
+                            android:text="反馈问题" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_contact_email"
+                            style="@style/Widget.Material3.Button.TonalButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:insetLeft="0dp"
+                            android:insetRight="0dp"
+                            android:minWidth="0dp"
+                            android:maxLines="1"
+                            android:ellipsize="none"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="10sp"
+                            android:autoSizeMaxTextSize="14sp"
+                            android:autoSizeStepGranularity="1sp"
+                            android:text="联系邮箱" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_coolapk"
+                            style="@style/Widget.Material3.Button.TonalButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:insetLeft="0dp"
+                            android:insetRight="0dp"
+                            android:minWidth="0dp"
+                            android:maxLines="1"
+                            android:ellipsize="none"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="10sp"
+                            android:autoSizeMaxTextSize="14sp"
+                            android:autoSizeStepGranularity="1sp"
+                            android:text="酷安作者" />
+
+                    </LinearLayout>
 
                 </LinearLayout>
 
@@ -226,21 +282,48 @@
 
                     </LinearLayout>
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_scan_logs"
-                        style="@style/Widget.Material3.Button.TonalButton"
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
-                        android:layout_marginBottom="8dp"
-                        android:text="自动扫描 LSPosed 日志" />
+                        android:orientation="horizontal">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_pick_log_file"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="手动选择日志文件" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_scan_logs"
+                            style="@style/Widget.Material3.Button.TonalButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:insetLeft="0dp"
+                            android:insetRight="0dp"
+                            android:minWidth="0dp"
+                            android:maxLines="1"
+                            android:ellipsize="none"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="10sp"
+                            android:autoSizeMaxTextSize="14sp"
+                            android:autoSizeStepGranularity="1sp"
+                            android:text="自动扫描日志" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_pick_log_file"
+                            style="@style/Widget.Material3.Button.TonalButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:insetLeft="0dp"
+                            android:insetRight="0dp"
+                            android:minWidth="0dp"
+                            android:maxLines="1"
+                            android:ellipsize="none"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="10sp"
+                            android:autoSizeMaxTextSize="14sp"
+                            android:autoSizeStepGranularity="1sp"
+                            android:text="手动选择文件" />
+
+                    </LinearLayout>
 
                 </LinearLayout>
 

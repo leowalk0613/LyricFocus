@@ -9,78 +9,36 @@ import io.github.libxposed.api.XposedModule
 
 object FocusIslandSuppressHook {
 
-    private val islandGateMethods = listOf(
-        "needShowIsland" to true,
-        "shouldShowIsland" to true,
-        "canShowIsland" to true,
-        "isIslandNotification" to true,
-        "shouldShowOnIsland" to true,
-        "supportIsland" to true
-    )
-
-    private val islandGateClasses = listOf(
-        "miui.systemui.statusbar.island.IslandViewController",
-        "miui.systemui.statusbar.island.DynamicIslandController",
-        "miui.systemui.statusbar.island.IslandWindowController",
-        "miui.systemui.notification.island.IslandWindowController",
-        "miui.systemui.notification.island.IslandViewController",
-        "com.android.systemui.statusbar.island.IslandCoordinator"
-    )
-
+    /**
+     * HyperOS4/Android17: 岛显示判定集中在 DynamicIslandController，
+     * hasCustomFocusView(StatusBarNotification) 检查 miui.focus.rv，在 onDynamicPluginCallback 中
+     * 被调用决定是否显示岛。hook 其返回 false 抑制 LyricFocus 焦点通知的岛显示。
+     */
     fun install(classLoader: ClassLoader, module: XposedModule, tag: String, contextProvider: () -> Context?) {
-        var hooked = 0
-        for (className in islandGateClasses) {
-            for ((methodName, returnsBoolean) in islandGateMethods) {
-                if (tryHookIslandGate(classLoader, module, className, methodName, returnsBoolean, contextProvider)) {
-                    hooked++
-                    module.log(android.util.Log.INFO, tag, "island suppress $className#$methodName")
-                }
+        try {
+            val clazz = ReflectUtil.findClass(
+                "com.android.systemui.statusbar.notification.DynamicIslandController",
+                classLoader
+            )
+            val method = clazz.getDeclaredMethod(
+                "hasCustomFocusView",
+                StatusBarNotification::class.java
+            )
+            method.isAccessible = true
+            module.hook(method).intercept { chain ->
+                val sbn = chain.args.getOrNull(0) as? StatusBarNotification
+                    ?: return@intercept chain.proceed()
+                if (!shouldSuppressIsland(sbn, contextProvider())) return@intercept chain.proceed()
+                false
             }
+            module.log(
+                android.util.Log.INFO,
+                tag,
+                "island suppress DynamicIslandController#hasCustomFocusView"
+            )
+        } catch (e: Throwable) {
+            module.log(android.util.Log.INFO, tag, "island suppress hook skipped: ${e.message}")
         }
-        if (hooked == 0) {
-            module.log(android.util.Log.INFO, tag, "island suppress hooks skipped (no matching methods)")
-        }
-    }
-
-    private fun tryHookIslandGate(
-        classLoader: ClassLoader,
-        module: XposedModule,
-        className: String,
-        methodName: String,
-        returnsBoolean: Boolean,
-        contextProvider: () -> Context?
-    ): Boolean {
-        return try {
-            val clazz = ReflectUtil.findClass(className, classLoader)
-            val methods = ReflectUtil.findMethodsByName(clazz, methodName)
-            if (methods.isEmpty()) return false
-            for (method in methods) {
-                module.hook(method).intercept { chain ->
-                    val sbn = findStatusBarNotification(chain.args) ?: return@intercept chain.proceed()
-                    if (!shouldSuppressIsland(sbn, contextProvider())) return@intercept chain.proceed()
-                    if (returnsBoolean) false else chain.proceed()
-                }
-            }
-            true
-        } catch (_: Throwable) {
-            false
-        }
-    }
-
-    private fun findStatusBarNotification(args: List<Any?>): StatusBarNotification? {
-        for (arg in args) {
-            when (arg) {
-                is StatusBarNotification -> return arg
-                else -> {
-                    try {
-                        val nested = ReflectUtil.callMethod(arg!!, "getSbn") as? StatusBarNotification
-                        if (nested != null) return nested
-                    } catch (_: Throwable) {
-                    }
-                }
-            }
-        }
-        return null
     }
 
     private fun shouldSuppressIsland(sbn: StatusBarNotification, context: Context?): Boolean {

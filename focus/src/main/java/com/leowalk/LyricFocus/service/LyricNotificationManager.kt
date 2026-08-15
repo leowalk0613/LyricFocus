@@ -13,6 +13,7 @@ import com.leowalk.LyricFocus.NotificationPermissionHelper
 import com.leowalk.LyricFocus.FocusPreferences
 import com.leowalk.LyricFocus.MainActivity
 import com.leowalk.LyricFocus.R
+import com.leowalk.LyricFocus.notification.HyperFocusLyricStyle
 import com.leowalk.LyricFocus.notification.RegularLyricNotificationStyle
 
 class LyricNotificationManager(private val context: Context) {
@@ -31,6 +32,10 @@ class LyricNotificationManager(private val context: Context) {
         const val CHANNEL_ID = "lyric_service"
         private const val CHANNEL_NAME = "LyricFocus 后台服务"
         const val NOTIFICATION_ID = 1
+
+        private const val PACKAGE_SYSTEMUI = "com.android.systemui"
+        private const val ACTION_PLAYBACK_STATE = "com.leowalk.LyricFocus.action.PLAYBACK_STATE"
+        private const val EXTRA_PLAYING = "playing"
     }
 
     init {
@@ -50,6 +55,19 @@ class LyricNotificationManager(private val context: Context) {
                 setSound(null, null)
             }
             notificationManager.createNotificationChannel(channel)
+
+            // 焦点通知渠道：应用进程直接发送，系统按 miui.focus.* extras 渲染为焦点通知
+            val focusChannel = NotificationChannel(
+                HyperFocusLyricStyle.CHANNEL_ID,
+                "LyricFocus 焦点歌词",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "锁屏 / 息屏歌词焦点通知"
+                setShowBadge(false)
+                enableVibration(false)
+                setSound(null, null)
+            }
+            notificationManager.createNotificationChannel(focusChannel)
         }
     }
 
@@ -209,38 +227,38 @@ class LyricNotificationManager(private val context: Context) {
         musicPackage: String = "",
         forceResync: Boolean = false
     ) {
-        try {
-            val intent = Intent("com.leowalk.LyricFocus.action.LYRIC_DATA").apply {
-                setPackage("com.android.systemui")
-                putExtra("lyric_json", lyricJson)
-                putExtra("position", position)
-                putExtra("is_playing", isPlaying)
-                putExtra("title", title)
-                putExtra("artist", artist)
-                putExtra("offset", offset)
-                putExtra("sync_advance", FocusPreferences.getSyncAdvanceMs(context))
-                putExtra("lyric_text", lyricText)
-                putExtra("second_line", secondLineText)
-                if (lineTranslation != null) {
-                    putExtra("line_translation", lineTranslation)
-                }
-                putExtra("music_package", musicPackage)
-                if (forceResync) {
-                    putExtra("force_resync", true)
-                }
-                FocusPreferences.fillStyleExtras(this, context)
-            }
-            context.sendBroadcast(intent)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        postFocusLyric(
+            lyricText = lyricText,
+            secondLineText = secondLineText,
+            lineTranslation = lineTranslation,
+            title = title,
+            artist = artist,
+            musicPackage = musicPackage,
+            isPlaying = isPlaying,
+            force = forceResync
+        )
+    }
+
+    /** 应用进程不再直接发焦点通知，改为广播到 SystemUI（uid=1000）发送，绕过 XMSF 认证 */
+    fun postFocusLyric(
+        lyricText: String,
+        secondLineText: String,
+        lineTranslation: String?,
+        title: String,
+        artist: String,
+        musicPackage: String,
+        isPlaying: Boolean,
+        force: Boolean = false
+    ) {
+        // 已迁移至 SystemUI 侧发送，此处留空，避免应用进程直接发焦点通知导致重复/认证失败
     }
 
     fun sendPlaybackState(isPlaying: Boolean) {
         try {
-            val intent = Intent("com.leowalk.LyricFocus.action.PLAYBACK_STATE").apply {
-                setPackage("com.android.systemui")
-                putExtra("playing", isPlaying)
+            // 应用进程不再直接发焦点通知，改为广播到 SystemUI，由 SystemUI 处理停止/恢复
+            val intent = Intent(ACTION_PLAYBACK_STATE).apply {
+                setPackage(PACKAGE_SYSTEMUI)
+                putExtra(EXTRA_PLAYING, isPlaying)
             }
             context.sendBroadcast(intent)
         } catch (e: Exception) {
