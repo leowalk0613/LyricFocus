@@ -1,11 +1,13 @@
 # V1.9.2(OS3) 更新
 
 > ## ⚠️ 重要提醒
-> **本包为 HyperOS 3.x 专用。**
-> **HyperOS 4 用户请使用 OS4 专用包，请勿安装本版！**
+> **本包为 HyperOS 3.x 专用（versionName `1.9.2(OS3)`）。**
+> **HyperOS 4 用户请使用 [OS4 专用包](https://github.com/leowalk0613/LyricFocus/releases/tag/v1.9.2-OS4)，请勿安装本版！**
+> **请勿交叉安装渠道包：OS3 ↔ OS4 焦点 API 不同，错装会导致焦点通知异常或退化为普通通知。**
 
 ## 新增
 - 外部歌词推送协议：开启外部渲染后只推送歌词；第三方声明 `EXTERNAL_LYRIC` 即可接入（兼容 aodchange / musiclockscreen）
+- 自研配套：[Aodchange](https://github.com/leowalk0613/Aodchange)（OS3 万象息屏）、[HyperLockMusic](https://github.com/leowalk0613/HyperLockMusic)（OS4 音乐锁屏）
 - QQ 音乐源支持原文 + 官方翻译
 - 自动源按播放器包名匹配（QQ/小米同源，网易优先网易）
 - 焦点通知背景支持专辑取色（独立于 Monet / 文字取色），支持透明度调节
