@@ -71,12 +71,13 @@ jobs:
         run: |
           RELEASE_JSON=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/releases/tags/${VERSION}")
-          ASSET_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | test("(?i)\\\\.apk$")) | .browser_download_url' | head -n1)
+          ASSET_URL=$(echo "$RELEASE_JSON" | jq -r '[.assets[] | select(.name | test("\\.apk$"; "i"))][0].browser_download_url')
           BODY=$(echo "$RELEASE_JSON" | jq -r '.body // ""')
           NAME=$(echo "$RELEASE_JSON" | jq -r '.name // .tag_name')
           TARGET=$(echo "$RELEASE_JSON" | jq -r '.target_commitish // "main"')
           if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" = "null" ]; then
             echo "No APK asset for $VERSION" >&2
+            echo "$RELEASE_JSON" | jq -r '.assets[].name // empty' >&2
             exit 1
           fi
           echo "ASSET_URL=$ASSET_URL" >> $GITHUB_ENV
