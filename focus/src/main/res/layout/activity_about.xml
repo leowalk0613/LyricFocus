@@ -110,7 +110,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="12dp"
-                            android:text="在小米 HyperOS 上于锁屏、AOD、通知中心展示同步歌词"
+                            android:text="在小米 HyperOS 4（本包 OS4 专用）上于锁屏、AOD、通知中心展示同步歌词"
                             android:textAppearance="?attr/textAppearanceBodySmall"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 

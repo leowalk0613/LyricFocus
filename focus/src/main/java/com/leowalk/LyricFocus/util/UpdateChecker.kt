@@ -237,11 +237,20 @@ class UpdateChecker(private val context: Context) {
     }
 
     fun getBundledReleaseNotes(context: Context): String? {
-        val assetName = "release_notes_${getCurrentVersion(context).replace('.', '_')}.md"
+        val assetName = "release_notes_${normalizeVersionForAsset(getCurrentVersion(context))}.md"
         return try {
             context.assets.open(assetName).bufferedReader().use { it.readText().trim() }
         } catch (_: Exception) {
             null
         }
+    }
+
+    /** 1.9.2(OS4) → 1_9_2_OS4，便于 assets 文件名区分 OS3/OS4 渠道包 */
+    private fun normalizeVersionForAsset(version: String): String {
+        return version
+            .replace('.', '_')
+            .replace('(', '_')
+            .replace(")", "")
+            .replace('-', '_')
     }
 }

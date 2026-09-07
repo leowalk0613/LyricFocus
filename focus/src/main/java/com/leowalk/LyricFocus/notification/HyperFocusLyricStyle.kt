@@ -118,7 +118,7 @@ object HyperFocusLyricStyle {
          * false：全部为原文行。
          */
         val interleavedTranslations: Boolean = false,
-        /** 实际展示行数：4~10 */
+        /** 实际展示行数：4~24 */
         val visibleCount: Int = MULTI_LINE_MAX_SLOTS,
         /** 当前正在播放的歌词行在 [lines] 中的槽位索引，-1 表示不标识 */
         val currentLineSlot: Int = -1
@@ -243,7 +243,7 @@ object HyperFocusLyricStyle {
     }
 
     /** 布局最大槽位数 */
-    const val MULTI_LINE_MAX_SLOTS = 10
+    const val MULTI_LINE_MAX_SLOTS = 24
 
     private val MULTI_LINE_IDS = intArrayOf(
         R.id.focus_ml_line_0,
@@ -255,7 +255,21 @@ object HyperFocusLyricStyle {
         R.id.focus_ml_line_6,
         R.id.focus_ml_line_7,
         R.id.focus_ml_line_8,
-        R.id.focus_ml_line_9
+        R.id.focus_ml_line_9,
+        R.id.focus_ml_line_10,
+        R.id.focus_ml_line_11,
+        R.id.focus_ml_line_12,
+        R.id.focus_ml_line_13,
+        R.id.focus_ml_line_14,
+        R.id.focus_ml_line_15,
+        R.id.focus_ml_line_16,
+        R.id.focus_ml_line_17,
+        R.id.focus_ml_line_18,
+        R.id.focus_ml_line_19,
+        R.id.focus_ml_line_20,
+        R.id.focus_ml_line_21,
+        R.id.focus_ml_line_22,
+        R.id.focus_ml_line_23
     )
 
 
@@ -1462,11 +1476,17 @@ object HyperFocusLyricStyle {
         } else if (monetBgColor != null) {
             if (FocusStyleSnapshot.monetBgOnly) defaultLineColor
             else AlbumColorExtractor.ensureContrast(defaultLineColor, monetBgColor, 7.0)
-        } else when (style.backgroundColor) {
-            Color.WHITE -> Color.BLACK
-            else -> COLOR_LYRIC_PRIMARY
+        } else {
+            // 当前行优先取强调色（accent），无强调色时白底用黑字、其余回退正文色
+            FocusStyleSnapshot.extractedAccentColor ?: if (style.backgroundColor == Color.WHITE) {
+                Color.BLACK
+            } else {
+                defaultLineColor
+            }
         }
         val nonCurrentTransColor = fadeTextColor(defaultLineColor)
+        // 未播原文轻微淡化，让当前行饱满强调色更醒目（不依赖 accent 与正文色的天然差异）
+        val nonCurrentLineColor = fadeTextColor(defaultLineColor, 0.8f)
         val currentLineSlot = multiLine.currentLineSlot.coerceAtLeast(0)
         val currentTransSlot = if (interleaved && currentLineSlot < visibleCount - 1) currentLineSlot + 1 else -1
 
@@ -1482,31 +1502,39 @@ object HyperFocusLyricStyle {
                 continue
             }
             views.setViewVisibility(viewId, View.VISIBLE)
-            if (isCurrentLine || isCurrentTrans) {
-                views.setCharSequence(viewId, "setText", boldText(displayText))
-                // 当前行翻译与其他翻译行一样用淡化色，避免与原文抢视觉
-                views.setTextColor(viewId, if (isCurrentTrans) nonCurrentTransColor else currentLineColor)
-                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP,
-                    if (isCurrentTrans) textSizeSp * 0.62f else textSizeSp)
-                views.setInt(viewId, "setMaxLines", if (isCurrentTrans) 1 else 4)
-            } else if (isTranslation) {
-                views.setTextViewText(viewId, displayText)
-                views.setTextColor(viewId, nonCurrentTransColor)
-                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.55f)
-                views.setInt(viewId, "setMaxLines", 1)
-            } else {
-                views.setTextViewText(viewId, displayText)
-                views.setTextColor(viewId, defaultLineColor)
-                views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.75f)
-                views.setInt(viewId, "setMaxLines", 1)
+            // 字体与行间距照搬 aodchange：当前原文加粗、其余不加粗；非当前行字号固定 15sp / 11sp
+            when {
+                isCurrentLine -> {
+                    views.setCharSequence(viewId, "setText", boldText(displayText))
+                    views.setTextColor(viewId, currentLineColor)
+                    views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp)
+                    views.setInt(viewId, "setMaxLines", 4)
+                }
+                isCurrentTrans -> {
+                    views.setTextViewText(viewId, displayText)
+                    views.setTextColor(viewId, nonCurrentTransColor)
+                    views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, textSizeSp * 0.62f)
+                    views.setInt(viewId, "setMaxLines", 1)
+                }
+                isTranslation -> {
+                    views.setTextViewText(viewId, displayText)
+                    views.setTextColor(viewId, nonCurrentTransColor)
+                    views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, 11f)
+                    views.setInt(viewId, "setMaxLines", 1)
+                }
+                else -> {
+                    views.setTextViewText(viewId, displayText)
+                    views.setTextColor(viewId, nonCurrentLineColor)
+                    views.setTextViewTextSize(viewId, TypedValue.COMPLEX_UNIT_SP, 15f)
+                    views.setInt(viewId, "setMaxLines", 1)
+                }
             }
             views.setInt(viewId, "setGravity", style.gravityValue)
-            // 行间距：组内翻译小间距，组间（或普通行）大间距
+            // 行间距：组内（翻译行）2dp 不动，组间/纯原文 50dp
             val paddingTop = when {
                 i == 0 -> 0
-                interleaved && i % 2 == 1 -> 4
-                interleaved -> 28
-                else -> 24
+                interleaved && i % 2 == 1 -> 2
+                else -> 50
             }
             views.setViewPadding(viewId, 0, paddingTop, 0, 0)
         }

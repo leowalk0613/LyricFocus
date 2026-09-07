@@ -218,14 +218,14 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="aodchange 外部渲染"
+                                android:text="外部渲染（纯推送）"
                                 android:textAppearance="?attr/textAppearanceBodyLarge" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="2dp"
-                                android:text="开启后歌词通过 ContentProvider 发送到 aodchange，焦点通知不再显示歌词"
+                                android:text="开启后本 App 只推送歌词，焦点通知不再显示；兼容 aodchange 及声明 EXTERNAL_LYRIC 的第三方模块"
                                 android:textAppearance="?attr/textAppearanceBodySmall"
                                 android:textColor="?attr/colorOnSurfaceVariant" />
 

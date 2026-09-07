@@ -690,7 +690,7 @@
                                     android:layout_height="wrap_content"
                                     android:stepSize="1"
                                     android:value="14"
-                                    android:valueFrom="12"
+                                    android:valueFrom="15"
                                     android:valueTo="32" />
 
                             </LinearLayout>

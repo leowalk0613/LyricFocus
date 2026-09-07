@@ -150,7 +150,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             if (dimmed) {
                 android.widget.Toast.makeText(
                     requireContext(),
-                    "外部渲染模式下样式设置不可用，关闭“aodchange 外部渲染”后恢复",
+                    "外部渲染模式下样式设置不可用，关闭「外部渲染」后恢复",
                     android.widget.Toast.LENGTH_LONG
                 ).show()
             } else {
@@ -993,7 +993,7 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                     return
                 }
                 val normalized = slider.value.coerceIn(
-                    FocusPreferences.MIN_LYRIC_TEXT_SIZE_SP,
+                    FocusPreferences.MIN_MULTI_LINE_TEXT_SIZE_SP,
                     FocusPreferences.MAX_LYRIC_TEXT_SIZE_SP
                 )
                 FocusPreferences.setMultiLineTextSize(requireContext(), normalized)

@@ -177,6 +177,9 @@ object FocusPreferences {
     const val MIN_LYRIC_TEXT_SIZE_SP = 12f
     const val MAX_LYRIC_TEXT_SIZE_SP = 32f
 
+    /** 多行模式字号最小值 = 未播行（非当前行）字号，保证当前行不小于未播行 */
+    const val MIN_MULTI_LINE_TEXT_SIZE_SP = 15f
+
     const val DEFAULT_LYRIC_MAX_LINES = 2
     const val DEFAULT_TRANSLATION_MAX_LINES = 1
 
@@ -767,7 +770,7 @@ object FocusPreferences {
     fun getMultiLineTextSize(context: Context): Float {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getFloat(PREF_MULTI_LINE_TEXT_SIZE, DEFAULT_MULTI_LINE_TEXT_SIZE_SP)
-            .coerceIn(MIN_LYRIC_TEXT_SIZE_SP, MAX_LYRIC_TEXT_SIZE_SP)
+            .coerceIn(MIN_MULTI_LINE_TEXT_SIZE_SP, MAX_LYRIC_TEXT_SIZE_SP)
     }
 
     fun setMultiLineTextSize(context: Context, sizeSp: Float) {
@@ -775,7 +778,7 @@ object FocusPreferences {
             .edit()
             .putFloat(
                 PREF_MULTI_LINE_TEXT_SIZE,
-                sizeSp.coerceIn(MIN_LYRIC_TEXT_SIZE_SP, MAX_LYRIC_TEXT_SIZE_SP)
+                sizeSp.coerceIn(MIN_MULTI_LINE_TEXT_SIZE_SP, MAX_LYRIC_TEXT_SIZE_SP)
             )
             .commit()
     }
@@ -1100,6 +1103,20 @@ object FocusPreferences {
             packageName.contains("spotify", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_SPOTIFY
             packageName.contains("apple", ignoreCase = true) || packageName.contains("itunes", ignoreCase = true) -> CUSTOM_AOD_TITLE_ICON_APPLE
             else -> CUSTOM_AOD_TITLE_ICON_APPLE
+        }
+    }
+
+    /**
+     * Auto 歌词源：按播放器包名决定优先在线源。
+     * QQ 音乐与小米音乐（com.miui.player）同源，均优先 QQ；网易云优先网易；其余默认 QQ。
+     */
+    fun preferredOnlineLyricSourceForPackage(packageName: String?): String {
+        if (packageName.isNullOrBlank()) return LYRIC_SOURCE_QQ
+        return when {
+            packageName.contains("netease", ignoreCase = true) -> LYRIC_SOURCE_NETEASE
+            packageName.contains("qqmusic", ignoreCase = true) ||
+                packageName.contains("miui.player", ignoreCase = true) -> LYRIC_SOURCE_QQ
+            else -> LYRIC_SOURCE_QQ
         }
     }
 

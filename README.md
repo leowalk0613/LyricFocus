@@ -27,9 +27,9 @@
 |---|---|---|
 | [功能概览](#功能概览) | [系统要求](#系统要求) | [架构与数据流](#架构与数据流) |
 | [项目结构](#项目结构) | [安装与配置](#安装与配置) | [设置项](#设置项) |
-| [歌词源](#歌词源) | [进程间通信](#进程间通信) | [Xposed Hook](#xposed-hook) |
-| [依赖](#依赖) | [版本更新](#版本更新) | [调试与反馈](#调试与反馈) |
-| [已知限制](#已知限制) | [致谢](#致谢) | [许可证](#许可证) |
+| [歌词源](#歌词源) | [进程间通信](#进程间通信) | [外部歌词接入](#外部歌词接入指南) |
+| [Xposed Hook](#xposed-hook) | [依赖](#依赖) | [版本更新](#版本更新) |
+| [调试与反馈](#调试与反馈) | [已知限制](#已知限制) | [致谢](#致谢) / [许可证](#许可证) |
 
 ---
 
@@ -39,6 +39,7 @@
 - **版本更新检测**：启动后并行检测 GitHub 与 Gitee Release，取最新版本；后台线程运行，不阻塞界面
 - **实时歌词**：`NotificationListenerService` 绑定 MediaSession，监听播放进度与元数据；主界面 2 秒定时刷新歌曲状态
 - **多歌词源**：网易云音乐、QQ 音乐、SuperLyricApi（AIDL 实时推送）、LyricInfo（通知栏 LRC 注入）、词幕 Lyricon、本地 LRC、AI 翻译；自动链式回退或指定单源
+- **外部歌词推送**：开启外部渲染后本 App 仅推送歌词；第三方用 Manifest meta-data 声明即可接入（见 [外部歌词接入指南](#外部歌词接入指南)）
 - **本地 LRC**：应用内 SAF 选文件夹，支持「歌名-歌手」双向匹配、三语 LRC 同时间戳合并；专辑名优先加分、已知歌曲 ID 直绑
 - **AI 翻译**：OpenAI 兼容 `/chat/completions` API，可选覆盖已有译文，支持连通性检测
 - **样式设置**：按场景分通用、锁屏样式 AOD、万象息屏 AOD 三类，开关联动互斥置灰
@@ -63,16 +64,16 @@
 
 | 项目 | 要求 |
 |------|------|
-| 系统 | **小米 HyperOS 4.0+ **（验证环境：Xiaomi HyperOS 4.0.0.18，Android 17） |
-| Android | API **31+**，`targetSdk 36` |
+| 系统 | **小米 HyperOS 4.0+（OS4 专用包）**（验证环境：Xiaomi HyperOS 4.0.0.18，Android 17）；HyperOS3 请用 OS3 包 |
+| Android | Android **17**（HyperOS4），API **31+**，`targetSdk 34` |
 | 框架 | **LSPosed 2.0**（API 102），旧版 LSPosed (API 82) 不再兼容。**必须更新！** |
 | LSPosed 作用域 | `com.android.systemui`（系统界面）、`com.miui.aod`（息屏与锁屏编辑） |
 | 权限 | 通知访问、发送通知、网络、前台服务、读取应用列表（白名单选应用，Android 11+） |
 | 可选 | Root（Magisk / KernelSU）— 应用内重启 SystemUI、查看 LSPosed 日志 |
 
 > ## ⚠️ 重要提醒
-> **v1.9.1 起仅支持 HyperOS4 / Android 17（验证环境：Xiaomi HyperOS 4.0.0.18）。**
-> **HyperOS3 及以下用户请勿更新！** 本版针对 HyperOS4 做了大量适配，未在 HyperOS3 上验证，可能无法正常显示焦点歌词。
+> **v1.9.2(OS4) 起版本名带 (OS4)/(OS3) 区分渠道。本包仅支持 HyperOS4 / Android 17（验证环境：Xiaomi HyperOS 4.0.0.18）。**
+> **HyperOS3 用户请使用 OS3 专用包，请勿更新本版！**
 
 ### 额外使用条件
 
@@ -402,6 +403,61 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 
 ---
 
+## 外部歌词接入指南
+
+开启「外部渲染」（设置里 aodchange 外部渲染开关）后，LyricFocus **只做搜词 / 对齐 / 推送**，不再输出焦点通知歌词。第三方模块按下列格式声明即可接收，**无需改 LyricFocus**。
+
+完整说明见 [docs/external-lyric-protocol.md](docs/external-lyric-protocol.md)。
+
+### 1. Manifest 声明
+
+```xml
+<meta-data
+    android:name="com.leowalk.LyricFocus.EXTERNAL_LYRIC"
+    android:value="content://your.package.authority" />
+```
+
+并实现导出的 `ContentProvider`（authority 与上面对应）。
+
+### 2. Provider 方法
+
+| method | extras | 用途 |
+|--------|--------|------|
+| `putlyric` | `n` = JSON 字符串 | 换行（轻量，无全量 lines） |
+| `putlyricfd` | `fd` = `ParcelFileDescriptor` | 切歌/加载（全量，读文件得 JSON） |
+| `settings`（可选） | 返回 `n` = `{"lyric_advance_ms":200}` | 同步提前量 |
+
+### 3. JSON（协议版本 `v: 1`）
+
+```json
+{
+  "v": 1,
+  "l": "当前行原文",
+  "s": "副行",
+  "t": 32000,
+  "title": "歌名",
+  "artist": "歌手",
+  "pkg": "com.tencent.qqmusic",
+  "playing": true,
+  "ctx": {
+    "idx": 12,
+    "lines": [
+      { "t": "原文", "tm": 32000, "r": "翻译", "isCur": true }
+    ]
+  }
+}
+```
+
+- 轻量推送通常不含 `ctx`；全量含 `ctx.lines` 供多行排版
+- 切歌清空：`l`/`s` 为空、`t = 0`
+- 未知字段请忽略
+
+内置兼容 URI（可不声明 meta-data）：`content://com.leowalk.aodchange.notifications`、`content://com.leowalk.musiclockscreen.lyric`。
+
+实现代码：`focus/.../service/ExternalLyricProtocol.kt`。
+
+---
+
 ## Xposed Hook
 
 入口：`com.leowalk.LyricFocus.xposed.FocusMainHook`
@@ -435,6 +491,15 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 ---
 
 ## 版本更新
+
+### v1.9.2(OS4)
+
+> ⚠️ **本包仅支持 HyperOS4 / Android 17；HyperOS3 请用 OS3 包。**
+
+- **新增**：外部歌词推送协议（Manifest `EXTERNAL_LYRIC`，纯推送）；QQ 源原文+翻译；自动源按播放器包名匹配（QQ/小米同源）
+- **优化**：多端推送独立去重；外部渲染文案；多行字号下限 15sp
+- **版本号**：`1.9.2(OS4)`（versionCode 32）
+- [完整更新日志](release-notes/release-notes-v1.9.2-OS4.md) · [接入指南](docs/external-lyric-protocol.md)
 
 ### v1.9.1
 

@@ -32,49 +32,35 @@ class LyricManager(context: Context) {
                     lrcLibProvider.searchLyric(title, artist, album)
                         ?: localProvider.searchLyric(title, artist, album)
                 else ->
-                    fetchAutoWithQQFirst(title, artist, album, musicPackage)
+                    fetchAutoByPackage(title, artist, album, musicPackage)
             }
         }
     }
 
-    /** Auto 模式：QQ 搜歌确认标题 → 网易拿歌词+翻译 → 严格匹配 → 本地兜底 */
-    private suspend fun fetchAutoWithQQFirst(
-        title: String, artist: String, album: String, musicPackage: String = ""
+    /**
+     * Auto 模式：按播放器包名匹配歌词源。
+     * - 网易云 → 先网易，再 QQ
+     * - QQ 音乐 / 小米音乐（同源）→ 先 QQ，再网易
+     * - 其他 → 先 QQ，再网易
+     * 均失败则本地兜底。
+     */
+    private suspend fun fetchAutoByPackage(
+        title: String,
+        artist: String,
+        album: String,
+        musicPackage: String
     ): LyricInfo? {
-        val qqProvider = if (musicPackage == "com.netease.cloudmusic") netEaseProvider else qqMusicProvider
-        val fallbackProvider = if (musicPackage == "com.netease.cloudmusic") qqMusicProvider else netEaseProvider
-
-        val qqResult = qqProvider.searchLyric(title, artist, album)
-        if (qqResult != null && !qqResult.isEmpty) {
-            val confirmedTitle = qqResult.title.ifBlank { title }
-            val confirmedArtist = qqResult.artist.ifBlank { artist }
-
-            if (qqProvider.id == netEaseProvider.id) {
-                return qqResult
-            }
-
-            val netEaseResult = netEaseProvider.searchLyric(confirmedTitle, confirmedArtist, album)
-            if (netEaseResult != null && !netEaseResult.isEmpty
-                && isStrictMatch(netEaseResult, confirmedTitle, confirmedArtist)
-                && netEaseResult.lines.any { it.translation != null }) {
-                return netEaseResult
-            }
-            return qqResult
+        val preferredId = FocusPreferences.preferredOnlineLyricSourceForPackage(musicPackage)
+        val preferred = if (preferredId == FocusPreferences.LYRIC_SOURCE_NETEASE) {
+            netEaseProvider
+        } else {
+            qqMusicProvider
         }
+        val secondary = if (preferred === qqMusicProvider) netEaseProvider else qqMusicProvider
 
-        val fbResult = fallbackProvider.searchLyric(title, artist, album)
-        return fbResult?.takeIf { !it.isEmpty }
-            ?: localProvider.searchLyric(title, artist, album)
-    }
-
-    private fun isStrictMatch(lyricInfo: LyricInfo, expectedTitle: String, expectedArtist: String): Boolean {
-        val titleScore = LyricSearchHelper.scoreTitleMatch(lyricInfo.title, expectedTitle)
-        if (titleScore <= 0) return false
-        if (expectedArtist.isNotBlank() && lyricInfo.artist.isNotBlank()) {
-            val artistScore = LyricSearchHelper.scoreArtistMatch(listOf(lyricInfo.artist), expectedArtist)
-            return artistScore >= 12
-        }
-        return true
+        preferred.searchLyric(title, artist, album)?.takeIf { !it.isEmpty }?.let { return it }
+        secondary.searchLyric(title, artist, album)?.takeIf { !it.isEmpty }?.let { return it }
+        return localProvider.searchLyric(title, artist, album)
     }
 
     suspend fun translateWithAi(lyricInfo: LyricInfo, title: String, artist: String): LyricInfo {
