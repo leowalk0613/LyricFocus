@@ -31,7 +31,15 @@ jobs:
         run: |
           git remote add gitee "https://leowalk0613:${{ secrets.GITEE_TOKEN }}@gitee.com/leowalk0613/LyricFocus.git"
           git push gitee HEAD:main --force
+
+          # Gitee 常拒绝 tags --force（reference already exists）；先 API 删冲突标签再推
+          for tag in $(git tag -l); do
+            curl -s -X DELETE \
+              "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/tags/${tag}?access_token=${{ secrets.GITEE_TOKEN }}" \
+              >/dev/null || true
+          done
           git push gitee --tags --force
+
           if [ "${{ github.event.inputs.push_os3_branch || 'true' }}" = "true" ]; then
             if git rev-parse --verify origin/hyperos3-1.9.1 >/dev/null 2>&1; then
               git push gitee origin/hyperos3-1.9.1:refs/heads/hyperos3-1.9.1 --force
