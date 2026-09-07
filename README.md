@@ -496,8 +496,8 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 
 > ⚠️ **本包仅支持 HyperOS4 / Android 17；HyperOS3 请用 OS3 包。**
 
-- **新增**：外部歌词推送协议（Manifest `EXTERNAL_LYRIC`，纯推送）；QQ 源原文+翻译；自动源按播放器包名匹配（QQ/小米同源）
-- **优化**：多端推送独立去重；外部渲染文案；多行字号下限 15sp
+- **新增**：外部歌词推送协议（Manifest `EXTERNAL_LYRIC`，纯推送）；QQ 源原文+翻译；自动源按播放器包名匹配（QQ/小米同源）；多行槽位扩至 24 行
+- **优化**：多端推送独立去重；当前行强调色/未播淡化；多行字号下限 15sp；欢迎页改版；系统要求标明 OS4
 - **版本号**：`1.9.2(OS4)`（versionCode 32）
 - [完整更新日志](release-notes/release-notes-v1.9.2-OS4.md) · [接入指南](docs/external-lyric-protocol.md)
 
