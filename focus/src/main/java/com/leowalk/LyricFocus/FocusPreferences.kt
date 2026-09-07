@@ -23,8 +23,8 @@ object FocusPreferences {
     const val PREF_MULTI_LINE_LYRICS = "multi_line_lyrics"
     /** 多行模式下是否显示翻译（有翻译时交错显示原文与翻译） */
     const val PREF_MULTI_LINE_SHOW_TRANSLATION = "multi_line_show_translation"
-    /** 多行模式一页行数：4~8 */
-    const val PREF_MULTI_LINE_LINE_COUNT = "multi_line_line_count"
+    /** 多行歌词区域固定高度（dp）：200~450 */
+    const val PREF_MULTI_LINE_HEIGHT = "multi_line_height"
     /** 仅 AOD 显示多行歌词，锁屏保持双行 */
     const val PREF_AOD_MULTI_LINE_ONLY = "aod_multi_line_only"
     /** 多行歌词独立字号（原文/翻译统一） */
@@ -78,6 +78,7 @@ object FocusPreferences {
     const val BACKGROUND_BLACK = "black"
     const val BACKGROUND_WHITE = "white"
     const val BACKGROUND_CUSTOM = "custom"
+    const val BACKGROUND_ALBUM = "album"
 
     const val LYRIC_SOURCE_AUTO = "auto"
     const val LYRIC_SOURCE_NETEASE = "netease"
@@ -163,22 +164,21 @@ object FocusPreferences {
     const val MAX_SYNC_ADVANCE_MS = 3000L
 
     const val DEFAULT_LYRIC_TEXT_SIZE_SP = 18f
-    const val DEFAULT_MULTI_LINE_TEXT_SIZE_SP = 14f
+    const val DEFAULT_MULTI_LINE_TEXT_SIZE_SP = 20f
 
-    const val DEFAULT_MULTI_LINE_LINE_COUNT = 8
-    const val MIN_MULTI_LINE_COUNT = 3
-    const val MAX_MULTI_LINE_COUNT = 8
+    const val DEFAULT_MULTI_LINE_HEIGHT_DP = 400
+    const val MIN_MULTI_LINE_HEIGHT_DP = 200
+    const val MAX_MULTI_LINE_HEIGHT_DP = 450
 
-    fun coerceMultiLineLineCount(lines: Int): Int {
-        return lines.coerceIn(MIN_MULTI_LINE_COUNT, MAX_MULTI_LINE_COUNT)
-    }
-    /** 3->4, 4->4, 5->6, 6->6, 7->8, 8->8 */
-    fun multiLinePageSlots(lines: Int): Int {
-        return ((lines + 1) / 2 * 2).coerceIn(4, 8)
+    fun coerceMultiLineHeightDp(dp: Int): Int {
+        return dp.coerceIn(MIN_MULTI_LINE_HEIGHT_DP, MAX_MULTI_LINE_HEIGHT_DP)
     }
 
     const val MIN_LYRIC_TEXT_SIZE_SP = 12f
     const val MAX_LYRIC_TEXT_SIZE_SP = 32f
+
+    /** 多行模式字号最小值 = 未播行（非当前行）字号，保证当前行不小于未播行 */
+    const val MIN_MULTI_LINE_TEXT_SIZE_SP = 15f
 
     const val DEFAULT_LYRIC_MAX_LINES = 2
     const val DEFAULT_TRANSLATION_MAX_LINES = 1
@@ -533,6 +533,14 @@ object FocusPreferences {
             .getBoolean(PREF_FOCUS_ENABLED, true)
     }
 
+    /** 首次启动写入焦点默认开，避免 SystemUI 侧 remote prefs 缺键后误判为关闭。 */
+    fun ensureFocusEnabledDefault(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (!prefs.contains(PREF_FOCUS_ENABLED)) {
+            prefs.edit().putBoolean(PREF_FOCUS_ENABLED, true).commit()
+        }
+    }
+
     fun setFocusEnabled(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
@@ -749,28 +757,28 @@ object FocusPreferences {
         return readFromModule(context) { isMultiLineShowTranslation(it) } ?: true
     }
 
-    fun getMultiLineLineCount(context: Context): Int {
-        return coerceMultiLineLineCount(
+    fun getMultiLineHeightDp(context: Context): Int {
+        return coerceMultiLineHeightDp(
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getInt(PREF_MULTI_LINE_LINE_COUNT, DEFAULT_MULTI_LINE_LINE_COUNT)
+                .getInt(PREF_MULTI_LINE_HEIGHT, DEFAULT_MULTI_LINE_HEIGHT_DP)
         )
     }
 
-    fun setMultiLineLineCount(context: Context, lines: Int) {
+    fun setMultiLineHeightDp(context: Context, dp: Int) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
-            .putInt(PREF_MULTI_LINE_LINE_COUNT, coerceMultiLineLineCount(lines))
+            .putInt(PREF_MULTI_LINE_HEIGHT, coerceMultiLineHeightDp(dp))
             .apply()
     }
 
-    fun readMultiLineLineCount(context: Context): Int {
-        return readFromModule(context) { getMultiLineLineCount(it) } ?: DEFAULT_MULTI_LINE_LINE_COUNT
+    fun readMultiLineHeightDp(context: Context): Int {
+        return readFromModule(context) { getMultiLineHeightDp(it) } ?: DEFAULT_MULTI_LINE_HEIGHT_DP
     }
 
     fun getMultiLineTextSize(context: Context): Float {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getFloat(PREF_MULTI_LINE_TEXT_SIZE, DEFAULT_MULTI_LINE_TEXT_SIZE_SP)
-            .coerceIn(MIN_LYRIC_TEXT_SIZE_SP, MAX_LYRIC_TEXT_SIZE_SP)
+            .coerceIn(MIN_MULTI_LINE_TEXT_SIZE_SP, MAX_LYRIC_TEXT_SIZE_SP)
     }
 
     fun setMultiLineTextSize(context: Context, sizeSp: Float) {
@@ -778,7 +786,7 @@ object FocusPreferences {
             .edit()
             .putFloat(
                 PREF_MULTI_LINE_TEXT_SIZE,
-                sizeSp.coerceIn(MIN_LYRIC_TEXT_SIZE_SP, MAX_LYRIC_TEXT_SIZE_SP)
+                sizeSp.coerceIn(MIN_MULTI_LINE_TEXT_SIZE_SP, MAX_LYRIC_TEXT_SIZE_SP)
             )
             .commit()
     }
@@ -1106,6 +1114,20 @@ object FocusPreferences {
         }
     }
 
+    /**
+     * Auto 歌词源：按播放器包名决定优先在线源。
+     * QQ 音乐与小米音乐（com.miui.player）同源，均优先 QQ；网易云优先网易；其余默认 QQ。
+     */
+    fun preferredOnlineLyricSourceForPackage(packageName: String?): String {
+        if (packageName.isNullOrBlank()) return LYRIC_SOURCE_QQ
+        return when {
+            packageName.contains("netease", ignoreCase = true) -> LYRIC_SOURCE_NETEASE
+            packageName.contains("qqmusic", ignoreCase = true) ||
+                packageName.contains("miui.player", ignoreCase = true) -> LYRIC_SOURCE_QQ
+            else -> LYRIC_SOURCE_QQ
+        }
+    }
+
     fun readAodKeepaliveSec(context: Context): Int {
         return readFromModule(context) { getAodKeepaliveSec(it) } ?: DEFAULT_AOD_KEEPALIVE_SEC
     }
@@ -1280,6 +1302,7 @@ object FocusPreferences {
 
     fun shouldExtractAlbumColors(context: Context): Boolean {
         return isAlbumColorExtractionActive(context) ||
+            getFocusBackground(context) == BACKGROUND_ALBUM ||
             (isCustomAodLayout(context) && getCustomAodColorMode(context) == CUSTOM_AOD_COLOR_ALBUM)
     }
 
@@ -1402,10 +1425,14 @@ object FocusPreferences {
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_COLOR_MODE, colorMode)
         intent.putExtra("monet_bg_only", isMonetBgOnly(context))
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_BACKGROUND, getFocusBackground(context))
+        intent.putExtra(
+            FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_COLOR_OPACITY,
+            getExtractedColorOpacity(context)
+        )
         appendExtractedColorExtras(intent, context)
     }
 
-    private fun appendExtractedColorExtras(intent: android.content.Intent, context: Context) {
+    fun appendExtractedColorExtras(intent: android.content.Intent, context: Context) {
         val color = getExtractedTextColor(context)
         intent.putExtra(FocusStyleSnapshot.EXTRA_STYLE_EXTRACTED_COLOR_SET, color != null)
         if (color != null) {
@@ -1432,7 +1459,7 @@ object FocusPreferences {
         }
     }
 
-    fun notifyStyleSettingsChanged(context: Context) {
+    fun notifyStyleSettingsChanged(context: Context, notifySelf: Boolean = true) {
         try {
             val intent = android.content.Intent(ACTION_SETTINGS_CHANGED).apply {
                 putExtra(FocusStyleSnapshot.EXTRA_STYLE_CHANGED, true)
@@ -1466,8 +1493,8 @@ object FocusPreferences {
                     isMultiLineShowTranslation(context)
                 )
                 putExtra(
-                    FocusStyleSnapshot.EXTRA_STYLE_MULTI_LINE_LINE_COUNT,
-                    getMultiLineLineCount(context)
+                    FocusStyleSnapshot.EXTRA_STYLE_MULTI_LINE_HEIGHT,
+                    getMultiLineHeightDp(context)
                 )
                 putExtra(
                     FocusStyleSnapshot.EXTRA_STYLE_MULTI_LINE_TEXT_SIZE,
@@ -1545,10 +1572,13 @@ object FocusPreferences {
                     FocusStyleSnapshot.EXTRA_STYLE_COLOR_MODE,
                     isColorModeEnabled(context)
                 )
+                putExtra("monet_bg_only", isMonetBgOnly(context))
                 appendExtractedColorExtras(this, context)
             }
             context.sendBroadcast(android.content.Intent(intent).setPackage("com.android.systemui"))
-            context.sendBroadcast(android.content.Intent(intent).setPackage(context.packageName))
+            if (notifySelf) {
+                context.sendBroadcast(android.content.Intent(intent).setPackage(context.packageName))
+            }
         } catch (_: Exception) {
         }
     }

@@ -8,6 +8,8 @@
         android:id="@+id/focus_lyric_bg"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:background="@drawable/focus_lyric_bg_rounded"
+        android:clipToOutline="true"
         android:contentDescription="@null"
         android:scaleType="centerCrop"
         android:visibility="gone" />

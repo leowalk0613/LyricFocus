@@ -127,12 +127,17 @@ object AlbumColorExtractor {
         val bg = when (backgroundMode) {
             FocusPreferences.BACKGROUND_BLACK -> Color.BLACK
             FocusPreferences.BACKGROUND_WHITE -> Color.WHITE
+            FocusPreferences.BACKGROUND_ALBUM -> backgroundEstimate
             else -> Color.BLACK
         }
         val primary = ensureContrast(accent, bg, MIN_PRIMARY_CONTRAST)
         val secondary = ensureContrast(blendSecondary(primary, bg), bg, MIN_SECONDARY_CONTRAST)
 
-        val isDarkBackground = backgroundMode != FocusPreferences.BACKGROUND_WHITE
+        val isDarkBackground = when (backgroundMode) {
+            FocusPreferences.BACKGROUND_WHITE -> false
+            FocusPreferences.BACKGROUND_ALBUM -> relativeLuminance(backgroundEstimate) < 0.45
+            else -> true
+        }
         val finalPrimary = guardSameColor(avoidPureColor(primary, isDarkBackground), bg)
         val finalSecondary = guardSameColor(avoidPureColor(secondary, isDarkBackground), bg)
 

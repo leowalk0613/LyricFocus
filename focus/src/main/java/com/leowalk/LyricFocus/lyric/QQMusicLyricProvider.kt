@@ -28,9 +28,25 @@ class QQMusicLyricProvider(context: android.content.Context) : LyricProvider {
         return try {
             val candidate = searchSong(title, artist, album) ?: return null
             Log.d(TAG, "searchLyric: candidate mid=${candidate.songMid} id=${candidate.songId}")
-            // 优先新接口（含翻译），DES 解密失败则走明文兜底
-            val result = fetchQrcLyric(candidate) ?: fetchLegacyLyric(candidate)
-            if (result != null) Log.d(TAG, "searchLyric: got ${result.lines.size} lines, hasTrans=${result.lines.any { it.translation != null }}")
+            // 优先 QRC（含翻译）；解密失败或无翻译时用明文 LRC 兜底/补翻译
+            val qrc = fetchQrcLyric(candidate)
+            if (qrc != null && hasTranslation(qrc)) {
+                Log.d(TAG, "searchLyric: qrc ${qrc.lines.size} lines with translation")
+                return qrc
+            }
+            val legacy = fetchLegacyLyric(candidate)
+            val result = when {
+                qrc != null && legacy != null && hasTranslation(legacy) ->
+                    mergeTranslationsOnto(qrc, legacy)
+                qrc != null -> qrc
+                else -> legacy
+            }
+            if (result != null) {
+                Log.d(
+                    TAG,
+                    "searchLyric: got ${result.lines.size} lines, hasTrans=${hasTranslation(result)}"
+                )
+            }
             result
         } catch (e: Exception) {
             Log.e(TAG, "searchLyric error", e)
@@ -38,13 +54,30 @@ class QQMusicLyricProvider(context: android.content.Context) : LyricProvider {
         }
     }
 
-    private suspend fun tryEnrichLyric(candidate: SongCandidate, fallback: LyricInfo): LyricInfo? {
-        return try {
-            fetchQrcLyric(candidate)
-        } catch (e: Exception) {
-            Log.d(TAG, "tryEnrichLyric failed", e)
-            null
+    private fun hasTranslation(info: LyricInfo): Boolean =
+        info.lines.any { isMeaningfulTranslation(it.translation) }
+
+    private fun isMeaningfulTranslation(text: String?): Boolean {
+        if (text.isNullOrBlank()) return false
+        val t = text.trim()
+        return t != "//" && t != "/" && t != "-" && t != "—" && t != "…"
+    }
+
+    /** 将 source 的翻译按时间对齐合并到 target（保留 target 原文与时间轴） */
+    private fun mergeTranslationsOnto(target: LyricInfo, source: LyricInfo): LyricInfo {
+        val translations = source.lines.mapNotNull { line ->
+            line.translation?.takeIf { isMeaningfulTranslation(it) }?.let { line.time to it }
         }
+        if (translations.isEmpty()) return target
+        val merged = target.lines.map { line ->
+            if (isMeaningfulTranslation(line.translation)) return@map line
+            val closest = translations.minByOrNull { kotlin.math.abs(it.first - line.time) }
+            val translation = closest
+                ?.takeIf { kotlin.math.abs(it.first - line.time) <= 500 }
+                ?.second
+            line.copy(translation = translation)
+        }
+        return target.copy(lines = merged)
     }
 
     private suspend fun searchSong(title: String, artist: String, album: String = ""): SongCandidate? {
@@ -314,13 +347,13 @@ class QQMusicLyricProvider(context: android.content.Context) : LyricProvider {
         }
         val resp = postMusicu("music.musichallSong.PlayLyricInfo", "GetPlayLyricInfo", param)
         if (resp == null) {
-            Log.d(TAG, "fetchQrcLyric: postMusicu returned null, trying fallback")
-            return fetchLegacyLyric(candidate)
+            Log.d(TAG, "fetchQrcLyric: postMusicu returned null")
+            return null
         }
         val data = resp.optJSONObject("req_0")?.optJSONObject("data")
         if (data == null) {
             Log.d(TAG, "fetchQrcLyric: no data in response")
-            return fetchLegacyLyric(candidate)
+            return null
         }
         val qrcRaw = data.optString("lyric", "")
         val transRaw = data.optString("trans", "")
@@ -328,8 +361,8 @@ class QQMusicLyricProvider(context: android.content.Context) : LyricProvider {
         Log.d(TAG, "fetchQrcLyric: lyric hex len=${qrcRaw.length} trans hex len=${transRaw.length}")
         val qrcText = decryptQrcStr(qrcRaw)
         if (qrcText.isEmpty()) {
-            Log.d(TAG, "fetchQrcLyric: DES decrypt lyric failed, trying fallback")
-            return fetchLegacyLyric(candidate)
+            Log.d(TAG, "fetchQrcLyric: DES decrypt lyric failed")
+            return null
         }
         val transText = decryptQrcStr(transRaw)
         val romaText = decryptQrcStr(romaRaw)
@@ -340,7 +373,7 @@ class QQMusicLyricProvider(context: android.content.Context) : LyricProvider {
             Log.d(TAG, "fetchQrcLyric: too few lines (${lines.size})")
             return null
         }
-        Log.d(TAG, "fetchQrcLyric: parsed ${lines.size} lines, hasTrans=${transText.isNotBlank()}")
+        Log.d(TAG, "fetchQrcLyric: parsed ${lines.size} lines, hasTrans=${lines.any { isMeaningfulTranslation(it.translation) }}")
         return LyricInfo(
             title = candidate.title,
             artist = candidate.artist,
@@ -371,6 +404,7 @@ class QQMusicLyricProvider(context: android.content.Context) : LyricProvider {
                     put("qrc", 0)
                     put("lrc", 1)
                     put("trans", 1)
+                    put("roma", 1)
                     put("cv", 2111)
                     put("ct", 19)
                     put("type", 0)
@@ -385,17 +419,42 @@ class QQMusicLyricProvider(context: android.content.Context) : LyricProvider {
                 if (!response.isSuccessful) return null
                 val json = JSONObject(response.body?.string() ?: return null)
                 val data = json.optJSONObject("req_0")?.optJSONObject("data") ?: return null
-                val lrcB64 = data.optString("lyric", "")
-                if (lrcB64.isBlank()) return null
-                val lyricText = try {
-                    String(android.util.Base64.decode(lrcB64, android.util.Base64.DEFAULT), Charsets.UTF_8)
-                } catch (e: Exception) { return null }
-                val lyricInfo = LrcParser.parse(lyricText)
+                val lyricText = decodeBase64Field(data.optString("lyric", "")) ?: return null
+                val transText = decodeBase64Field(data.optString("trans", ""))
+                val lyricInfo = LrcParser.parseWithTranslation(lyricText, transText)
                 if (lyricInfo.lines.size < 2) return null
-                Log.d(TAG, "fetchLegacyLyric: ${lyricInfo.lines.size} lines")
-                lyricInfo.copy(title = candidate.title, artist = candidate.artist, album = candidate.album, source = name)
+                val cleaned = lyricInfo.copy(
+                    lines = lyricInfo.lines.map { line ->
+                        if (isMeaningfulTranslation(line.translation)) line
+                        else line.copy(translation = null)
+                    }
+                )
+                Log.d(
+                    TAG,
+                    "fetchLegacyLyric: ${cleaned.lines.size} lines, hasTrans=${hasTranslation(cleaned)}"
+                )
+                cleaned.copy(
+                    title = candidate.title,
+                    artist = candidate.artist,
+                    album = candidate.album,
+                    source = name
+                )
             }
-        } catch (e: Exception) { Log.d(TAG, "fetchLegacyLyric failed", e); null }
+        } catch (e: Exception) {
+            Log.d(TAG, "fetchLegacyLyric failed", e)
+            null
+        }
+    }
+
+    private fun decodeBase64Field(raw: String): String? {
+        if (raw.isBlank()) return null
+        return try {
+            String(android.util.Base64.decode(raw, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                .takeIf { it.isNotBlank() }
+        } catch (e: Exception) {
+            Log.d(TAG, "decodeBase64Field failed, len=${raw.length}")
+            null
+        }
     }
 
     private fun parseQrcToLyricLines(qrcText: String, transText: String, romaText: String): List<LyricLine> {
@@ -414,7 +473,8 @@ class QQMusicLyricProvider(context: android.content.Context) : LyricProvider {
             var translation: String? = null
             while (transIdx < transLines.size && transLines[transIdx].first < lineStart - 500) transIdx++
             if (transIdx < transLines.size && transLines[transIdx].first < lineEnd) {
-                translation = transLines[transIdx].second.map { it.text }.joinToString("").takeIf { it.isNotBlank() }
+                translation = transLines[transIdx].second.map { it.text }.joinToString("")
+                    .takeIf { isMeaningfulTranslation(it) }
                 transIdx++
             }
             var reading: String? = null

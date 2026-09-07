@@ -177,7 +177,6 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         switchFocusLyric.setOnCheckedChangeListener { _, checked ->
             FocusPreferences.setFocusEnabled(requireContext(), checked)
             broadcastSettingsChanged()
-            restartForHookChange()
         }
         switchCustomAodLayout.setOnCheckedChangeListener { _, checked ->
             FocusPreferences.setCustomAodLayout(requireContext(), checked)
@@ -189,7 +188,6 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
             FocusPreferences.notifyStyleSettingsChanged(requireContext())
             broadcastSettingsChanged()
             updateStatus()
-            restartForHookChange()
         }
         switchAppWhitelist.setOnCheckedChangeListener { _, checked ->
             val ctx = requireContext()
@@ -264,8 +262,8 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         } else if (FocusPreferences.isCustomAodLayout(ctx)) {
             "万象息屏（自定义）"
         } else if (FocusPreferences.isMultiLineLyrics(ctx)) {
-            val lines = FocusPreferences.getMultiLineLineCount(ctx)
-            "锁屏样式（多行×$lines）"
+            val height = FocusPreferences.getMultiLineHeightDp(ctx)
+            "锁屏样式（多行·${height}dp）"
         } else {
             "锁屏样式"
         }
@@ -296,28 +294,6 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         } catch (_: Exception) {
         }
         startMusicMonitorService()
-    }
-
-    /**
-     * hook 开关变化：root 重启 SystemUI 与 AOD，使 hook 装载状态在进程重启后生效。
-     * 重启失败不阻塞（hook 内已有运行时门卫兜底，下次系统重启也会生效）。
-     */
-    private fun restartForHookChange() {
-        val ctx = requireContext()
-        com.leowalk.LyricFocus.util.RootHelper.restartSystemUiAsync { success, _ ->
-            if (!success) {
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    try {
-                        android.widget.Toast.makeText(
-                            ctx,
-                            "未获取 Root 权限，hook 开关将在下次系统重启后生效",
-                            android.widget.Toast.LENGTH_LONG
-                        ).show()
-                    } catch (_: Throwable) {
-                    }
-                }
-            }
-        }
     }
 
     /**

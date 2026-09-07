@@ -29,7 +29,8 @@ class SystemUIPluginHook : BaseHook() {
             )
             module.hook(method).intercept { chain ->
                 val proceeded = chain.proceed()
-                // aodchange 外部渲染 / 焦点通知歌词关闭：不注入任何插件 hook
+                // 仅明确关闭时跳过插件 bypass；queryMode 失败（null）仍注入，
+                // 否则 OS3 上 canShowFocus 失败会 resetAllParam，焦点退化为普通通知。
                 val focusDisabled = FocusMainHook.queryMode(SETTINGS_URI, "focus_mode") == false
                 if (SystemUIHyperFocusHook.aodchangeMode || focusDisabled) return@intercept proceeded
                 val result = proceeded as? ContextWrapper ?: return@intercept proceeded
