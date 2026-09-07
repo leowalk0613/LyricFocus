@@ -14,8 +14,14 @@
 
 > 实现 HyperOS 锁屏息屏焦点歌词的 LSP 模块 — `com.leowalk.LyricFocus`
 
+> ## ⚠️ 渠道包提醒
+> **本 `main` / 默认 Release 为 HyperOS 4 专用 `1.9.2(OS4)`。**
+> **HyperOS 3 用户请下载 [V1.9.2(OS3)](https://github.com/leowalk0613/LyricFocus/releases/tag/v1.9.2-OS3)，请勿安装 OS4 包。**
+
 [123 网盘](https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3) ·
-[GitHub Releases](https://github.com/leowalk0613/LyricFocus/releases)
+[GitHub Releases](https://github.com/leowalk0613/LyricFocus/releases) ·
+[OS3 Release](https://github.com/leowalk0613/LyricFocus/releases/tag/v1.9.2-OS3) ·
+[OS4 Release](https://github.com/leowalk0613/LyricFocus/releases/tag/v1.9.2-OS4)
 
 </div>
 
@@ -39,7 +45,7 @@
 - **版本更新检测**：启动后并行检测 GitHub 与 Gitee Release，取最新版本；后台线程运行，不阻塞界面
 - **实时歌词**：`NotificationListenerService` 绑定 MediaSession，监听播放进度与元数据；主界面 2 秒定时刷新歌曲状态
 - **多歌词源**：网易云音乐、QQ 音乐、SuperLyricApi（AIDL 实时推送）、LyricInfo（通知栏 LRC 注入）、词幕 Lyricon、本地 LRC、AI 翻译；自动链式回退或指定单源
-- **外部歌词推送**：开启外部渲染后本 App 仅推送歌词；第三方用 Manifest meta-data 声明即可接入（见 [外部歌词接入指南](#外部歌词接入指南)）
+- **外部歌词推送**：开启外部渲染后本 App 仅推送歌词；第三方用 Manifest meta-data 声明即可接入（见 [外部歌词接入指南](#外部歌词接入指南)）。自研配套：[Aodchange](https://github.com/leowalk0613/Aodchange)（HyperOS 3 万象息屏）、[HyperLockMusic](https://github.com/leowalk0613/HyperLockMusic)（HyperOS 4 音乐锁屏）
 - **本地 LRC**：应用内 SAF 选文件夹，支持「歌名-歌手」双向匹配、三语 LRC 同时间戳合并；专辑名优先加分、已知歌曲 ID 直绑
 - **AI 翻译**：OpenAI 兼容 `/chat/completions` API，可选覆盖已有译文，支持连通性检测
 - **样式设置**：按场景分通用、锁屏样式 AOD、万象息屏 AOD 三类，开关联动互斥置灰
@@ -409,6 +415,15 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 
 完整说明见 [docs/external-lyric-protocol.md](docs/external-lyric-protocol.md)。
 
+### 自研配套模块（外部渲染示例）
+
+| 模块 | 系统 | 说明 |
+|------|------|------|
+| [Aodchange](https://github.com/leowalk0613/Aodchange) | HyperOS **3** | 万象息屏自渲染歌词 / 卡片样式；开启 LyricFocus「外部渲染」后由本模块上屏 |
+| [HyperLockMusic](https://github.com/leowalk0613/HyperLockMusic) | HyperOS **4** | 音乐锁屏 / AOD 专辑壁纸与歌词；歌词数据同样走 LyricFocus 外部渲染推送 |
+
+二者均消费内置兼容 URI（或等价 Provider）；其它第三方仍可按下方协议自行接入。
+
 ### 1. Manifest 声明
 
 ```xml
@@ -452,7 +467,10 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 - 切歌清空：`l`/`s` 为空、`t = 0`
 - 未知字段请忽略
 
-内置兼容 URI（可不声明 meta-data）：`content://com.leowalk.aodchange.notifications`、`content://com.leowalk.musiclockscreen.lyric`。
+内置兼容 URI（可不声明 meta-data）：
+
+- `content://com.leowalk.aodchange.notifications` → [Aodchange](https://github.com/leowalk0613/Aodchange)
+- `content://com.leowalk.musiclockscreen.lyric` → [HyperLockMusic](https://github.com/leowalk0613/HyperLockMusic)（锁屏音乐模块）
 
 实现代码：`focus/.../service/ExternalLyricProtocol.kt`。
 

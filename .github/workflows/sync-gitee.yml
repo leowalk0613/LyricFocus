@@ -6,6 +6,15 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "要同步到 Gitee 的 GitHub Release 标签（空则同步 Latest，如 v1.9.2-OS4）"
+        required: false
+        default: ""
+      push_os3_branch:
+        description: "是否同时推送 hyperos3-1.9.1 分支到 Gitee"
+        required: false
+        default: "true"
 
 jobs:
   mirror-repo:
@@ -15,28 +24,60 @@ jobs:
         with:
           fetch-depth: 0
           ref: main
-      - run: |
+      - name: Fetch all branches and tags
+        run: |
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' --tags --force
+      - name: Push main + tags (+ optional OS3 branch) to Gitee
+        run: |
           git remote add gitee "https://leowalk0613:${{ secrets.GITEE_TOKEN }}@gitee.com/leowalk0613/LyricFocus.git"
-          git push gitee main --tags --force
+          git push gitee HEAD:main --force
+          git push gitee --tags --force
+          if [ "${{ github.event.inputs.push_os3_branch || 'true' }}" = "true" ]; then
+            if git rev-parse --verify origin/hyperos3-1.9.1 >/dev/null 2>&1; then
+              git push gitee origin/hyperos3-1.9.1:refs/heads/hyperos3-1.9.1 --force
+              echo "Pushed hyperos3-1.9.1"
+            else
+              echo "origin/hyperos3-1.9.1 not found, skip"
+            fi
+          fi
 
   mirror-release:
     needs: mirror-repo
     runs-on: ubuntu-latest
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     steps:
-      - name: Get latest release info
+      - name: Resolve release tag
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            VERSION="${{ github.event.inputs.release_tag }}"
+          else
+            VERSION=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/releases/latest" | jq -r '.tag_name')
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Resolved VERSION=$VERSION"
+
+      - name: Get release info
         run: |
           RELEASE_JSON=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/latest")
-          ASSET_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".apk")) | .browser_download_url')
-          VERSION=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
-          BODY=$(echo "$RELEASE_JSON" | jq -r '.body')
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${VERSION}")
+          ASSET_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | test("(?i)\\\\.apk$")) | .browser_download_url' | head -n1)
+          BODY=$(echo "$RELEASE_JSON" | jq -r '.body // ""')
+          NAME=$(echo "$RELEASE_JSON" | jq -r '.name // .tag_name')
+          TARGET=$(echo "$RELEASE_JSON" | jq -r '.target_commitish // "main"')
+          if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" = "null" ]; then
+            echo "No APK asset for $VERSION" >&2
+            exit 1
+          fi
           echo "ASSET_URL=$ASSET_URL" >> $GITHUB_ENV
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "NAME=$NAME" >> $GITHUB_ENV
+          echo "TARGET=$TARGET" >> $GITHUB_ENV
           echo "BODY<<EOF" >> $GITHUB_ENV
           echo "$BODY" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
-          echo "Release: $VERSION, APK: $ASSET_URL"
+          echo "Release: $NAME ($VERSION), target=$TARGET, APK: $ASSET_URL"
 
       - name: Download APK
         run: curl -L -o LyricFocus.apk "$ASSET_URL"
@@ -54,8 +95,13 @@ jobs:
         run: |
           RESPONSE=$(curl -s -X POST "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases" \
             -H "Content-Type: application/json" \
-            -d "{\"access_token\":\"${{ secrets.GITEE_TOKEN }}\",\"tag_name\":\"$VERSION\",\"name\":\"$VERSION\",\"body\":$(echo "$BODY" | jq -Rs .),\"target_commitish\":\"main\",\"prerelease\":false}")
+            -d "{\"access_token\":\"${{ secrets.GITEE_TOKEN }}\",\"tag_name\":\"$VERSION\",\"name\":\"$NAME\",\"body\":$(echo "$BODY" | jq -Rs .),\"target_commitish\":\"$TARGET\",\"prerelease\":false}")
+          echo "$RESPONSE" | jq -r '.message // empty' || true
           RELEASE_ID=$(echo "$RESPONSE" | jq -r '.id')
+          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+            echo "Failed to create Gitee release: $RESPONSE" >&2
+            exit 1
+          fi
           echo "RELEASE_ID=$RELEASE_ID" >> $GITHUB_ENV
           echo "Created release $RELEASE_ID"
 
