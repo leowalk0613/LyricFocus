@@ -12,7 +12,7 @@ on:
         required: false
         default: ""
       push_os3_branch:
-        description: "是否同时推送 hyperos3-1.9.1 分支到 Gitee"
+        description: "是否同时推送 hyperos3 分支到 Gitee"
         required: false
         default: "true"
 
@@ -41,11 +41,11 @@ jobs:
           git push gitee --tags --force
 
           if [ "${{ github.event.inputs.push_os3_branch || 'true' }}" = "true" ]; then
-            if git rev-parse --verify origin/hyperos3-1.9.1 >/dev/null 2>&1; then
-              git push gitee origin/hyperos3-1.9.1:refs/heads/hyperos3-1.9.1 --force
-              echo "Pushed hyperos3-1.9.1"
+            if git rev-parse --verify origin/hyperos3 >/dev/null 2>&1; then
+              git push gitee origin/hyperos3:refs/heads/hyperos3 --force
+              echo "Pushed hyperos3"
             else
-              echo "origin/hyperos3-1.9.1 not found, skip"
+              echo "origin/hyperos3 not found, skip"
             fi
           fi
 
