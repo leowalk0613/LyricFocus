@@ -20,8 +20,8 @@
 
 内置兼容（可不声明 meta-data）：
 
-- `content://com.leowalk.aodchange.notifications`
-- `content://com.leowalk.musiclockscreen.lyric`
+- `content://com.leowalk.aodchange.notifications` — [Aodchange](https://github.com/leowalk0613/Aodchange)（HyperOS 3 万象息屏）
+- `content://com.leowalk.musiclockscreen.lyric` — [HyperLockMusic](https://github.com/leowalk0613/HyperLockMusic)（HyperOS 4 音乐锁屏）
 
 若同时声明了与内置相同的 URI，只会推送一次。
 
