@@ -1,7 +1,7 @@
 # V1.9.2(OS4)
 
 > ## ⚠️ 重要提醒
-> **本包为 HyperOS4 / Android 17 专用（验证环境：Xiaomi HyperOS 4.0.0.18）。**
+> **本包为 HyperOS4 / Android 17 专用（验证环境：Xiaomi HyperOS 4.0.0.35）。**
 > **HyperOS3 用户请使用 OS3 专用包，请勿安装本版！**
 
 ## 新增

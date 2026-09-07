@@ -70,7 +70,7 @@
 
 | 项目 | 要求 |
 |------|------|
-| 系统 | **小米 HyperOS 4.0+（OS4 专用包）**（验证环境：Xiaomi HyperOS 4.0.0.18，Android 17）；HyperOS3 请用 OS3 包 |
+| 系统 | **小米 HyperOS 4.0+（OS4 专用包）**（验证环境：Xiaomi HyperOS 4.0.0.35，Android 17）；HyperOS3 请用 OS3 包 |
 | Android | Android **17**（HyperOS4），API **31+**，`targetSdk 34` |
 | 框架 | **LSPosed 2.0**（API 102），旧版 LSPosed (API 82) 不再兼容。**必须更新！** |
 | LSPosed 作用域 | `com.android.systemui`（系统界面）、`com.miui.aod`（息屏与锁屏编辑） |
@@ -78,7 +78,7 @@
 | 可选 | Root（Magisk / KernelSU）— 应用内重启 SystemUI、查看 LSPosed 日志 |
 
 > ## ⚠️ 重要提醒
-> **v1.9.2(OS4) 起版本名带 (OS4)/(OS3) 区分渠道。本包仅支持 HyperOS4 / Android 17（验证环境：Xiaomi HyperOS 4.0.0.18）。**
+> **v1.9.2(OS4) 起版本名带 (OS4)/(OS3) 区分渠道。本包仅支持 HyperOS4 / Android 17（验证环境：Xiaomi HyperOS 4.0.0.35）。**
 > **HyperOS3 用户请使用 OS3 专用包，请勿更新本版！**
 
 ### 额外使用条件
@@ -177,7 +177,7 @@ LyricFocus/
 | 网络 | 拉取歌词需联网（网易云 / QQ 音乐 API） |
 | Root（推荐） | 非必须，但 Hook 变更后可在应用内一键重启 SystemUI、查看 LSPosed 日志 |
 
-> 已在 **Xiaomi HyperOS 4.0.0.18（Android 17）** 环境验证。其他 HyperOS 版本若焦点通知 API 有差异，可能需要适配。
+> 已在 **Xiaomi HyperOS 4.0.0.35（Android 17）** 环境验证。其他 HyperOS 版本若焦点通知 API 有差异，可能需要适配。
 
 ---
 
