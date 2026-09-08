@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.ExternalLyricTest" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#1B6B4A</item>
+        <item name="colorPrimaryVariant">#0F4A32</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">#C45C26</item>
+        <item name="android:statusBarColor">#0F4A32</item>
+        <item name="android:navigationBarColor">#F2F5F1</item>
+        <item name="android:windowBackground">#F2F5F1</item>
+    </style>
+</resources>

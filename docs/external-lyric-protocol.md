@@ -114,3 +114,17 @@ Provider 需在 Manifest 中导出（或按你的安全策略配置权限），�
 | 外部渲染 **开** | 关闭焦点歌词输出；向所有已发现 endpoint 推送 |
 
 实现参考：`focus/.../service/ExternalLyricProtocol.kt`。
+
+## 6. 仓库内最小示例
+
+[`externalLyricTest/`](../externalLyricTest/) 是按本协议实现的第三方接收端（非内置 URI）：
+
+- Manifest 声明 `EXTERNAL_LYRIC` + 导出 Provider
+- 处理 `putlyric` / `putlyricfd` / `settings`
+- 界面实时显示方法名与歌词，便于联调
+
+```bash
+./gradlew :externalLyricTest:installDebug
+```
+
+构建与验证步骤见 [`externalLyricTest/README.md`](../externalLyricTest/README.md)。

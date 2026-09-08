@@ -138,6 +138,8 @@ flowchart LR
 LyricFocus/
 ├── settings.gradle
 ├── build.gradle
+├── docs/external-lyric-protocol.md     → 外部歌词推送协议
+├── externalLyricTest/                  → 第三方接入最小示例（可运行）
 └── focus/
     ├── build.gradle
     └── src/main/
@@ -152,7 +154,7 @@ LyricFocus/
         │   ├── FocusStyleSnapshot.kt    → SystemUI 侧样式快照
         │   ├── ui/                       # HomeFragment、StyleSettingsFragment、AboutFragment
         │   ├── lyric/                    # 网易云 / QQ、LRC 解析
-        │   ├── service/                  # MediaSession、歌词服务、通知管理
+        │   ├── service/                  # MediaSession、歌词服务、通知管理、ExternalLyricProtocol
         │   ├── notification/             # HyperFocusLyricStyle
         │   ├── receiver/                 # FocusResyncReceiver、ServiceRestartReceiver
         │   ├── util/                     # RootHelper、AlbumColorExtractor、InstalledAppsHelper、UpdateChecker
@@ -421,8 +423,9 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 |------|------|------|
 | [Aodchange](https://github.com/leowalk0613/Aodchange) | HyperOS **3** | 万象息屏自渲染歌词 / 卡片样式；开启 LyricFocus「外部渲染」后由本模块上屏 |
 | [HyperLockMusic](https://github.com/leowalk0613/HyperLockMusic) | HyperOS **4** | 音乐锁屏 / AOD 专辑壁纸与歌词；歌词数据同样走 LyricFocus 外部渲染推送 |
+| [`externalLyricTest/`](externalLyricTest/) | 任意（调试） | **第三方接入最小可运行示例**：仅声明 meta-data + Provider，界面展示 `putlyric` / `putlyricfd` |
 
-二者均消费内置兼容 URI（或等价 Provider）；其它第三方仍可按下方协议自行接入。
+生产配套消费内置兼容 URI（或等价 Provider）；接入新模块请先对照 [`externalLyricTest`](externalLyricTest/README.md) 与下方协议。
 
 ### 1. Manifest 声明
 
@@ -472,7 +475,8 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 - `content://com.leowalk.aodchange.notifications` → [Aodchange](https://github.com/leowalk0613/Aodchange)
 - `content://com.leowalk.musiclockscreen.lyric` → [HyperLockMusic](https://github.com/leowalk0613/HyperLockMusic)（锁屏音乐模块）
 
-实现代码：`focus/.../service/ExternalLyricProtocol.kt`。
+实现代码：`focus/.../service/ExternalLyricProtocol.kt`。  
+最小接收端示例：[`externalLyricTest/`](externalLyricTest/)（`./gradlew :externalLyricTest:installDebug`）。
 
 ---
 

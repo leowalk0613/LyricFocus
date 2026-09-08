@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "LyricFocus"
 include(":focus")
+include(":externalLyricTest")
