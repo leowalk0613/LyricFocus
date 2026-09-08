@@ -130,14 +130,7 @@ class UpdateChecker(private val context: Context) {
                 var apkUrl: String? = null
                 val assets = json.optJSONArray("assets")
                 if (assets != null) {
-                    for (i in 0 until assets.length()) {
-                        val asset = assets.optJSONObject(i)
-                        val name = asset?.optString("name", "")
-                        if (name?.endsWith(".apk") == true) {
-                            apkUrl = asset.optString("browser_download_url", "")
-                            break
-                        }
-                    }
+                    apkUrl = pickApkUrl(assets)
                 }
 
                 val hasUpdate = compareVersions(currentVersion, latestVersion) < 0
@@ -184,14 +177,7 @@ class UpdateChecker(private val context: Context) {
                 var apkUrl: String? = null
                 val assets = json.optJSONArray("assets")
                 if (assets != null) {
-                    for (i in 0 until assets.length()) {
-                        val asset = assets.optJSONObject(i)
-                        val name = asset?.optString("name", "")
-                        if (name?.endsWith(".apk") == true) {
-                            apkUrl = asset.optString("browser_download_url", "")
-                            break
-                        }
-                    }
+                    apkUrl = pickApkUrl(assets)
                 }
 
                 val hasUpdate = compareVersions(currentVersion, latestVersion) < 0
@@ -213,9 +199,39 @@ class UpdateChecker(private val context: Context) {
         }
     }
 
+    /**
+     * 共用 Release 下挂 OS3/OS4 两个 APK：优先选本渠道包。
+     * 文件名可能是 `LyricFocus.v1.9.3(OS4).apk` 或 GitHub 去掉括号后的 `LyricFocus.v1.9.3.OS4.apk`。
+     */
+    private fun pickApkUrl(assets: org.json.JSONArray): String? {
+        val channel = channelMarker(currentVersion) // "OS3" / "OS4" / null
+        var fallback: String? = null
+        for (i in 0 until assets.length()) {
+            val asset = assets.optJSONObject(i) ?: continue
+            val name = asset.optString("name", "")
+            if (!name.endsWith(".apk", ignoreCase = true)) continue
+            val url = asset.optString("browser_download_url", "").ifBlank { null } ?: continue
+            if (fallback == null) fallback = url
+            if (channel != null && name.contains(channel, ignoreCase = true)) {
+                return url
+            }
+        }
+        return fallback
+    }
+
+    /** 从 versionName 提取渠道标记，如 `1.9.3(OS4)` / `1.9.2-OS3` → OS4/OS3 */
+    private fun channelMarker(version: String): String? {
+        val m = Regex("""OS[34]""", RegexOption.IGNORE_CASE).find(version) ?: return null
+        return m.value.uppercase()
+    }
+
+    /**
+     * 比较版本号。忽略渠道后缀与前缀：
+     * `1.9.3(OS4)` / `1.9.3.OS4` / `v1.9.3` 均按 `1.9.3` 比较。
+     */
     fun compareVersions(current: String, latest: String): Int {
-        val currentParts = current.split(".").mapNotNull { it.toIntOrNull() }
-        val latestParts = latest.split(".").mapNotNull { it.toIntOrNull() }
+        val currentParts = versionParts(current)
+        val latestParts = versionParts(latest)
 
         val maxLength = maxOf(currentParts.size, latestParts.size)
         for (i in 0 until maxLength) {
@@ -225,6 +241,13 @@ class UpdateChecker(private val context: Context) {
             if (currentPart > latestPart) return 1
         }
         return 0
+    }
+
+    /** 取出开头的数字段，如 `1.9.3(OS4)` → [1,9,3] */
+    private fun versionParts(version: String): List<Int> {
+        val stripped = version.trim().replaceFirst("^[vVxX]+".toRegex(), "")
+        val numeric = Regex("""\d+(?:\.\d+)*""").find(stripped)?.value ?: return emptyList()
+        return numeric.split(".").mapNotNull { it.toIntOrNull() }
     }
 
     fun getCurrentVersion(context: Context): String {
