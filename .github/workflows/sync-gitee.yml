@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "要同步到 Gitee 的 GitHub Release 标签（空则同步 Latest，如 v1.9.2-OS4）"
+        description: "要同步到 Gitee 的 GitHub Release 标签（如 v1.9.3；空则同步 Latest）"
         required: false
         default: ""
       push_os3_branch:
@@ -32,13 +32,23 @@ jobs:
           git remote add gitee "https://leowalk0613:${{ secrets.GITEE_TOKEN }}@gitee.com/leowalk0613/LyricFocus.git"
           git push gitee HEAD:main --force
 
-          # Gitee 常拒绝 tags --force（reference already exists）；先 API 删冲突标签再推
-          for tag in $(git tag -l); do
+          # 仅推送本次相关 tag，避免把本地/历史残留标签整包刷到 Gitee
+          # 优先推送本次 release_tag；workflow_dispatch 未指定时仍推 GitHub 上已有 tags（与远端对齐）
+          RELEASE_TAG="${{ github.event.inputs.release_tag }}"
+          if [ -n "$RELEASE_TAG" ]; then
             curl -s -X DELETE \
-              "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/tags/${tag}?access_token=${{ secrets.GITEE_TOKEN }}" \
+              "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/tags/${RELEASE_TAG}?access_token=${{ secrets.GITEE_TOKEN }}" \
               >/dev/null || true
-          done
-          git push gitee --tags --force
+            git push gitee "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}" --force
+          else
+            # 与 GitHub 对齐：先列 GitHub tags，逐个推（仍可能覆盖 Gitee 同名 tag）
+            for tag in $(git tag -l 'v*'); do
+              curl -s -X DELETE \
+                "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/tags/${tag}?access_token=${{ secrets.GITEE_TOKEN }}" \
+                >/dev/null || true
+              git push gitee "refs/tags/${tag}:refs/tags/${tag}" --force || true
+            done
+          fi
 
           if [ "${{ github.event.inputs.push_os3_branch || 'true' }}" = "true" ]; then
             if git rev-parse --verify origin/hyperos3 >/dev/null 2>&1; then
@@ -76,25 +86,32 @@ jobs:
         run: |
           RELEASE_JSON=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/releases/tags/${VERSION}")
-          ASSET_URL=$(echo "$RELEASE_JSON" | jq -r '[.assets[] | select(.name | test("\\.apk$"; "i"))][0].browser_download_url')
           BODY=$(echo "$RELEASE_JSON" | jq -r '.body // ""')
           NAME=$(echo "$RELEASE_JSON" | jq -r '.name // .tag_name')
           TARGET=$(echo "$RELEASE_JSON" | jq -r '.target_commitish // "main"')
-          if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" = "null" ]; then
+          APK_COUNT=$(echo "$RELEASE_JSON" | jq '[.assets[] | select(.name | test("\\.apk$"; "i"))] | length')
+          if [ -z "$APK_COUNT" ] || [ "$APK_COUNT" = "0" ]; then
             echo "No APK asset for $VERSION" >&2
             echo "$RELEASE_JSON" | jq -r '.assets[].name // empty' >&2
             exit 1
           fi
-          echo "ASSET_URL=$ASSET_URL" >> $GITHUB_ENV
+          echo "$RELEASE_JSON" | jq -r '[.assets[] | select(.name | test("\\.apk$"; "i"))] | .[] | "\(.name)\t\(.browser_download_url)"' \
+            > apk-assets.tsv
           echo "NAME=$NAME" >> $GITHUB_ENV
           echo "TARGET=$TARGET" >> $GITHUB_ENV
           echo "BODY<<EOF" >> $GITHUB_ENV
           echo "$BODY" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
-          echo "Release: $NAME ($VERSION), target=$TARGET, APK: $ASSET_URL"
+          echo "Release: $NAME ($VERSION), target=$TARGET, APKs:"
+          cat apk-assets.tsv
 
-      - name: Download APK
-        run: curl -L -o LyricFocus.apk "$ASSET_URL"
+      - name: Download APKs
+        run: |
+          mkdir -p apk-assets
+          while IFS=$'\t' read -r NAME URL; do
+            echo "Downloading $NAME"
+            curl -L -o "apk-assets/$NAME" "$URL"
+          done < apk-assets.tsv
 
       - name: Delete existing Gitee release
         run: |
@@ -119,9 +136,13 @@ jobs:
           echo "RELEASE_ID=$RELEASE_ID" >> $GITHUB_ENV
           echo "Created release $RELEASE_ID"
 
-      - name: Upload APK to Gitee
+      - name: Upload APKs to Gitee
         run: |
-          curl -s -X POST "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases/$RELEASE_ID/attach_files" \
-            -F "access_token=${{ secrets.GITEE_TOKEN }}" \
-            -F "file=@LyricFocus.apk"
+          for f in apk-assets/*.apk; do
+            echo "Uploading $(basename "$f")"
+            curl -s -X POST "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases/$RELEASE_ID/attach_files" \
+              -F "access_token=${{ secrets.GITEE_TOKEN }}" \
+              -F "file=@${f}"
+            echo
+          done
           echo "Upload done"
