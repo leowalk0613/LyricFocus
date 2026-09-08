@@ -1,4 +1,4 @@
-package com.leowalk.LyricFocus.service
+﻿package com.leowalk.LyricFocus.service
 
 import android.app.AlarmManager
 import android.app.PendingIntent
@@ -24,6 +24,7 @@ import com.leowalk.LyricFocus.FocusPreferences
 import com.leowalk.LyricFocus.FocusStyleSnapshot
 import com.leowalk.LyricFocus.lyric.LyricInfo
 import com.leowalk.LyricFocus.lyric.LyricManager
+import com.leowalk.LyricFocus.lyric.PlayingSongIdResolver
 import com.leowalk.LyricFocus.util.AlbumColorExtractor
 import com.leowalk.LyricFocus.util.AlbumArtLoader
 import com.leowalk.LyricFocus.util.RootHelper
@@ -1163,7 +1164,26 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
         fetchLyricJob = serviceScope.launch {
             try {
-                var lyricInfo = lyricManager.fetchLyric(title, artist, musicPackage = currentMusicPackage())
+                val pkg = currentMusicPackage()
+                val metadata = MusicMonitorService.currentMetadata
+                val resolvedId = PlayingSongIdResolver.resolve(
+                    packageName = pkg,
+                    metadata = metadata,
+                    focusMediaJsons = MusicMonitorService.focusMediaJsonForPackage(pkg),
+                )
+                if (resolvedId != null) {
+                    Log.d(
+                        TAG,
+                        "Resolved platform song id: ${resolvedId.platform}:" +
+                            "id=${resolvedId.songId} mid=${resolvedId.songMid}"
+                    )
+                }
+                var lyricInfo = lyricManager.fetchLyric(
+                    title,
+                    artist,
+                    musicPackage = pkg,
+                    platformSongId = resolvedId,
+                )
                 if (lyricInfo != null && !lyricInfo.isEmpty) {
                     applyLyricResult(lyricInfo, title, artist)
 

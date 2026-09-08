@@ -1288,6 +1288,32 @@ class SystemUIHyperFocusHook : BaseHook() {
         }
 
         val result: HyperFocusLyricStyle.MultiLineWindow? = if (FocusStyleSnapshot.multiLineShowTranslation) {
+            if (FocusStyleSnapshot.multiLineCurrentTranslationOnly) {
+                // 仅当前行显示翻译：当前原文 → 当前翻译（若有）→ 后续原文
+                val lines = ArrayList<String>(maxSlots)
+                val currentLine = lyricLines.getOrNull(currentIndex)
+                val currentOrig = currentLine?.text?.trim()?.takeIf { it.isNotBlank() } ?: ""
+                if (currentOrig.isNotEmpty()) lines += currentOrig
+                val currentTrans = currentLine?.translation?.replace('\n', ' ')?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                    ?: currentLineTranslation?.replace('\n', ' ')?.trim()?.takeIf { it.isNotBlank() }
+                val hasCurrentTrans = !currentTrans.isNullOrEmpty()
+                if (hasCurrentTrans) lines += currentTrans!!
+                var fwdIdx = currentIndex + 1
+                while (lines.size < pageSlots && fwdIdx < lyricLines.size) {
+                    val text = lyricLines.getOrNull(fwdIdx)?.text?.trim()?.takeIf { it.isNotBlank() } ?: ""
+                    if (text.isNotEmpty()) lines += text
+                    fwdIdx++
+                }
+                while (lines.size < maxSlots) lines += ""
+                HyperFocusLyricStyle.MultiLineWindow(
+                    lines = lines,
+                    interleavedTranslations = false,
+                    currentTranslationOnly = hasCurrentTrans,
+                    visibleCount = pageSlots,
+                    currentLineSlot = 0
+                )
+            } else {
             val interleaved = ArrayList<String>(maxSlots)
             var hasAnyTranslation = false
             var fwdIdx = currentIndex
@@ -1334,6 +1360,7 @@ class SystemUIHyperFocusHook : BaseHook() {
                     visibleCount = pageSlots,
                     currentLineSlot = 0
                 )
+            }
             }
         } else {
             val lines = ArrayList<String>(maxSlots)

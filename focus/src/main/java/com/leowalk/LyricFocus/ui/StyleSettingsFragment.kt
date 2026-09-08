@@ -37,8 +37,13 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
     private lateinit var multiLineHeightRow: View
     private lateinit var sliderMultiLineHeight: Slider
     private lateinit var tvMultiLineHeightLabel: TextView
+    private lateinit var multiLineLineSpacingRow: View
+    private lateinit var sliderMultiLineLineSpacing: Slider
+    private lateinit var tvMultiLineLineSpacingLabel: TextView
     private lateinit var multiLineTranslationRow: View
     private lateinit var switchMultiLineShowTranslation: MaterialSwitch
+    private lateinit var multiLineCurrentTranslationOnlyRow: View
+    private lateinit var switchMultiLineCurrentTranslationOnly: MaterialSwitch
     private lateinit var aodMultiLineOnlyRow: View
     private lateinit var switchAodMultiLineOnly: MaterialSwitch
     private lateinit var multiLineTextSizeRow: View
@@ -189,8 +194,15 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         multiLineHeightRow = view.findViewById(R.id.multi_line_height_row)
         sliderMultiLineHeight = view.findViewById(R.id.slider_multi_line_height)
         tvMultiLineHeightLabel = view.findViewById(R.id.multi_line_height_label)
+        multiLineLineSpacingRow = view.findViewById(R.id.multi_line_line_spacing_row)
+        sliderMultiLineLineSpacing = view.findViewById(R.id.slider_multi_line_line_spacing)
+        tvMultiLineLineSpacingLabel = view.findViewById(R.id.multi_line_line_spacing_label)
         multiLineTranslationRow = view.findViewById(R.id.multi_line_translation_row)
         switchMultiLineShowTranslation = view.findViewById(R.id.switch_multi_line_show_translation)
+        multiLineCurrentTranslationOnlyRow =
+            view.findViewById(R.id.multi_line_current_translation_only_row)
+        switchMultiLineCurrentTranslationOnly =
+            view.findViewById(R.id.switch_multi_line_current_translation_only)
         aodMultiLineOnlyRow = view.findViewById(R.id.aod_multi_line_only_row)
         switchAodMultiLineOnly = view.findViewById(R.id.switch_aod_multi_line_only)
         multiLineTextSizeRow = view.findViewById(R.id.multi_line_text_size_row)
@@ -271,7 +283,9 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             gravityGroup,
             switchMultiLineLyrics,
             sliderMultiLineHeight,
+            sliderMultiLineLineSpacing,
             switchMultiLineShowTranslation,
+            switchMultiLineCurrentTranslationOnly,
             sliderMultiLineTextSize
         )
         customAodControls += listOf(
@@ -514,9 +528,14 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         switchMultiLineLyrics.isChecked = FocusPreferences.isMultiLineLyrics(requireContext())
         switchMultiLineShowTranslation.isChecked =
             FocusPreferences.isMultiLineShowTranslation(requireContext())
+        switchMultiLineCurrentTranslationOnly.isChecked =
+            FocusPreferences.isMultiLineCurrentTranslationOnly(requireContext())
         val heightDp = FocusPreferences.getMultiLineHeightDp(requireContext()).toFloat()
         sliderMultiLineHeight.value = heightDp
         tvMultiLineHeightLabel.text = "${heightDp.toInt()} dp"
+        val lineSpacingDp = FocusPreferences.getMultiLineLineSpacingDp(requireContext()).toFloat()
+        sliderMultiLineLineSpacing.value = lineSpacingDp
+        tvMultiLineLineSpacingLabel.text = "${lineSpacingDp.toInt()} dp"
         switchAodMultiLineOnly.isChecked = FocusPreferences.isAodMultiLineOnly(requireContext())
         bindMultiLineTextSizeSlider(FocusPreferences.getMultiLineTextSize(requireContext()))
 
@@ -686,7 +705,9 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                 switchMultiLineLyrics.isChecked = false
             }
             multiLineHeightRow.visibility = View.GONE
+            multiLineLineSpacingRow.visibility = View.GONE
             multiLineTranslationRow.visibility = View.GONE
+            multiLineCurrentTranslationOnlyRow.visibility = View.GONE
             multiLineTextSizeRow.visibility = View.GONE
             aodMultiLineOnlyRow.visibility = View.GONE
             return
@@ -696,7 +717,9 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
 
         if (realtimeSource) {
             multiLineHeightRow.visibility = View.GONE
+            multiLineLineSpacingRow.visibility = View.GONE
             multiLineTranslationRow.visibility = View.GONE
+            multiLineCurrentTranslationOnlyRow.visibility = View.GONE
             multiLineTextSizeRow.visibility = View.GONE
             aodMultiLineOnlyRow.visibility = View.GONE
             switchMultiLineLyrics.isEnabled = false
@@ -711,8 +734,12 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
             return
         }
 
+        val showTranslation = FocusPreferences.isMultiLineShowTranslation(requireContext())
         multiLineHeightRow.visibility = if (multiLineEnabled) View.VISIBLE else View.GONE
+        multiLineLineSpacingRow.visibility = if (multiLineEnabled) View.VISIBLE else View.GONE
         multiLineTranslationRow.visibility = if (multiLineEnabled) View.VISIBLE else View.GONE
+        multiLineCurrentTranslationOnlyRow.visibility =
+            if (multiLineEnabled && showTranslation) View.VISIBLE else View.GONE
         multiLineTextSizeRow.visibility = if (multiLineEnabled) View.VISIBLE else View.GONE
         aodMultiLineOnlyRow.visibility = if (multiLineEnabled) View.VISIBLE else View.GONE
         val multiLineInteractive = lockScreenInteractive && multiLineEnabled
@@ -720,9 +747,15 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
         switchAodMultiLineOnly.alpha = if (multiLineInteractive) 1f else 0.38f
         switchMultiLineShowTranslation.isEnabled = multiLineInteractive
         switchMultiLineShowTranslation.alpha = if (multiLineInteractive) 1f else 0.38f
+        switchMultiLineCurrentTranslationOnly.isEnabled = multiLineInteractive && showTranslation
+        switchMultiLineCurrentTranslationOnly.alpha =
+            if (multiLineInteractive && showTranslation) 1f else 0.38f
         sliderMultiLineHeight.isEnabled = multiLineInteractive
         sliderMultiLineHeight.alpha = if (multiLineInteractive) 1f else 0.38f
         tvMultiLineHeightLabel.alpha = if (multiLineInteractive) 1f else 0.38f
+        sliderMultiLineLineSpacing.isEnabled = multiLineInteractive
+        sliderMultiLineLineSpacing.alpha = if (multiLineInteractive) 1f else 0.38f
+        tvMultiLineLineSpacingLabel.alpha = if (multiLineInteractive) 1f else 0.38f
         sliderMultiLineTextSize.isEnabled = multiLineInteractive
         sliderMultiLineTextSize.alpha = if (multiLineInteractive) 1f else 0.38f
         tvMultiLineTextSizeLabel.alpha = if (multiLineInteractive) 1f else 0.38f
@@ -956,6 +989,20 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                 return@setOnCheckedChangeListener
             }
             FocusPreferences.setMultiLineShowTranslation(requireContext(), checked)
+            updateMultiLineDependentUi()
+            notifyStyleChanged()
+        }
+        switchMultiLineCurrentTranslationOnly.setOnCheckedChangeListener { _, checked ->
+            if (isBindingUi) return@setOnCheckedChangeListener
+            if (FocusPreferences.isCustomAodLayout(requireContext()) ||
+                !FocusPreferences.isMultiLineLyrics(requireContext()) ||
+                !FocusPreferences.isMultiLineShowTranslation(requireContext())
+            ) {
+                switchMultiLineCurrentTranslationOnly.isChecked =
+                    FocusPreferences.isMultiLineCurrentTranslationOnly(requireContext())
+                return@setOnCheckedChangeListener
+            }
+            FocusPreferences.setMultiLineCurrentTranslationOnly(requireContext(), checked)
             notifyStyleChanged()
         }
         switchAodMultiLineOnly.setOnCheckedChangeListener { _, checked ->
@@ -976,6 +1023,21 @@ class StyleSettingsFragment : Fragment(R.layout.activity_style_settings) {
                 }
                 val height = slider.value.toInt()
                 FocusPreferences.setMultiLineHeightDp(requireContext(), height)
+                notifyStyleChanged()
+            }
+        })
+        sliderMultiLineLineSpacing.addOnChangeListener { _, value, _ ->
+            tvMultiLineLineSpacingLabel.text = "${value.toInt()} dp"
+        }
+        sliderMultiLineLineSpacing.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) = Unit
+            override fun onStopTrackingTouch(slider: Slider) {
+                if (!FocusPreferences.isMultiLineLyrics(requireContext()) ||
+                    !sliderMultiLineLineSpacing.isEnabled
+                ) {
+                    return
+                }
+                FocusPreferences.setMultiLineLineSpacingDp(requireContext(), slider.value.toInt())
                 notifyStyleChanged()
             }
         })

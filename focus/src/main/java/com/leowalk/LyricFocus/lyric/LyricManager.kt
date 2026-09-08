@@ -1,6 +1,7 @@
 package com.leowalk.LyricFocus.lyric
 
 import android.content.Context
+import android.util.Log
 import com.leowalk.LyricFocus.FocusPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,25 +15,32 @@ class LyricManager(context: Context) {
     private val localProvider = LocalLrcLyricProvider(appContext)
     private val aiTranslator = AiLyricTranslator(appContext)
 
-    suspend fun fetchLyric(title: String, artist: String = "", album: String = "", musicPackage: String = ""): LyricInfo? {
+    suspend fun fetchLyric(
+        title: String,
+        artist: String = "",
+        album: String = "",
+        musicPackage: String = "",
+        platformSongId: PlayingSongIdResolver.ResolvedId? = null,
+    ): LyricInfo? {
         return withContext(Dispatchers.IO) {
             LocalLrcBootstrap.ensureReady(appContext)
-            when (FocusPreferences.getLyricSource(appContext)) {
+            val source = FocusPreferences.getLyricSource(appContext)
+            when (source) {
                 FocusPreferences.LYRIC_SOURCE_LOCAL ->
                     localProvider.searchLyric(title, artist, album)
                 FocusPreferences.LYRIC_SOURCE_AI ->
-                    fetchBaseForAi(title, artist, album)
+                    fetchBaseForAi(title, artist, album, platformSongId)
                 FocusPreferences.LYRIC_SOURCE_NETEASE ->
-                    netEaseProvider.searchLyric(title, artist, album)
+                    fetchByIdThenSearch(FocusPreferences.LYRIC_SOURCE_NETEASE, platformSongId, title, artist, album)
                         ?: localProvider.searchLyric(title, artist, album)
                 FocusPreferences.LYRIC_SOURCE_QQ ->
-                    qqMusicProvider.searchLyric(title, artist, album)
+                    fetchByIdThenSearch(FocusPreferences.LYRIC_SOURCE_QQ, platformSongId, title, artist, album)
                         ?: localProvider.searchLyric(title, artist, album)
                 FocusPreferences.LYRIC_SOURCE_LRCLIB ->
                     lrcLibProvider.searchLyric(title, artist, album)
                         ?: localProvider.searchLyric(title, artist, album)
                 else ->
-                    fetchAutoByPackage(title, artist, album, musicPackage)
+                    fetchAutoByPackage(title, artist, album, musicPackage, platformSongId)
             }
         }
     }
@@ -48,19 +56,73 @@ class LyricManager(context: Context) {
         title: String,
         artist: String,
         album: String,
-        musicPackage: String
+        musicPackage: String,
+        platformSongId: PlayingSongIdResolver.ResolvedId?,
     ): LyricInfo? {
         val preferredId = FocusPreferences.preferredOnlineLyricSourceForPackage(musicPackage)
         val preferred = if (preferredId == FocusPreferences.LYRIC_SOURCE_NETEASE) {
-            netEaseProvider
+            FocusPreferences.LYRIC_SOURCE_NETEASE
         } else {
-            qqMusicProvider
+            FocusPreferences.LYRIC_SOURCE_QQ
         }
-        val secondary = if (preferred === qqMusicProvider) netEaseProvider else qqMusicProvider
+        val secondary = if (preferred == FocusPreferences.LYRIC_SOURCE_QQ) {
+            FocusPreferences.LYRIC_SOURCE_NETEASE
+        } else {
+            FocusPreferences.LYRIC_SOURCE_QQ
+        }
 
-        preferred.searchLyric(title, artist, album)?.takeIf { !it.isEmpty }?.let { return it }
-        secondary.searchLyric(title, artist, album)?.takeIf { !it.isEmpty }?.let { return it }
+        fetchByIdThenSearch(preferred, platformSongId, title, artist, album)
+            ?.takeIf { !it.isEmpty }?.let { return it }
+        // 次选源仅在 ID 属于该平台时直拉，否则搜歌名
+        val secondaryId = platformSongId?.takeIf { it.platform == secondary }
+        fetchByIdThenSearch(secondary, secondaryId, title, artist, album)
+            ?.takeIf { !it.isEmpty }?.let { return it }
         return localProvider.searchLyric(title, artist, album)
+    }
+
+    private suspend fun fetchByIdThenSearch(
+        platform: String,
+        platformSongId: PlayingSongIdResolver.ResolvedId?,
+        title: String,
+        artist: String,
+        album: String,
+    ): LyricInfo? {
+        if (platformSongId != null &&
+            platformSongId.platform == platform &&
+            platformSongId.hasDirectKey()
+        ) {
+            val byId = when (platform) {
+                FocusPreferences.LYRIC_SOURCE_NETEASE ->
+                    if (platformSongId.songId > 0L) {
+                        netEaseProvider.fetchLyricById(platformSongId.songId, title, artist, album)
+                    } else null
+                FocusPreferences.LYRIC_SOURCE_QQ ->
+                    qqMusicProvider.fetchLyricById(
+                        songId = platformSongId.songId,
+                        title = title,
+                        artist = artist,
+                        album = album,
+                        songMid = platformSongId.songMid.orEmpty(),
+                    )
+                else -> null
+            }
+            if (byId != null && !byId.isEmpty) {
+                Log.d(
+                    TAG,
+                    "lyric by id ok platform=$platform id=${platformSongId.songId} mid=${platformSongId.songMid}"
+                )
+                return byId
+            }
+            Log.d(
+                TAG,
+                "lyric by id miss platform=$platform id=${platformSongId.songId} mid=${platformSongId.songMid}, fallback search"
+            )
+        }
+        return when (platform) {
+            FocusPreferences.LYRIC_SOURCE_NETEASE -> netEaseProvider.searchLyric(title, artist, album)
+            FocusPreferences.LYRIC_SOURCE_QQ -> qqMusicProvider.searchLyric(title, artist, album)
+            else -> null
+        }
     }
 
     suspend fun translateWithAi(lyricInfo: LyricInfo, title: String, artist: String): LyricInfo {
@@ -89,13 +151,23 @@ class LyricManager(context: Context) {
     private suspend fun fetchBaseForAi(
         title: String,
         artist: String,
-        album: String
+        album: String,
+        platformSongId: PlayingSongIdResolver.ResolvedId?,
     ): LyricInfo? {
-        return qqMusicProvider.searchLyric(title, artist, album)
-            ?: netEaseProvider.searchLyric(title, artist, album)
+        val preferred = platformSongId?.platform ?: FocusPreferences.LYRIC_SOURCE_QQ
+        val secondary = if (preferred == FocusPreferences.LYRIC_SOURCE_NETEASE) {
+            FocusPreferences.LYRIC_SOURCE_QQ
+        } else {
+            FocusPreferences.LYRIC_SOURCE_NETEASE
+        }
+        return fetchByIdThenSearch(preferred, platformSongId, title, artist, album)
+            ?: fetchByIdThenSearch(secondary, platformSongId?.takeIf { it.platform == secondary }, title, artist, album)
             ?: localProvider.searchLyric(title, artist, album)
     }
 
+    companion object {
+        private const val TAG = "LyricManager"
+    }
 }
 
 object LocalLrcBootstrap {

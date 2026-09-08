@@ -49,6 +49,9 @@ class MusicMonitorService : NotificationListenerService() {
         var currentPlaybackState: PlaybackState? = null
             private set
 
+        @Volatile
+        private var instance: MusicMonitorService? = null
+
         private val listeners = mutableListOf<MusicStateListener>()
 
         fun addListener(listener: MusicStateListener) {
@@ -59,6 +62,23 @@ class MusicMonitorService : NotificationListenerService() {
 
         fun removeListener(listener: MusicStateListener) {
             listeners.remove(listener)
+        }
+
+        /** 读取指定包名通知里的 miui.focus.param.media（需通知使用权） */
+        fun focusMediaJsonForPackage(packageName: String?): List<String> {
+            if (packageName.isNullOrBlank()) return emptyList()
+            val svc = instance ?: return emptyList()
+            return try {
+                svc.activeNotifications
+                    .asSequence()
+                    .filter { it.packageName == packageName }
+                    .mapNotNull { it.notification.extras.getString("miui.focus.param.media") }
+                    .filter { it.isNotBlank() }
+                    .toList()
+            } catch (e: Exception) {
+                Log.w(TAG, "focusMediaJsonForPackage failed", e)
+                emptyList()
+            }
         }
     }
 
@@ -92,6 +112,7 @@ class MusicMonitorService : NotificationListenerService() {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "MusicMonitorService onCreate")
+        instance = this
         isServiceRunning = true
 
         createNotificationChannel()
@@ -293,6 +314,7 @@ class MusicMonitorService : NotificationListenerService() {
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "MusicMonitorService onDestroy")
+        if (instance === this) instance = null
         isServiceRunning = false
         unregisterSettingsReceiver()
         stopPeriodicRefresh()

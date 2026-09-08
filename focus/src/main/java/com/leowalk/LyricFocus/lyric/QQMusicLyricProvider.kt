@@ -28,30 +28,96 @@ class QQMusicLyricProvider(context: android.content.Context) : LyricProvider {
         return try {
             val candidate = searchSong(title, artist, album) ?: return null
             Log.d(TAG, "searchLyric: candidate mid=${candidate.songMid} id=${candidate.songId}")
-            // 优先 QRC（含翻译）；解密失败或无翻译时用明文 LRC 兜底/补翻译
-            val qrc = fetchQrcLyric(candidate)
-            if (qrc != null && hasTranslation(qrc)) {
-                Log.d(TAG, "searchLyric: qrc ${qrc.lines.size} lines with translation")
-                return qrc
-            }
-            val legacy = fetchLegacyLyric(candidate)
-            val result = when {
-                qrc != null && legacy != null && hasTranslation(legacy) ->
-                    mergeTranslationsOnto(qrc, legacy)
-                qrc != null -> qrc
-                else -> legacy
-            }
-            if (result != null) {
-                Log.d(
-                    TAG,
-                    "searchLyric: got ${result.lines.size} lines, hasTrans=${hasTranslation(result)}"
-                )
-            }
-            result
+            fetchLyricForCandidate(candidate)
         } catch (e: Exception) {
             Log.e(TAG, "searchLyric error", e)
             null
         }
+    }
+
+    /** 已知平台 songId / songMid 时直拉，跳过搜索（小米音乐多为 songmid） */
+    suspend fun fetchLyricById(
+        songId: Long = 0L,
+        title: String = "",
+        artist: String = "",
+        album: String = "",
+        songMid: String = "",
+    ): LyricInfo? {
+        return try {
+            val resolvedId = when {
+                songId > 0L -> songId
+                songMid.isNotBlank() -> {
+                    val id = resolveSongIdFromMid(songMid)
+                    Log.d(TAG, "fetchLyricById: songmid=$songMid -> songId=$id")
+                    id ?: return null
+                }
+                else -> return null
+            }
+            val candidate = SongCandidate(
+                songMid = songMid,
+                songId = resolvedId,
+                title = title,
+                artist = artist,
+                album = album,
+            )
+            Log.d(TAG, "fetchLyricById: songId=$resolvedId")
+            fetchLyricForCandidate(candidate)
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchLyricById error", e)
+            null
+        }
+    }
+
+    /** songmid → 数字 songid（小米音乐 focus share 常用） */
+    private suspend fun resolveSongIdFromMid(songMid: String): Long? {
+        val mid = songMid.trim()
+        if (mid.isEmpty()) return null
+        val url =
+            "https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg" +
+                "?songmid=$mid&tpl=yqq_song_detail&format=json&platform=yqq"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", USER_AGENT)
+            .header("Referer", "https://y.qq.com/")
+            .build()
+        return try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val body = response.body?.string() ?: return null
+                val root = JSONObject(body)
+                if (root.optInt("code", -1) != 0) return null
+                root.optJSONArray("data")
+                    ?.optJSONObject(0)
+                    ?.optLong("id", 0L)
+                    ?.takeIf { it > 0L }
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "resolveSongIdFromMid failed mid=$mid", e)
+            null
+        }
+    }
+
+    private suspend fun fetchLyricForCandidate(candidate: SongCandidate): LyricInfo? {
+        // 优先 QRC（含翻译）；解密失败或无翻译时用明文 LRC 兜底/补翻译
+        val qrc = fetchQrcLyric(candidate)
+        if (qrc != null && hasTranslation(qrc)) {
+            Log.d(TAG, "fetchLyricForCandidate: qrc ${qrc.lines.size} lines with translation")
+            return qrc
+        }
+        val legacy = fetchLegacyLyric(candidate)
+        val result = when {
+            qrc != null && legacy != null && hasTranslation(legacy) ->
+                mergeTranslationsOnto(qrc, legacy)
+            qrc != null -> qrc
+            else -> legacy
+        }
+        if (result != null) {
+            Log.d(
+                TAG,
+                "fetchLyricForCandidate: got ${result.lines.size} lines, hasTrans=${hasTranslation(result)}"
+            )
+        }
+        return result
     }
 
     private fun hasTranslation(info: LyricInfo): Boolean =

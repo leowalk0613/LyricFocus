@@ -52,6 +52,7 @@ class AboutFragment : Fragment(R.layout.activity_about) {
         super.onViewCreated(view, savedInstanceState)
         view.findViewById<View>(R.id.app_bar_about).visibility = View.GONE
         setupVersionLabel(view)
+        setupAppDescription(view)
         setupLinks(view)
         setupLogViewer(view)
         setupSystemRequirementsButton(view)
@@ -76,12 +77,32 @@ class AboutFragment : Fragment(R.layout.activity_about) {
     }
 
     private fun setupVersionLabel(view: View) {
-        view.findViewById<TextView>(R.id.tv_version).text = runCatching {
+        view.findViewById<TextView>(R.id.tv_version).text = currentVersionLabel()
+    }
+
+    private fun setupAppDescription(view: View) {
+        val versionName = currentVersionName()
+        val isOs3 = versionName.contains("OS3", ignoreCase = true)
+        val channel = if (isOs3) {
+            "HyperOS 3（本包 OS3 专用）"
+        } else {
+            "HyperOS 4（本包 OS4 专用）"
+        }
+        view.findViewById<TextView>(R.id.tv_app_description).text =
+            "在小米 $channel 上于锁屏、AOD、通知中心展示同步歌词，并支持向第三方软件推送与转发歌词"
+    }
+
+    private fun currentVersionLabel(): String {
+        val name = currentVersionName()
+        return if (name.isNotBlank()) "v$name" else getString(R.string.app_version)
+    }
+
+    private fun currentVersionName(): String {
+        return runCatching {
             val ctx = requireContext()
             @Suppress("DEPRECATION")
-            val info = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
-            "v${info.versionName}"
-        }.getOrElse { getString(R.string.app_version) }
+            ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName.orEmpty()
+        }.getOrElse { "" }
     }
 
     private fun setupLinks(view: View) {

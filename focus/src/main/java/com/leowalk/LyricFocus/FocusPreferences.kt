@@ -23,8 +23,12 @@ object FocusPreferences {
     const val PREF_MULTI_LINE_LYRICS = "multi_line_lyrics"
     /** 多行模式下是否显示翻译（有翻译时交错显示原文与翻译） */
     const val PREF_MULTI_LINE_SHOW_TRANSLATION = "multi_line_show_translation"
+    /** 多行显示翻译时：仅当前行下方显示翻译（第二行），其余行只显示原文 */
+    const val PREF_MULTI_LINE_CURRENT_TRANSLATION_ONLY = "multi_line_current_translation_only"
     /** 多行歌词区域固定高度（dp）：200~450 */
     const val PREF_MULTI_LINE_HEIGHT = "multi_line_height"
+    /** 多行歌词行距（原文行之间的 paddingTop，dp）：0~100，默认 50；翻译紧跟仍为 2dp */
+    const val PREF_MULTI_LINE_LINE_SPACING = "multi_line_line_spacing"
     /** 仅 AOD 显示多行歌词，锁屏保持双行 */
     const val PREF_AOD_MULTI_LINE_ONLY = "aod_multi_line_only"
     /** 多行歌词独立字号（原文/翻译统一） */
@@ -172,6 +176,16 @@ object FocusPreferences {
 
     fun coerceMultiLineHeightDp(dp: Int): Int {
         return dp.coerceIn(MIN_MULTI_LINE_HEIGHT_DP, MAX_MULTI_LINE_HEIGHT_DP)
+    }
+
+    const val DEFAULT_MULTI_LINE_LINE_SPACING_DP = 50
+    const val MIN_MULTI_LINE_LINE_SPACING_DP = 0
+    const val MAX_MULTI_LINE_LINE_SPACING_DP = 100
+    /** 原文与紧跟翻译之间的固定间距（dp），不随行距滑块变化 */
+    const val MULTI_LINE_TRANSLATION_GAP_DP = 2
+
+    fun coerceMultiLineLineSpacingDp(dp: Int): Int {
+        return dp.coerceIn(MIN_MULTI_LINE_LINE_SPACING_DP, MAX_MULTI_LINE_LINE_SPACING_DP)
     }
 
     const val MIN_LYRIC_TEXT_SIZE_SP = 12f
@@ -533,7 +547,7 @@ object FocusPreferences {
             .getBoolean(PREF_FOCUS_ENABLED, true)
     }
 
-    /** 首次启动写入焦点默认开，避免 SystemUI 侧 remote prefs 缺键后误判为关闭。 */
+    /** OS3：首次安装时默认打开焦点通知（prefs 无该键时写入 true） */
     fun ensureFocusEnabledDefault(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         if (!prefs.contains(PREF_FOCUS_ENABLED)) {
@@ -757,6 +771,22 @@ object FocusPreferences {
         return readFromModule(context) { isMultiLineShowTranslation(it) } ?: true
     }
 
+    fun isMultiLineCurrentTranslationOnly(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_MULTI_LINE_CURRENT_TRANSLATION_ONLY, false)
+    }
+
+    fun setMultiLineCurrentTranslationOnly(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_MULTI_LINE_CURRENT_TRANSLATION_ONLY, enabled)
+            .apply()
+    }
+
+    fun readMultiLineCurrentTranslationOnly(context: Context): Boolean {
+        return readFromModule(context) { isMultiLineCurrentTranslationOnly(it) } ?: false
+    }
+
     fun getMultiLineHeightDp(context: Context): Int {
         return coerceMultiLineHeightDp(
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -773,6 +803,25 @@ object FocusPreferences {
 
     fun readMultiLineHeightDp(context: Context): Int {
         return readFromModule(context) { getMultiLineHeightDp(it) } ?: DEFAULT_MULTI_LINE_HEIGHT_DP
+    }
+
+    fun getMultiLineLineSpacingDp(context: Context): Int {
+        return coerceMultiLineLineSpacingDp(
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getInt(PREF_MULTI_LINE_LINE_SPACING, DEFAULT_MULTI_LINE_LINE_SPACING_DP)
+        )
+    }
+
+    fun setMultiLineLineSpacingDp(context: Context, dp: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(PREF_MULTI_LINE_LINE_SPACING, coerceMultiLineLineSpacingDp(dp))
+            .apply()
+    }
+
+    fun readMultiLineLineSpacingDp(context: Context): Int {
+        return readFromModule(context) { getMultiLineLineSpacingDp(it) }
+            ?: DEFAULT_MULTI_LINE_LINE_SPACING_DP
     }
 
     fun getMultiLineTextSize(context: Context): Float {
@@ -1493,8 +1542,16 @@ object FocusPreferences {
                     isMultiLineShowTranslation(context)
                 )
                 putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_MULTI_LINE_CURRENT_TRANSLATION_ONLY,
+                    isMultiLineCurrentTranslationOnly(context)
+                )
+                putExtra(
                     FocusStyleSnapshot.EXTRA_STYLE_MULTI_LINE_HEIGHT,
                     getMultiLineHeightDp(context)
+                )
+                putExtra(
+                    FocusStyleSnapshot.EXTRA_STYLE_MULTI_LINE_LINE_SPACING,
+                    getMultiLineLineSpacingDp(context)
                 )
                 putExtra(
                     FocusStyleSnapshot.EXTRA_STYLE_MULTI_LINE_TEXT_SIZE,

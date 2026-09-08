@@ -23,7 +23,9 @@ object FocusStyleSnapshot {
     const val EXTRA_STYLE_SINGLE_LINE_ONLY = "style_single_line_only"
     const val EXTRA_STYLE_MULTI_LINE_LYRICS = "style_multi_line_lyrics"
     const val EXTRA_STYLE_MULTI_LINE_SHOW_TRANSLATION = "style_multi_line_show_translation"
+    const val EXTRA_STYLE_MULTI_LINE_CURRENT_TRANSLATION_ONLY = "style_multi_line_current_translation_only"
     const val EXTRA_STYLE_MULTI_LINE_HEIGHT = "style_multi_line_height"
+    const val EXTRA_STYLE_MULTI_LINE_LINE_SPACING = "style_multi_line_line_spacing"
     const val EXTRA_STYLE_MULTI_LINE_TEXT_SIZE = "style_multi_line_text_size"
     const val EXTRA_STYLE_AOD_MULTI_LINE_ONLY = "style_aod_multi_line_only"
     const val EXTRA_STYLE_CUSTOM_AOD_TEXT_SIZE = "style_custom_aod_text_size"
@@ -105,7 +107,15 @@ object FocusStyleSnapshot {
         private set
 
     @Volatile
+    var multiLineCurrentTranslationOnly: Boolean = false
+        private set
+
+    @Volatile
     var multiLineHeightDp: Int = FocusPreferences.DEFAULT_MULTI_LINE_HEIGHT_DP
+        private set
+
+    @Volatile
+    var multiLineLineSpacingDp: Int = FocusPreferences.DEFAULT_MULTI_LINE_LINE_SPACING_DP
         private set
 
     @Volatile
@@ -268,10 +278,20 @@ object FocusStyleSnapshot {
             FocusPreferences.PREF_MULTI_LINE_SHOW_TRANSLATION,
             true
         )
+        multiLineCurrentTranslationOnly = prefs.getBoolean(
+            FocusPreferences.PREF_MULTI_LINE_CURRENT_TRANSLATION_ONLY,
+            false
+        )
         multiLineHeightDp = FocusPreferences.coerceMultiLineHeightDp(
             prefs.getInt(
                 FocusPreferences.PREF_MULTI_LINE_HEIGHT,
                 FocusPreferences.DEFAULT_MULTI_LINE_HEIGHT_DP
+            )
+        )
+        multiLineLineSpacingDp = FocusPreferences.coerceMultiLineLineSpacingDp(
+            prefs.getInt(
+                FocusPreferences.PREF_MULTI_LINE_LINE_SPACING,
+                FocusPreferences.DEFAULT_MULTI_LINE_LINE_SPACING_DP
             )
         )
         multiLineTextSizeSp = prefs.getFloat(
@@ -445,9 +465,20 @@ object FocusStyleSnapshot {
                 multiLineShowTranslation
             )
         }
+        if (intent.hasExtra(EXTRA_STYLE_MULTI_LINE_CURRENT_TRANSLATION_ONLY)) {
+            multiLineCurrentTranslationOnly = intent.getBooleanExtra(
+                EXTRA_STYLE_MULTI_LINE_CURRENT_TRANSLATION_ONLY,
+                multiLineCurrentTranslationOnly
+            )
+        }
         if (intent.hasExtra(EXTRA_STYLE_MULTI_LINE_HEIGHT)) {
             multiLineHeightDp = FocusPreferences.coerceMultiLineHeightDp(
                 intent.getIntExtra(EXTRA_STYLE_MULTI_LINE_HEIGHT, multiLineHeightDp)
+            )
+        }
+        if (intent.hasExtra(EXTRA_STYLE_MULTI_LINE_LINE_SPACING)) {
+            multiLineLineSpacingDp = FocusPreferences.coerceMultiLineLineSpacingDp(
+                intent.getIntExtra(EXTRA_STYLE_MULTI_LINE_LINE_SPACING, multiLineLineSpacingDp)
             )
         }
         if (intent.hasExtra(EXTRA_STYLE_MULTI_LINE_TEXT_SIZE)) {

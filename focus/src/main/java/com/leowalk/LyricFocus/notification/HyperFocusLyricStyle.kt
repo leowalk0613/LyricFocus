@@ -115,9 +115,11 @@ object HyperFocusLyricStyle {
         val lines: List<String>,
         /**
          * true：交错排布 (原文, 翻译) 成组，填满固定高度区域。
-         * false：全部为原文行。
+         * false：全部为原文行（或仅当前行带翻译）。
          */
         val interleavedTranslations: Boolean = false,
+        /** true：仅当前行下方跟一条翻译（第二行），其余行均为原文 */
+        val currentTranslationOnly: Boolean = false,
         /** 实际展示行数：4~24 */
         val visibleCount: Int = MULTI_LINE_MAX_SLOTS,
         /** 当前正在播放的歌词行在 [lines] 中的槽位索引，-1 表示不标识 */
@@ -126,6 +128,7 @@ object HyperFocusLyricStyle {
         fun contentKey(): String {
             return lines.joinToString("\u0001") + "\u0001|" +
                 (if (interleavedTranslations) "1" else "0") +
+                (if (currentTranslationOnly) "C" else "") +
                 "\u0001@" + visibleCount +
                 "\u0001#" + currentLineSlot
         }
@@ -1432,6 +1435,7 @@ object HyperFocusLyricStyle {
         views.setInt(R.id.focus_lyric_content, "setGravity", contentGravity)
 
         val interleaved = multiLine.interleavedTranslations
+        val currentOnly = multiLine.currentTranslationOnly
         val rawLines = multiLine.lines
         val visibleCount = multiLine.visibleCount.coerceIn(4, MULTI_LINE_MAX_SLOTS)
         val displayLines = if (interleaved && FocusStyleSnapshot.swapLyricTranslation) {
@@ -1441,6 +1445,16 @@ object HyperFocusLyricStyle {
                 val pair = i / 2
                 val partner = if (i % 2 == 0) pair * 2 + 1 else pair * 2
                 rawLines.getOrNull(partner).orEmpty()
+            }
+        } else if (currentOnly && FocusStyleSnapshot.swapLyricTranslation) {
+            // 仅当前行翻译：互换前两槽，其余原文不动
+            List(MULTI_LINE_MAX_SLOTS) { i ->
+                if (i >= visibleCount) return@List ""
+                when (i) {
+                    0 -> rawLines.getOrNull(1).orEmpty().ifBlank { rawLines.getOrNull(0).orEmpty() }
+                    1 -> rawLines.getOrNull(0).orEmpty()
+                    else -> rawLines.getOrNull(i).orEmpty()
+                }
             }
         } else {
             List(MULTI_LINE_MAX_SLOTS) { i ->
@@ -1488,12 +1502,18 @@ object HyperFocusLyricStyle {
         // 未播原文轻微淡化，让当前行饱满强调色更醒目（不依赖 accent 与正文色的天然差异）
         val nonCurrentLineColor = fadeTextColor(defaultLineColor, 0.8f)
         val currentLineSlot = multiLine.currentLineSlot.coerceAtLeast(0)
-        val currentTransSlot = if (interleaved && currentLineSlot < visibleCount - 1) currentLineSlot + 1 else -1
+        val currentTransSlot = when {
+            currentOnly && currentLineSlot < visibleCount - 1 &&
+                displayLines.getOrNull(currentLineSlot + 1).orEmpty().isNotBlank() ->
+                currentLineSlot + 1
+            interleaved && currentLineSlot < visibleCount - 1 -> currentLineSlot + 1
+            else -> -1
+        }
 
         for (i in 0 until MULTI_LINE_MAX_SLOTS) {
             val viewId = MULTI_LINE_IDS[i]
             val displayText = displayLines[i]
-            val isTranslation = interleaved && i < visibleCount && i % 2 == 1
+            val isTranslation = !currentOnly && interleaved && i < visibleCount && i % 2 == 1
             val isCurrentLine = i == currentLineSlot
             val isCurrentTrans = i == currentTransSlot && displayText.isNotBlank()
             if (i >= visibleCount || displayText.isBlank()) {
@@ -1530,11 +1550,14 @@ object HyperFocusLyricStyle {
                 }
             }
             views.setInt(viewId, "setGravity", style.gravityValue)
-            // 行间距：组内（翻译行）2dp 不动，组间/纯原文 50dp
+            // 行间距：翻译紧跟固定 2dp；原文行之间用可调行距
+            val lineSpacing = FocusStyleSnapshot.multiLineLineSpacingDp
+            val translationGap = FocusPreferences.MULTI_LINE_TRANSLATION_GAP_DP
             val paddingTop = when {
                 i == 0 -> 0
-                interleaved && i % 2 == 1 -> 2
-                else -> 50
+                currentOnly && i == currentTransSlot -> translationGap
+                interleaved && i % 2 == 1 -> translationGap
+                else -> lineSpacing
             }
             views.setViewPadding(viewId, 0, paddingTop, 0, 0)
         }
@@ -1547,7 +1570,7 @@ object HyperFocusLyricStyle {
             safeSetViewVisibility(views, R.id.focus_lyric_bg, View.GONE)
         }
 
-        // 多行歌词区域高度可调（200-450dp）；API 31+ RemoteViews.setViewLayoutHeight
+        // 多行歌词区域高度可调（200-450dp）
         try {
             views.setViewLayoutHeight(
                 R.id.focus_lyric_content,
