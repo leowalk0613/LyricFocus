@@ -14,14 +14,16 @@
 
 > 实现 HyperOS 锁屏息屏焦点歌词的 LSP 模块 — `com.leowalk.LyricFocus`
 
-> ## ⚠️ 重要提醒（渠道包）
-> **本仓库 / README 对应 HyperOS 3 专用包 `1.9.2(OS3)`。**
-> **请勿安装到 HyperOS 4：OS4 请下载 [V1.9.2(OS4)](https://github.com/leowalk0613/LyricFocus/releases/tag/v1.9.2-OS4)。**
-> **请勿把 OS4 包装到 HyperOS 3：焦点 API 不同，会导致焦点通知退化为普通通知或无法显示。**
+> ## ⚠️ 渠道包提醒（自 1.9.3 起）
+> **OS3 / OS4 共用同一个 GitHub Release**（如 [V1.9.3](https://github.com/leowalk0613/LyricFocus/releases/tag/v1.9.3)），附件含两个 APK。  
+> **包内 `versionName` 仍区分渠道**：`1.9.3(OS4)` / `1.9.3(OS3)`，请按系统安装对应包，**勿交叉安装**。  
+> - HyperOS **4** → 下载 `LyricFocus.v*.OS4.apk`  
+> - HyperOS **3** → 下载 `LyricFocus.v*.OS3.apk`  
+> 源码分支：`main` = OS4，`hyperos3` = OS3。
 
 [123 网盘](https://1825191091.share.123pan.cn/123pan/jNBsjv-vZrV?pwd=Ifn3) ·
-[GitHub Releases](https://github.com/leowalk0613/LyricFocus/releases) ·
-[本版 Release v1.9.2-OS3](https://github.com/leowalk0613/LyricFocus/releases/tag/v1.9.2-OS3)
+[GitHub Releases](https://github.com/leowalk0613/LyricFocus/releases/latest) ·
+[Gitee](https://gitee.com/leowalk0613/LyricFocus)
 
 </div>
 
@@ -42,18 +44,17 @@
 ## 功能概览
 
 - **Material 3 界面**：主界面、歌词源管理、样式设置、关于页统一 Tonal 风格；工具栏常驻版本信息按钮（有更新变红）与重启 SystemUI 图标（需 Root）
-- **版本更新检测**：启动后并行检测 GitHub 与 Gitee Release，取最新版本；后台线程运行，不阻塞界面
+- **版本更新检测**：并行检测 GitHub / Gitee 最新 Release；比较时忽略 `(OS3)`/`(OS4)` 渠道后缀；下载优先匹配本渠道 APK
 - **实时歌词**：`NotificationListenerService` 绑定 MediaSession，监听播放进度与元数据；主界面 2 秒定时刷新歌曲状态
-- **多歌词源**：网易云音乐、QQ 音乐、SuperLyricApi（AIDL 实时推送）、LyricInfo（通知栏 LRC 注入）、词幕 Lyricon、本地 LRC、AI 翻译；自动链式回退或指定单源
+- **多歌词源**：网易云、QQ、SuperLyricApi、LyricInfo、词幕 Lyricon、本地 LRC、AI 翻译；**优先按播放器歌曲 ID 直取**（网易 / QQ / 小米），失败再标题搜索；自动源按播放器包名匹配
 - **外部歌词推送**：开启外部渲染后本 App 仅推送歌词；第三方用 Manifest meta-data 声明即可接入（见 [外部歌词接入指南](#外部歌词接入指南)）。自研配套：[Aodchange](https://github.com/leowalk0613/Aodchange)（HyperOS 3 万象息屏）、[HyperLockMusic](https://github.com/leowalk0613/HyperLockMusic)（HyperOS 4 音乐锁屏）
 - **本地 LRC**：应用内 SAF 选文件夹，支持「歌名-歌手」双向匹配、三语 LRC 同时间戳合并；专辑名优先加分、已知歌曲 ID 直绑
 - **AI 翻译**：OpenAI 兼容 `/chat/completions` API，可选覆盖已有译文，支持连通性检测
 - **样式设置**：按场景分通用、锁屏样式 AOD、万象息屏 AOD 三类，开关联动互斥置灰
 - **通用样式**：歌词翻译位置互换、仅显示第一行、焦点通知背景、Monet 动态取色、通知文字取色
-- **锁屏样式 AOD**：字号、文字颜色、固定行数、对齐方式、多行模式（3~8 行滑块，当前行高亮+强调色，支持仅 AOD 展开多行）
+- **锁屏样式 AOD**：字号、文字颜色、固定行数、对齐方式、**多行模式**（通知高度 / 行距可调；可选仅当前行显示翻译；当前行高亮+强调色；支持仅 AOD 展开多行）
 - **万象息屏 AOD**：独立字号、歌词宽度（50–100%）、歌名显示选项（全部/隐藏歌名/隐藏歌手/全隐藏）、颜色模式（白/专辑取色/24 推荐色+RGB）；歌名 · 歌手 3:2 居中，标题图标按歌词染色
 - **动态取色**：HSL 保彩对比度算法，从专辑封面 Palette 挑 3 差异色（通知三色+文字两色）；Monet 接管背景、文字取色仅接管文字
-- **样式实时预览**：样式设置页固定预览区，实时反映所有改动，播放时同步显示真实歌词
 - **通知原地更新**：锁屏/AOD 换行不重建通知会话，仅更新 RemoteViews；600ms 防抖消除切歌掉帧
 - **歌词焦点置顶**：焦点通知数据层+视图层双保险，歌词卡片始终优先于倒计时等通知
 - **应用白名单**：可选仅对指定音乐 App 响应；支持搜索已安装应用、手动添加包名
@@ -62,25 +63,24 @@
 - **Root 重启 SystemUI**：主界面右上角一键重启，Hook/样式变更后快速生效
 - **权限向导**：必要/其他分组，逐项显示用途说明与状态图标，一键跳转授权
 - **LSPosed 日志查看**：应用内自动扫描或手动选择日志，筛选 LyricFocus 相关条目，支持一键复制
-- **关于界面**：软件信息、项目与联系作者、系统要求、许可证与致谢
+- **关于界面**：按渠道显示系统说明；项目链接居中；注明支持向第三方推送与转发歌词
 
 ---
 
 ## 系统要求
 
-| 项目 | 要求 |
-|------|------|
-| 系统 | **小米 HyperOS 3.0+（本包为 OS3 专用）**（验证环境：HyperOS 3.0.x，如平板 / 手机 OS3）；**HyperOS4 请用 OS4 包** |
-| Android | API **31+**（Android 12 及以上），`targetSdk 34` |
-| 框架 | **LSPosed 2.0**（API 102），旧版 LSPosed (API 82) 不再兼容。**必须更新！** |
-| LSPosed 作用域 | `com.android.systemui`（系统界面）、`com.miui.aod`（息屏与锁屏编辑）、`com.xiaomi.xmsf`（可选焦点认证） |
-| 权限 | 通知访问、发送通知、网络、前台服务、读取应用列表（白名单选应用，Android 11+） |
-| 可选 | Root（Magisk / KernelSU）— 应用内重启 SystemUI、查看 LSPosed 日志 |
+| 项目 | OS4 包 | OS3 包 |
+|------|--------|--------|
+| 系统 | **HyperOS 4.0+**（验证：Xiaomi HyperOS 4.0.0.35 / Android 17） | **HyperOS 3.x** |
+| `versionName` | `x.y.z(OS4)` | `x.y.z(OS3)` |
+| Android | API **31+**，`targetSdk 34` | 同左 |
+| 框架 | **LSPosed 2.0**（API 102），旧版 API 82 不兼容 | 同左 |
+| LSPosed 作用域 | `com.android.systemui`、`com.miui.aod`；可选 `com.xiaomi.xmsf`（焦点认证） | 同左（Hook 实现因系统 API 不同而分渠道） |
+| 权限 | 通知访问、发送通知、网络、前台服务；可选应用列表 / Root / 忽略电池优化 | 同左 |
 
 > ## ⚠️ 重要提醒
-> **本包为 HyperOS 3.x / OS3 专用（versionName `1.9.2(OS3)`，versionCode 34）。**
-> **HyperOS 4 用户请安装 [OS4 专用包](https://github.com/leowalk0613/LyricFocus/releases/tag/v1.9.2-OS4)，请勿安装本版！**
-> **本版使用 OS3 焦点 API（`canShowFocus` / `SystemUIApplication`），在 HyperOS4 上未验证且可能无法工作。**
+> **请勿交叉安装渠道包**：OS3 ↔ OS4 的 SystemUI / 焦点权限 API 不同，错装会导致焦点通知异常或退化为普通通知。  
+> 自 **1.9.3** 起下载页为**同一 Release 下的两个 APK**，以文件名 / 包内 `versionName` 区分。
 
 ### 额外使用条件
 
@@ -139,6 +139,8 @@ flowchart LR
 LyricFocus/
 ├── settings.gradle
 ├── build.gradle
+├── docs/external-lyric-protocol.md     → 外部歌词推送协议
+├── externalLyricTest/                  → 第三方接入最小示例（可运行）
 └── focus/
     ├── build.gradle
     └── src/main/
@@ -152,12 +154,12 @@ LyricFocus/
         │   ├── FocusPreferences.kt
         │   ├── FocusStyleSnapshot.kt    → SystemUI 侧样式快照
         │   ├── ui/                       # HomeFragment、StyleSettingsFragment、AboutFragment
-        │   ├── lyric/                    # 网易云 / QQ、LRC 解析
-        │   ├── service/                  # MediaSession、歌词服务、通知管理
+        │   ├── lyric/                    # 网易云 / QQ、ID 解析 PlayingSongIdResolver、LRC 解析
+        │   ├── service/                  # MediaSession、歌词服务、通知管理、ExternalLyricProtocol
         │   ├── notification/             # HyperFocusLyricStyle
         │   ├── receiver/                 # FocusResyncReceiver、ServiceRestartReceiver
-        │   ├── util/                     # RootHelper、AlbumColorExtractor、InstalledAppsHelper、UpdateChecker
-        │   └── xposed/                   # SystemUI / AOD Hook
+        │   ├── util/                     # RootHelper、AlbumColorExtractor、UpdateChecker
+        │   └── xposed/                   # SystemUI / AOD Hook（OS3/OS4 实现不同，禁止整文件互拷）
         └── res/layout/                   # focus_lyric_* / activity_style_settings / about
 ```
 
@@ -171,26 +173,24 @@ LyricFocus/
 
 | 项目 | 说明 |
 |------|------|
-| 设备 | 小米 / Redmi，**HyperOS 3.x**（本包专用；HyperOS4 请换 OS4 包） |
+| 设备 | 小米 / Redmi：HyperOS **4** 装 OS4 包，HyperOS **3** 装 OS3 包 |
 | Android | **12 及以上**（`minSdk 31`） |
 | Bootloader | 已解锁（安装 LSPosed 所需） |
-| LSPosed | 已通过 Magisk / KernelSU 等模块安装并启用 |
+| LSPosed | 已通过 Magisk / KernelSU 等模块安装并启用（**须 2.0 / API 102**） |
 | 网络 | 拉取歌词需联网（网易云 / QQ 音乐 API） |
 | Root（推荐） | 非必须，但 Hook 变更后可在应用内一键重启 SystemUI、查看 LSPosed 日志 |
 
-> ## ⚠️ 安装警告
-> **仅下载带 `(OS3)` 的 Release**（如 `v1.9.2-OS3` / `LyricFocus.v1.9.2(OS3).apk`）。
-> **不要安装 `V1.9.2(OS4)` 或其它 OS4 渠道包。**
-> 验证环境以 **HyperOS 3.0.x** 为准；焦点白名单仍需 HyperIsland / HyperCeiler 等模块配合。
+> OS4 包已在 **Xiaomi HyperOS 4.0.0.35（Android 17）** 验证；OS3 包面向 HyperOS 3.x。两渠道 Hook 不可混用。
 
 ---
 
 ### 方式一：下载 Release APK（推荐）
 
-1. 打开 [Releases](https://github.com/leowalk0613/LyricFocus/releases/tag/v1.9.2-OS3)，下载 **OS3** 渠道 APK（文件名含 `OS3`）
-2. 将 APK 传到手机，在系统设置中允许「安装未知来源应用」
-3. 点击 APK 完成安装
-4. 继续下方 [LSPosed 配置](#lsposed-配置) 与 [应用权限](#应用权限)
+1. 打开 [最新 Release](https://github.com/leowalk0613/LyricFocus/releases/latest)（自 1.9.3 起 **一个页面两个 APK**）
+2. 按系统选择：
+   - HyperOS **4** → `LyricFocus.v*.OS4.apk`（包内 `x.y.z(OS4)`）
+   - HyperOS **3** → `LyricFocus.v*.OS3.apk`（包内 `x.y.z(OS3)`）
+3. 传到手机，允许「安装未知来源」，安装后继续 [LSPosed 配置](#lsposed-配置) 与 [应用权限](#应用权限)
 
 ---
 
@@ -226,23 +226,24 @@ cd LyricFocus
 ./gradlew :focus:assembleRelease
 ```
 
-产物路径：
+产物路径（文件名含渠道后缀）：
 
 ```
-focus/build/outputs/apk/debug/focus-debug.apk
-focus/build/outputs/apk/release/focus-release.apk
+focus/build/outputs/apk/debug/LyricFocus.v{versionName}.apk
+focus/build/outputs/apk/release/LyricFocus.v{versionName}.apk
 ```
 
-上传到 GitHub Release 时，请将 Release APK 重命名为 `LyricFocus.v{versionName}.apk`（如 `LyricFocus.v1.6.1.apk`），与现有 Release 资源命名一致。
+例：`LyricFocus.v1.9.3(OS4).apk`。上传 GitHub 时括号可能被去掉为 `LyricFocus.v1.9.3.OS4.apk`。
 
 **Android Studio**：打开项目根目录 → Sync Gradle → 选择运行配置 **`focus`** → Run。
 
 安装到已连接设备：
 
 ```bash
-adb install -r focus/build/outputs/apk/debug/focus-debug.apk
-adb install -r focus/build/outputs/apk/release/focus-release.apk
+adb install -r "focus/build/outputs/apk/debug/LyricFocus.v1.9.3(OS4).apk"
 ```
+
+> 编译 OS3 请使用 `hyperos3` 分支 / worktree（`D:\work\LyricFocus-OS3`），**勿**把 OS4 的 `SystemUIHyperFocusHook.kt` 整文件覆盖到 OS3。
 
 ---
 
@@ -358,10 +359,13 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 | 文字颜色 | `lyric_text_color` | `white` | `white` / `black`；Monet 或文字取色开启时无效 |
 | 歌词行数 | `lyric_max_lines` | `2` | 1 ~ 2；多行模式下不可用 |
 | 翻译行数 | `translation_max_lines` | `1` | 1 ~ 2；多行模式下不可用 |
-| 多行模式 | `multi_line_lyrics` | 关 | 锁屏按页多行歌词 |
-| 多行显示翻译 | `multi_line_show_translation` | 开 | 有翻译时交错填满所选行数 |
-| 多行行数 | `multi_line_line_count` | `8` | 3 ~ 8 |
-| 多行字号 | `multi_line_text_size` | `14` | 12 ~ 32 sp |
+| 多行模式 | `multi_line_lyrics` | 关 | 锁屏/AOD 多行歌词 |
+| 多行显示翻译 | `multi_line_show_translation` | 开 | 有翻译时原文与翻译交错填满 |
+| 仅当前行翻译 | `multi_line_current_translation_only` | 关 | 开启后仅当前行下方显示翻译，其余只显示原文 |
+| 多行通知高度 | `multi_line_height` | `400` | 200 ~ 450 dp |
+| 多行行距 | `multi_line_line_spacing` | `50` | 0 ~ 100 dp（原文行间距；翻译紧跟固定 2dp） |
+| 多行字号 | `multi_line_text_size` | `20` | 15 ~ 32 sp |
+| 仅 AOD 多行 | `aod_multi_line_only` | 关 | 锁屏保持双行，仅 AOD 用多行 |
 | 对齐方式 | `lyric_gravity` | `center` | `left` / `center` / `right`；锁屏样式 AOD |
 | 焦点通知背景 | `focus_background` | `default` | `default` / `black` / `white`；Monet 开启时无效 |
 | Monet 动态取色 | `monet_dynamic_color` | 关 | 专辑封面实时取背景+文字色 |
@@ -373,21 +377,18 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 
 | 源 | Provider | 说明 |
 |----|----------|------|
-| 网易云音乐 | `NetEaseLyricProvider` | `music.163.com/api/...` |
-| QQ 音乐 | `QQMusicLyricProvider` | `u.y.qq.com` 搜索 + `i.y.qq.com` 歌词 |
+| 网易云音乐 | `NetEaseLyricProvider` | 优先 `songId` 直取，否则搜索 `music.163.com` |
+| QQ 音乐 | `QQMusicLyricProvider` | 优先 `songId` / `songMid` 直取；小米音乐用通知 `songmid` |
 | SuperLyricApi | `SuperLyricBridge` | AIDL 实时推送，第三方歌词源（LGPL-2.1） |
 | LyricInfo | `LyricInfo` | 通知栏读取 LRC（Xposed 注入） |
 | 词幕 Lyricon | `LyriconBridge` | 完整歌词+翻译（Apache 2.0） |
 | 本地 LRC | `LocalLrcLyricProvider` | SAF 选文件夹，支持三语同时间戳 LRC |
 | AI 翻译 | `AiLyricTranslator` | OpenAI 兼容 API，默认仅补全无译文 |
 
-- `auto`：先网易云，失败再 QQ，最后本地
-- `local`：匹配本地 `.lrc`（支持「歌名 - 歌手」/「歌手 - 歌名」及三语同时间戳格式）
-- `ai`：先在线获取歌词，再调用 AI 生成译文（需配置 API Key）
-- `super_lyric`：SuperLyricApi AIDL 实时推送
-- `lyric_info`：LyricInfo 通知栏 LRC 注入（需 Xposed）
-- `lyricon`：词幕 Lyricon 歌词源
-- 按 MediaSession 的**标题 + 艺术家**搜词，专辑名优先加分；已知歌曲 ID 直绑；播放器不限网易云/QQ
+- **ID 优先**：`PlayingSongIdResolver` 从 MediaSession / 焦点通知解析平台 ID，命中则跳过搜索
+- `auto`：按播放器包名优先匹配（网易→网易；QQ/小米→QQ），再链式回退
+- `local` / `ai` / `super_lyric` / `lyric_info` / `lyricon`：指定单源
+- 搜索仍按标题+艺术家，专辑名优先加分
 
 `LrcParser` 支持标准 LRC、`[mm:ss:cc]` 网易格式、外部翻译合并、三语 LRC（原文 / 翻译 / 读音同时间戳合并）、跳过作词/作曲行。
 
@@ -425,8 +426,9 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 |------|------|------|
 | [Aodchange](https://github.com/leowalk0613/Aodchange) | HyperOS **3** | 万象息屏自渲染歌词 / 卡片样式；开启 LyricFocus「外部渲染」后由本模块上屏 |
 | [HyperLockMusic](https://github.com/leowalk0613/HyperLockMusic) | HyperOS **4** | 音乐锁屏 / AOD 专辑壁纸与歌词；歌词数据同样走 LyricFocus 外部渲染推送 |
+| [`externalLyricTest/`](externalLyricTest/) | 任意（调试） | **第三方接入最小可运行示例**：仅声明 meta-data + Provider，界面展示 `putlyric` / `putlyricfd` |
 
-二者均消费内置兼容 URI（或等价 Provider）；其它第三方仍可按下方协议自行接入。
+生产配套消费内置兼容 URI（或等价 Provider）；接入新模块请先对照 [`externalLyricTest`](externalLyricTest/README.md) 与下方协议。
 
 ### 1. Manifest 声明
 
@@ -476,7 +478,8 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 - `content://com.leowalk.aodchange.notifications` → [Aodchange](https://github.com/leowalk0613/Aodchange)
 - `content://com.leowalk.musiclockscreen.lyric` → [HyperLockMusic](https://github.com/leowalk0613/HyperLockMusic)（锁屏音乐模块）
 
-实现代码：`focus/.../service/ExternalLyricProtocol.kt`。
+实现代码：`focus/.../service/ExternalLyricProtocol.kt`。  
+最小接收端示例：[`externalLyricTest/`](externalLyricTest/)（`./gradlew :externalLyricTest:installDebug`）。
 
 ---
 
@@ -488,13 +491,21 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 
 | 作用域 | 主要类 | 职责 |
 |--------|--------|------|
-| `com.android.systemui` | `SystemUIHyperFocusHook` | 广播、焦点通知、权限 bypass |
+| `com.android.systemui` | `SystemUIHyperFocusHook` | 广播、焦点通知、权限 bypass（**OS3/OS4 实现不同，禁止整文件互拷**） |
 | | `FocusPinAboveHook` | 焦点通知数据层/视图层置顶歌词卡片 |
 | | `SystemUIPluginHook` | 焦点/AOD 插件 ClassLoader bypass |
 | | `FocusIslandSuppressHook` | 关闭超级岛兜底 |
 | `com.miui.aod` | `AodFocusPluginHook` | AOD 进程焦点权限 bypass |
 
 焦点通知构建见 `HyperFocusLyricStyle.kt`：`FocusApi.sendDiyFocus()`、渠道 `channel_id_focusNotifLyrics`。
+
+**OS3 vs OS4 Hook 差异（摘要）**：
+
+| 项 | OS3（`hyperos3`） | OS4（`main`） |
+|----|-------------------|---------------|
+| Application 入口 | `SystemUIApplication` | `SystemUIApplicationImpl` |
+| 焦点权限 | `canShowFocus` / `canCustomFocus`（boolean，`miui.systemui`） | `canShowFocusState*`（int，`com.miui.systemui`） |
+| 签名检查 | 无 OS4 那套强制 `SignatureChecker` hook | 需 hook `SignatureChecker` |
 
 ---
 
@@ -514,25 +525,27 @@ adb install -r focus/build/outputs/apk/release/focus-release.apk
 
 ## 版本更新
 
-### v1.9.2(OS3)
+### v1.9.3（OS3 / OS4 共用 Release）
 
-> ⚠️ **本包仅支持 HyperOS3；HyperOS4 请用 OS4 包。**
+> ⚠️ **同一 tag `v1.9.3` 挂两个 APK**；`versionName` 仍为 `1.9.3(OS4)` / `1.9.3(OS3)`。
 
-- **新增**：外部歌词推送协议（Manifest `EXTERNAL_LYRIC`，纯推送）；QQ 源原文+翻译；自动源按播放器包名匹配（QQ/小米同源）；专辑取色背景；多行高度/24 槽
-- **修复**：OS3 焦点通知总开关缺键不误关；息屏 cancel+repost 置顶；样式持续生效
-- **保留**：OS3 `canShowFocus`/`SystemUIApplication` API；OS3 防闪烁/岛抑制实现
-- **版本号**：`1.9.2(OS3)`（versionCode 34）
-- [完整更新日志](release-notes/release-notes-v1.9.2-OS3.md) · [接入指南](docs/external-lyric-protocol.md)
+- **新增**：按播放器歌曲 ID 直取歌词（网易 / QQ / 小米）；多行「仅当前行显示翻译」；多行行距可调（0–100dp）
+- **优化**：关于页链接居中、描述按渠道；更新检测忽略渠道后缀，下载优先本渠道 APK
+- **版本号**：OS4 `1.9.3(OS4)`（versionCode 34）；OS3 `1.9.3(OS3)`（versionCode 36）
+- [完整更新日志](release-notes/release-notes-v1.9.3.md)
 
-### v1.9.1(OS3)
+### v1.9.2(OS4)
 
-> ⚠️ **HyperOS3 专用中间版（焦点通知退化修复）**
+> ⚠️ **本包仅支持 HyperOS4 / Android 17；HyperOS3 请用 OS3 包。**（1.9.2 仍为分 tag 发行）
 
-- OS3：remote prefs 缺键 ≠ 关闭；`refreshSettings` / aodchange 同步早退
+- **新增**：外部歌词推送协议（Manifest `EXTERNAL_LYRIC`，纯推送）；QQ 源原文+翻译；自动源按播放器包名匹配（QQ/小米同源）；多行槽位扩至 24 行
+- **优化**：多端推送独立去重；当前行强调色/未播淡化；多行字号下限 15sp；欢迎页改版；系统要求标明 OS4
+- **版本号**：`1.9.2(OS4)`（versionCode 32）
+- [完整更新日志](release-notes/release-notes-v1.9.2-OS4.md) · [接入指南](docs/external-lyric-protocol.md)
 
 ### v1.9.1
 
-> ⚠️ **主线该版为 HyperOS4 / Android 17 适配；OS3 渠道见上方 OS3 条目**
+> ⚠️ **本版本仅支持 HyperOS4 / Android 17，HyperOS3 及以下用户请勿更新！**
 
 - **HyperOS4 / Android 17 适配（重点）**：焦点通知认证（`SignatureChecker.checkSignatures` Hook，XmsfAuthHook）、防闪烁 Hook 重写（`StatusBarFocusNotifUtils.needAnim`）、岛抑制 Hook 重写（`DynamicIslandController.hasCustomFocusView`）、AOD 状态检测（`MiuiDozeService` + `AodFocusControllerV2.mAodStart`）、RemoteViews 新 API（`setViewLayoutHeight`）
 - **新增**：焦点通知背景专辑取色（独立于 Monet/文字取色）+ 透明度调节；通知高度滑块（200-450dp，默认 400dp）
@@ -909,14 +922,19 @@ LSPosed 日志目录结构：
 
 - **不能**。本应用依赖 HyperOS 焦点通知（`miui.focus.*`）与 SystemUI Hook，其他 ROM 不支持。
 
+**Q：装错渠道包会怎样？**
+
+- OS3 包装到 HyperOS 4、或 OS4 包装到 HyperOS 3，焦点通知常会异常或退化为普通通知。请从 [最新 Release](https://github.com/leowalk0613/LyricFocus/releases/latest) 按文件名选 `OS3` / `OS4` 包重装。
+
 ---
 
 ## 已知限制
 
 - 仅适用于小米 HyperOS 焦点通知，其他 ROM 不可用
+- **OS3 / OS4 渠道包不可混用**（SystemUI 入口类与焦点权限 API 不同）
 - 系统大版本升级可能导致 Hook 类名变化，需适配
 - 焦点 updatable 会话有约 9s 系统超时，AOD 靠周期性 notify 续期
-- 歌词准确度取决于 API 搜索与 LRC 质量
+- 歌词准确度取决于平台 ID / API 搜索与 LRC 质量
 
 ---
 
