@@ -89,6 +89,21 @@ class NetEaseLyricProvider : LyricProvider {
         return lyricInfo.copy(source = name)
     }
 
+    /** 已知平台 songId 时直拉，跳过搜索 */
+    suspend fun fetchLyricById(songId: Long, title: String = "", artist: String = "", album: String = ""): LyricInfo? {
+        return try {
+            fetchLyricBySongId(songId)?.copy(
+                title = title.ifBlank { "" },
+                artist = artist.ifBlank { "" },
+                album = album.ifBlank { "" },
+                source = name
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
     private data class SongCandidate(
         val id: Long,
         val title: String,
