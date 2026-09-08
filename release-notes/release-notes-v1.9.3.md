@@ -7,8 +7,8 @@
 
 | 渠道 | 适用系统 | APK |
 |------|----------|-----|
-| **OS4** | HyperOS 4 / Android 17 | `LyricFocus.v1.9.3(OS4).apk` |
-| **OS3** | HyperOS 3.x | `LyricFocus.v1.9.3(OS3).apk` |
+| **OS4** | HyperOS 4 / Android 17 | `LyricFocus.v1.9.3.OS4.apk`（包内 versionName `1.9.3(OS4)`） |
+| **OS3** | HyperOS 3.x | `LyricFocus.v1.9.3.OS3.apk`（包内 versionName `1.9.3(OS3)`） |
 
 ## 新增（两渠道）
 - **按歌曲 ID 直取歌词**：网易云 / QQ 音乐 / 小米音乐优先用平台 ID 拉歌词，失败再回退标题+歌手搜索
