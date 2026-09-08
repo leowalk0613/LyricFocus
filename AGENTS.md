@@ -15,7 +15,10 @@
    - OS4：`main`，提交信息 `vX.Y.Z(OS4): 简短描述`
    - OS3：`hyperos3`，提交信息 `vX.Y.Z(OS3): 简短描述`
 5. **统一打标签**（只打一个）：`git tag -f vX.Y.Z`（在 `main` 上；⚠ 用 `-f` 覆盖已存在的本地标签）
-6. **`git push origin main hyperos3 --tags`**
+6. **推送分支 + 仅推送本次 tag**（⚠ **禁止** `git push --tags`，否则会把本地残留的旧标签重新推上远端）：
+   - `git push origin main`
+   - `git push origin hyperos3`
+   - `git push origin vX.Y.Z`（若远端已有同名 tag 需先删：`git push origin :refs/tags/vX.Y.Z` 再推）
 7. **`gh release create vX.Y.Z`**（**OS3/OS4 共用同一个 Release，不再分 `vX.Y.Z-OS3` / `vX.Y.Z-OS4`**）：
    - `--title "VX.Y.Z"`（大写 V + 版本号，不附加渠道或描述）
    - `--notes-file release-notes/release-notes-vX.Y.Z.md`（一份说明，内含两渠道注意点）
@@ -45,7 +48,8 @@
 - release APK 路径：`focus\build\outputs\apk\release\LyricFocus.vX.Y.Z(OSx).apk`
 - debug APK 路径：`focus\build\outputs\apk\debug\LyricFocus.vX.Y.Z(OSx).apk`
 - Release 编译含 R8 混淆 + 资源收缩，正常约 2~3 分钟，APK 约 6MB
-- 推送时 `--tags` 可能因旧标签冲突报错，拒绝的 tag 用 `git push origin :refs/tags/xxx` 删除远端后重新 `git push origin vX.Y.Z`
+- **禁止**使用 `git push --tags` / `git push origin --tags`：会恢复用户已在远端删除的历史标签
+- 仅推送当前版本标签：`git push origin vX.Y.Z`；若冲突则先 `git push origin :refs/tags/vX.Y.Z` 再推
 - Gitee 同步由 GitHub Actions 自动完成（需已配置 `GITEE_TOKEN` secret）
 
 ## OS3 / OS4 双渠道同步 ⚠
