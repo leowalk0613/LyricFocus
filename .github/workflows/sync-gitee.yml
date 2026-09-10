@@ -113,36 +113,77 @@ jobs:
             curl -L -o "apk-assets/$NAME" "$URL"
           done < apk-assets.tsv
 
-      - name: Delete existing Gitee release
+      - name: Ensure Gitee release
         run: |
+          : > existing-assets.txt
           EXISTING=$(curl -s "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases/tags/$VERSION?access_token=${{ secrets.GITEE_TOKEN }}")
-          EXISTING_ID=$(echo "$EXISTING" | jq -r '.id // empty')
-          if [ -n "$EXISTING_ID" ]; then
-            echo "Deleting existing release $EXISTING_ID"
-            curl -s -X DELETE "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases/$EXISTING_ID?access_token=${{ secrets.GITEE_TOKEN }}"
-          fi
-
-      - name: Create Gitee release
-        run: |
-          RESPONSE=$(curl -s -X POST "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases" \
-            -H "Content-Type: application/json" \
-            -d "{\"access_token\":\"${{ secrets.GITEE_TOKEN }}\",\"tag_name\":\"$VERSION\",\"name\":\"$NAME\",\"body\":$(echo "$BODY" | jq -Rs .),\"target_commitish\":\"$TARGET\",\"prerelease\":false}")
-          echo "$RESPONSE" | jq -r '.message // empty' || true
-          RELEASE_ID=$(echo "$RESPONSE" | jq -r '.id')
-          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
-            echo "Failed to create Gitee release: $RESPONSE" >&2
-            exit 1
+          RELEASE_ID=$(echo "$EXISTING" | jq -r '.id // empty')
+          if [ -n "$RELEASE_ID" ]; then
+            echo "Reusing Gitee release $RELEASE_ID"
+            echo "$EXISTING" | jq -r '.assets[]?.name // empty' >> existing-assets.txt
+            curl -s -X PATCH "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases/$RELEASE_ID" \
+              -H "Content-Type: application/json" \
+              -d "{\"access_token\":\"${{ secrets.GITEE_TOKEN }}\",\"name\":\"$NAME\",\"body\":$(echo "$BODY" | jq -Rs .),\"tag_name\":\"$VERSION\"}" \
+              >/dev/null || true
+          else
+            RESPONSE=$(curl -s -X POST "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases" \
+              -H "Content-Type: application/json" \
+              -d "{\"access_token\":\"${{ secrets.GITEE_TOKEN }}\",\"tag_name\":\"$VERSION\",\"name\":\"$NAME\",\"body\":$(echo "$BODY" | jq -Rs .),\"target_commitish\":\"$TARGET\",\"prerelease\":false}")
+            echo "$RESPONSE" | jq -r '.message // empty' || true
+            RELEASE_ID=$(echo "$RESPONSE" | jq -r '.id')
+            if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+              echo "Failed to create Gitee release: $RESPONSE" >&2
+              exit 1
+            fi
+            echo "Created release $RELEASE_ID"
           fi
           echo "RELEASE_ID=$RELEASE_ID" >> $GITHUB_ENV
-          echo "Created release $RELEASE_ID"
+          echo "Already attached:"
+          cat existing-assets.txt || true
 
       - name: Upload APKs to Gitee
         run: |
+          FAIL=0
           for f in apk-assets/*.apk; do
-            echo "Uploading $(basename "$f")"
-            curl -s -X POST "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases/$RELEASE_ID/attach_files" \
-              -F "access_token=${{ secrets.GITEE_TOKEN }}" \
-              -F "file=@${f}"
-            echo
+            BASE=$(basename "$f")
+            if grep -qxF "$BASE" existing-assets.txt 2>/dev/null; then
+              echo "Skip existing $BASE"
+              continue
+            fi
+            echo "Uploading $BASE ($(wc -c < "$f") bytes)"
+            OK=0
+            for attempt in 1 2 3; do
+              set +e
+              HTTP=$(curl -sS -o /tmp/upload-out.json -w "%{http_code}" \
+                --connect-timeout 30 --max-time 600 --retry 2 --retry-delay 10 \
+                -X POST "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases/$RELEASE_ID/attach_files" \
+                -F "access_token=${{ secrets.GITEE_TOKEN }}" \
+                -F "file=@${f}")
+              CURL_RC=$?
+              set -e
+              echo "attempt=$attempt curl_rc=$CURL_RC http=$HTTP"
+              cat /tmp/upload-out.json 2>/dev/null || true
+              echo
+              if [ "$CURL_RC" = "0" ] && { [ "$HTTP" = "200" ] || [ "$HTTP" = "201" ]; }; then
+                OK=1
+                break
+              fi
+              sleep 20
+            done
+            if [ "$OK" != "1" ]; then
+              echo "Failed to upload $BASE" >&2
+              FAIL=1
+            fi
           done
+          # 最终核对：两边 APK 都应在 Gitee release 上
+          FINAL=$(curl -s "https://gitee.com/api/v5/repos/leowalk0613/LyricFocus/releases/$RELEASE_ID?access_token=${{ secrets.GITEE_TOKEN }}")
+          echo "$FINAL" | jq -r '.assets[]?.name // empty'
+          for f in apk-assets/*.apk; do
+            BASE=$(basename "$f")
+            if ! echo "$FINAL" | jq -e --arg n "$BASE" '[.assets[]?.name] | index($n) != null' >/dev/null; then
+              echo "Missing on Gitee after upload: $BASE" >&2
+              FAIL=1
+            fi
+          done
+          [ "$FAIL" = "0" ]
           echo "Upload done"
