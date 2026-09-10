@@ -30,11 +30,13 @@ import com.leowalk.LyricFocus.util.AlbumArtLoader
 import com.leowalk.LyricFocus.util.RootHelper
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 
 class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
@@ -145,6 +147,10 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private var fetchLyricJob: Job? = null
     private var albumArtRetryJob: Job? = null
+    /** 切歌代际：旧 HTTP 请求返回后若 generation 不匹配则丢弃，避免 B 覆盖 C */
+    private var lyricGeneration: Int = 0
+    private var lastFetchRequestTitle: String = ""
+    private var lastFetchRequestArtist: String = ""
     private var lastBroadcastLyric = ""
     private var lastBroadcastSecond = ""
     private lateinit var externalLyricPusher: ExternalLyricProtocol.Pusher
@@ -514,6 +520,18 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     }
 
     private fun updateLyricProgress() {
+        // 兜底：直接读控制器元数据，网络源回调延迟时也能在 ~250ms 内切到新歌
+        if (ensureTrackMatchesMonitor()) {
+            return
+        }
+        if (currentLyricInfo.isEmpty &&
+            currentTitle.isNotBlank() &&
+            fetchLyricJob?.isActive != true &&
+            (lastFetchRequestTitle != currentTitle || lastFetchRequestArtist != currentArtist)
+        ) {
+            fetchLyric(currentTitle, currentArtist)
+            return
+        }
         resolveCurrentPosition()
         currentPlaybackPositionMs = currentPosition
         updateNotification()
@@ -980,12 +998,16 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
     private fun clearLyricStateForBlockedApp() {
         fetchLyricJob?.cancel()
+        fetchLyricJob = null
+        lyricGeneration++
         stopLyricUpdate()
         stopRealtimeBridges()
         currentTitle = ""
         currentArtist = ""
         currentAlbumArt = null
         currentAlbumArtKey = ""
+        lastFetchRequestTitle = ""
+        lastFetchRequestArtist = ""
         currentLyricInfo = LyricInfo.EMPTY
         currentLyricSourceHit = ""
         currentLyricSongLabel = ""
@@ -1002,6 +1024,8 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
     private fun clearLyricStateForStoppedApp() {
         fetchLyricJob?.cancel()
+        fetchLyricJob = null
+        lyricGeneration++
         stopLyricUpdate()
         stopRealtimeBridges()
         isPlaying = false
@@ -1009,6 +1033,8 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         currentArtist = ""
         currentAlbumArt = null
         currentAlbumArtKey = ""
+        lastFetchRequestTitle = ""
+        lastFetchRequestArtist = ""
         currentLyricInfo = LyricInfo.EMPTY
         currentLyricSourceHit = ""
         currentLyricSongLabel = ""
@@ -1040,6 +1066,23 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             0L
         }
         lastUpdateTime = System.currentTimeMillis()
+        isPlaying = state?.state == PlaybackState.STATE_PLAYING
+
+        val metadata = controller.metadata ?: MusicMonitorService.currentMetadata
+        val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: ""
+        val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: ""
+        if (title.isNotBlank() && (title != currentTitle || artist != currentArtist)) {
+            onTrackChanged(title, artist)
+            val artKey = metadata?.let { AlbumArtLoader.artKey(it) }.orEmpty()
+            if (artKey.isNotBlank() && artKey != currentAlbumArtKey && metadata != null) {
+                currentAlbumArtKey = artKey
+                currentAlbumArt = AlbumArtLoader.load(this, metadata)
+                extractAndSaveAlbumColor(currentAlbumArt, forceNotify = true)
+            }
+        } else if (title.isNotBlank()) {
+            currentTitle = title
+            currentArtist = artist
+        }
     }
 
     override fun onMetadataChanged(metadata: MediaMetadata?) {
@@ -1049,11 +1092,14 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             return
         }
         if (metadata == null) {
+            fetchLyricJob?.cancel()
+            fetchLyricJob = null
+            lyricGeneration++
             currentTitle = ""
             currentArtist = ""
             currentAlbumArt = null
             currentAlbumArtKey = ""
-            currentLyricInfo = LyricInfo.EMPTY
+            clearLyricResult()
             lastBroadcastLyric = ""
             lastBroadcastSecond = ""
             lyricNotificationManager.cancelNotification()
@@ -1068,25 +1114,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         val artChanged = artKey.isNotBlank() && artKey != currentAlbumArtKey
 
         if (songChanged) {
-            currentTitle = title
-            currentArtist = artist
-            currentLyricInfo = LyricInfo.EMPTY
-            currentLyricSourceHit = ""
-            resetBroadcastCache()
-            sendNoLyricStateToSystemUI(title, artist)
-            clearAlbumColorForNewSong()
-            // 外部渲染：切歌立即推送空数据，避免接收端残留上一首歌词
-            if (aodchangeRenderMode) {
-                try {
-                    externalLyricPusher.clear(title, artist)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to clear external lyric on song change", e)
-                }
-            }
-            fetchLyric(title, artist)
-            if (isPlaying) {
-                restartLyricTickerIfPlaying()
-            }
+            onTrackChanged(title, artist)
         }
 
         if (songChanged || artChanged) {
@@ -1114,6 +1142,13 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             clearLyricStateForStoppedApp()
             return
         }
+        // 播放状态变化时做一次元数据一致性检查（部分网络源切歌只推 playback）
+        if (ensureTrackMatchesMonitor()) {
+            isPlaying = state.state == PlaybackState.STATE_PLAYING
+            lyricNotificationManager.sendPlaybackState(isPlaying)
+            if (isPlaying) startLyricUpdate() else stopLyricUpdate()
+            return
+        }
         currentPosition = extrapolatePlaybackPosition(state)
         lastUpdateTime = System.currentTimeMillis()
         isPlaying = state.state == PlaybackState.STATE_PLAYING
@@ -1123,9 +1158,12 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         if (isPlaying) {
             startLyricUpdate()
             if (currentLyricInfo.isEmpty && currentTitle.isNotBlank()) {
-                if (fetchLyricJob?.isActive == true) {
-                } else {
-                    sendNoLyricStateToSystemUI(currentTitle, currentArtist)
+                if (fetchLyricJob?.isActive != true) {
+                    if (lastFetchRequestTitle != currentTitle || lastFetchRequestArtist != currentArtist) {
+                        fetchLyric(currentTitle, currentArtist)
+                    } else {
+                        sendNoLyricStateToSystemUI(currentTitle, currentArtist)
+                    }
                 }
             }
         } else {
@@ -1138,6 +1176,59 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         }
     }
 
+    /**
+     * 统一切歌处理：立刻取消旧请求、清空旧歌词并推送占位，再拉取新歌词。
+     * 网络源与本地源走同一路径。
+     */
+    private fun onTrackChanged(newTitle: String, newArtist: String) {
+        Log.d(TAG, "onTrackChanged: '$currentTitle'/'$currentArtist' -> '$newTitle'/'$newArtist'")
+        currentTitle = newTitle
+        currentArtist = newArtist
+        fetchLyricJob?.cancel()
+        fetchLyricJob = null
+        lyricGeneration++
+        clearLyricResult()
+        currentPosition = MusicMonitorService.currentController?.playbackState?.let { state ->
+            extrapolatePlaybackPosition(state)
+        } ?: 0L
+        lastUpdateTime = System.currentTimeMillis()
+        currentPlaybackPositionMs = currentPosition
+        resetBroadcastCache()
+        clearAlbumColorForNewSong()
+
+        // 立刻推送 loading/空歌词，避免接收端残留上一首
+        if (aodchangeRenderMode) {
+            try {
+                externalLyricPusher.clear(newTitle, newArtist)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to clear external lyric on song change", e)
+            }
+        } else {
+            sendLoadingStateToSystemUI(newTitle, newArtist)
+        }
+
+        fetchLyric(newTitle, newArtist)
+    }
+
+    /** @return true 表示已触发切歌处理，调用方应中止后续旧曲逻辑 */
+    private fun ensureTrackMatchesMonitor(): Boolean {
+        val metadata = MusicMonitorService.currentController?.metadata
+            ?: MusicMonitorService.currentMetadata
+            ?: return false
+        val title = metadata.getString(MediaMetadata.METADATA_KEY_TITLE) ?: ""
+        val artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: ""
+        if (title.isBlank()) return false
+        if (title != currentTitle || artist != currentArtist) {
+            onTrackChanged(title, artist)
+            return true
+        }
+        return false
+    }
+
+    private fun isStaleLyricFetch(generation: Int, title: String, artist: String): Boolean {
+        return generation != lyricGeneration || title != currentTitle || artist != currentArtist
+    }
+
     private fun fetchLyric(title: String, artist: String) {
         fetchLyricJob?.cancel()
         stopRealtimeBridges()
@@ -1146,6 +1237,10 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             currentLyricInfo = LyricInfo.EMPTY
             return
         }
+
+        lastFetchRequestTitle = title
+        lastFetchRequestArtist = artist
+        val generation = ++lyricGeneration
 
         val source = FocusPreferences.getLyricSource(this)
 
@@ -1158,7 +1253,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             return
         }
         if (source == FocusPreferences.LYRIC_SOURCE_LYRICINFO) {
-            fetchFromLyricInfo(title, artist)
+            fetchFromLyricInfo(title, artist, generation)
             return
         }
 
@@ -1184,17 +1279,26 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                     musicPackage = pkg,
                     platformSongId = resolvedId,
                 )
+                ensureActive()
+                if (isStaleLyricFetch(generation, title, artist)) {
+                    Log.d(TAG, "Discard stale lyric result for '$title' (gen=$generation current=$lyricGeneration)")
+                    return@launch
+                }
                 if (lyricInfo != null && !lyricInfo.isEmpty) {
                     applyLyricResult(lyricInfo, title, artist)
 
                     if (FocusPreferences.isAiTranslateEnabled(this@LyricService)) {
                         try {
                             val translated = lyricManager.translateWithAi(lyricInfo, title, artist)
+                            ensureActive()
+                            if (isStaleLyricFetch(generation, title, artist)) return@launch
                             Log.d(TAG, "AI translate: sameRef=${translated === lyricInfo} hasTrans=${translated.lines.any { it.translation != null }} lines=${translated.lines.size}")
                             if (translated !== lyricInfo) {
                                 applyLyricResult(translated, title, artist)
                                 lyricInfo = translated
                             }
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             Log.e(TAG, "AI translate error", e)
                         }
@@ -1203,19 +1307,27 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                     if (FocusPreferences.isAiPolishEnabled(this@LyricService)) {
                         try {
                             val polished = lyricManager.polishWithAi(lyricInfo, title, artist)
+                            ensureActive()
+                            if (isStaleLyricFetch(generation, title, artist)) return@launch
                             if (polished !== lyricInfo) {
                                 applyLyricResult(polished, title, artist)
                             }
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             Log.e(TAG, "AI polish error", e)
                         }
                     }
                 } else {
+                    if (isStaleLyricFetch(generation, title, artist)) return@launch
                     clearLyricResult()
                     sendNoLyricStateToSystemUI(title, artist, force = true)
                     Log.d(TAG, "No lyric found")
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                if (isStaleLyricFetch(generation, title, artist)) return@launch
                 Log.e(TAG, "Fetch lyric error", e)
                 clearLyricResult()
                 sendNoLyricStateToSystemUI(title, artist, force = true)
@@ -1224,6 +1336,10 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     }
 
     private fun applyLyricResult(lyricInfo: LyricInfo, title: String, artist: String, restartTicker: Boolean = true) {
+        if (title != currentTitle || artist != currentArtist) {
+            Log.d(TAG, "applyLyricResult ignored stale: expected='$title'/'$artist' current='$currentTitle'/'$currentArtist'")
+            return
+        }
         currentLyricInfo = lyricInfo
         currentLyricSourceHit = lyricInfo.source
         currentLyricSongLabel = listOf(title, artist)
@@ -1246,7 +1362,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         Log.d(TAG, "Lyric loaded: ${lyricInfo.lines.size} lines, source=${lyricInfo.source}, first=${lyricInfo.lines.firstOrNull()?.text?.take(20)}")
     }
 
-    private fun fetchFromLyricInfo(title: String, artist: String) {
+    private fun fetchFromLyricInfo(title: String, artist: String, generation: Int = lyricGeneration) {
         fetchLyricJob = serviceScope.launch {
             try {
                 val metadata = MusicMonitorService.currentMetadata ?: return@launch
@@ -1266,6 +1382,8 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                         Log.d(TAG, "LyricInfo song mismatch: expected='$title', got='$songName', retrying in 500ms")
                         clearLyricResult()
                         kotlinx.coroutines.delay(500L)
+                        ensureActive()
+                        if (isStaleLyricFetch(generation, title, artist)) return@launch
                         val retryMetadata = MusicMonitorService.currentMetadata
                         if (retryMetadata != null) {
                             val retryJson = retryMetadata.getString("lyricInfo")
@@ -1280,13 +1398,17 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                                     Log.d(TAG, "LyricInfo retry still mismatch: expected='$title', got='$retryName'")
                                     return@launch
                                 }
+                                if (isStaleLyricFetch(generation, title, artist)) return@launch
                                 return@launch parseAndApplyLyricInfo(retryRoot, title, artist)
                             }
                         }
                         return@launch
                     }
                 }
+                if (isStaleLyricFetch(generation, title, artist)) return@launch
                 parseAndApplyLyricInfo(root, title, artist)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "LyricInfo parse error", e)
             }
@@ -1515,6 +1637,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         }
 
         fetchLyricJob?.cancel()
+        fetchLyricJob = null
         MusicMonitorService.removeListener(this)
         lyricNotificationManager.cancelNotification()
         lyricNotificationManager.sendPlaybackState(false)

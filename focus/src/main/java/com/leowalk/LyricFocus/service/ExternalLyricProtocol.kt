@@ -55,6 +55,7 @@ object ExternalLyricProtocol {
         val artist: String,
         val musicPackage: String = "",
         val playing: Boolean = true,
+        val loading: Boolean = false,
         val ctx: JSONObject? = null
     )
 
@@ -167,6 +168,7 @@ object ExternalLyricProtocol {
             put("artist", payload.artist)
             if (payload.musicPackage.isNotBlank()) put("pkg", payload.musicPackage)
             put("playing", payload.playing)
+            put("loading", payload.loading)
             if (includeCtx && payload.ctx != null) put("ctx", payload.ctx)
         }
     }
@@ -211,7 +213,7 @@ object ExternalLyricProtocol {
             }
         }
 
-        /** 切歌时空数据，清接收方残留 */
+        /** 切歌时空数据 / loading，清接收方残留 */
         fun clear(title: String, artist: String) {
             val payload = PushPayload(
                 lyricLine = "",
@@ -220,6 +222,7 @@ object ExternalLyricProtocol {
                 title = title,
                 artist = artist,
                 playing = false,
+                loading = true,
                 ctx = null
             )
             val json = buildJson(payload, includeCtx = false).toString()

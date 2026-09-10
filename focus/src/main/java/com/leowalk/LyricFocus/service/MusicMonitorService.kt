@@ -251,7 +251,9 @@ class MusicMonitorService : NotificationListenerService() {
             override fun onMetadataChanged(metadata: MediaMetadata?) {
                 super.onMetadataChanged(metadata)
                 currentMetadata = metadata
-                val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
+                lastKnownTitle = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
+                lastKnownArtist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)
+                val title = lastKnownTitle
                 Log.d(TAG, "Metadata changed: $title")
                 notifyMetadataChanged(metadata)
             }
@@ -386,37 +388,33 @@ class MusicMonitorService : NotificationListenerService() {
     }
 
     private fun checkSessionHealth() {
-        val currentMeta = currentMetadata
-        val title = currentMeta?.getString(MediaMetadata.METADATA_KEY_TITLE)
-        val artist = currentMeta?.getString(MediaMetadata.METADATA_KEY_ARTIST)
+        if (currentController == null) return
+        try {
+            val freshMeta = currentController?.metadata
+            val freshState = currentController?.playbackState
 
-        if (title != null && artist != null && (title != lastKnownTitle || artist != lastKnownArtist)) {
-            Log.d(TAG, "Health check detected metadata change: $title - $artist")
-            lastKnownTitle = title
-            lastKnownArtist = artist
-            notifyMetadataChanged(currentMeta)
-        }
-
-        if (currentController != null) {
-            try {
-                val freshMeta = currentController?.metadata
-                val freshState = currentController?.playbackState
-
-                if (freshMeta != null && freshMeta != currentMetadata) {
-                    Log.d(TAG, "Health check: stale metadata detected, refreshing")
+            if (freshMeta != null) {
+                val title = freshMeta.getString(MediaMetadata.METADATA_KEY_TITLE)
+                val artist = freshMeta.getString(MediaMetadata.METADATA_KEY_ARTIST)
+                val metaObjectChanged = freshMeta != currentMetadata
+                val trackChanged = title != lastKnownTitle || artist != lastKnownArtist
+                if (metaObjectChanged || trackChanged) {
+                    Log.d(TAG, "Health check metadata refresh: $title - $artist")
                     currentMetadata = freshMeta
+                    lastKnownTitle = title
+                    lastKnownArtist = artist
                     notifyMetadataChanged(freshMeta)
                 }
-
-                if (freshState != null && freshState != currentPlaybackState) {
-                    Log.d(TAG, "Health check: stale playback state detected")
-                    currentPlaybackState = freshState
-                    notifyPlaybackStateChanged(freshState)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Health check failed", e)
-                clearCurrentSession()
             }
+
+            if (freshState != null && freshState != currentPlaybackState) {
+                Log.d(TAG, "Health check: stale playback state detected")
+                currentPlaybackState = freshState
+                notifyPlaybackStateChanged(freshState)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Health check failed", e)
+            clearCurrentSession()
         }
     }
 }
