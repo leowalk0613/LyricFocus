@@ -263,15 +263,14 @@ object FocusPreferences {
     fun formatLyricSourceLabel(source: String): String {
         return when (source) {
             LYRIC_SOURCE_NETEASE -> "网易云音乐"
-            LYRIC_SOURCE_QQ -> "QQ音乐"
-            LYRIC_SOURCE_LOCAL -> "本地 LRC 文件"
-            LYRIC_SOURCE_AI -> "AI 翻译（在线 + 翻译）"
+            LYRIC_SOURCE_QQ -> "QQ 音乐"
+            LYRIC_SOURCE_LOCAL -> "本地 LRC"
+            LYRIC_SOURCE_AI -> "AI 翻译增强"
             LYRIC_SOURCE_SUPERLYRIC -> "Super Lyric"
             LYRIC_SOURCE_LYRICON -> "词幕 Lyricon"
-            LYRIC_SOURCE_LYRICON -> "词幕 Lyricon"
             LYRIC_SOURCE_LYRICINFO -> "LyricInfo"
-            LYRIC_SOURCE_LRCLIB -> "LRCLib（海外）"
-            else -> "自动（QQ确认 → 网易翻译）"
+            LYRIC_SOURCE_LRCLIB -> "LRCLIB"
+            else -> "自动（按播放器）"
         }
     }
 

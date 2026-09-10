@@ -167,14 +167,22 @@ class LyricSourceActivity : AppCompatActivity() {
 
             // 获取每个源的描述和图标
             val (desc, iconRes) = when (key) {
-                FocusPreferences.LYRIC_SOURCE_AUTO -> "按播放器匹配（QQ/小米同源），否则先 QQ 再网易" to R.drawable.ic_music_note
-                FocusPreferences.LYRIC_SOURCE_NETEASE -> "从网易云音乐获取歌词" to R.drawable.ic_app_icon_netease
-                FocusPreferences.LYRIC_SOURCE_QQ -> "从 QQ 音乐获取歌词与翻译" to R.drawable.ic_app_icon_qq
-                FocusPreferences.LYRIC_SOURCE_SUPERLYRIC -> "实时推送单行歌词" to R.drawable.ic_music_note
-                FocusPreferences.LYRIC_SOURCE_LYRICON -> "完整歌词含原文+翻译" to R.drawable.ic_music_note
-                FocusPreferences.LYRIC_SOURCE_LYRICINFO -> "读取通知栏歌词字段" to R.drawable.ic_info
-                FocusPreferences.LYRIC_SOURCE_LOCAL -> "从本地 LRC 文件读取" to R.drawable.ic_home
-                FocusPreferences.LYRIC_SOURCE_LRCLIB -> "海外开源歌词库（不保证完全匹配）" to R.drawable.ic_music_note
+                FocusPreferences.LYRIC_SOURCE_AUTO ->
+                    "网易云播放器优先网易，QQ/小米优先 QQ；失败换另一在线源，再失败用本地 LRC" to R.drawable.ic_music_note
+                FocusPreferences.LYRIC_SOURCE_NETEASE ->
+                    "有平台歌曲 ID 时直拉，否则搜歌名；含翻译；失败回落本地 LRC" to R.drawable.ic_app_icon_netease
+                FocusPreferences.LYRIC_SOURCE_QQ ->
+                    "有歌曲 ID/mid 时直拉，否则搜歌名；优先 QRC（含翻译）；失败回落本地 LRC" to R.drawable.ic_app_icon_qq
+                FocusPreferences.LYRIC_SOURCE_SUPERLYRIC ->
+                    "播放时逐行实时推送；无完整时间轴，不支持多行/翻译互换" to R.drawable.ic_music_note
+                FocusPreferences.LYRIC_SOURCE_LYRICON ->
+                    "经 LyricProvider 一次加载完整歌词（原文+翻译），支持多行等功能" to R.drawable.ic_music_note
+                FocusPreferences.LYRIC_SOURCE_LYRICINFO ->
+                    "读取通知栏 MediaMetadata.extras.lyricInfo 中的 LRC" to R.drawable.ic_info
+                FocusPreferences.LYRIC_SOURCE_LOCAL ->
+                    "仅匹配本地目录中的 LRC 文件（可自选文件夹）" to R.drawable.ic_home
+                FocusPreferences.LYRIC_SOURCE_LRCLIB ->
+                    "海外开源库按歌名/歌手匹配；不保证曲目完全对应；失败回落本地 LRC" to R.drawable.ic_music_note
                 else -> "" to R.drawable.ic_music_note
             }
 
@@ -364,9 +372,9 @@ class LyricSourceActivity : AppCompatActivity() {
             ctx, com.google.android.material.R.attr.colorOnSurfaceVariant, "LyricFocus"
         )
         val warnings = listOf(
-            "· Lyricon 提供完整歌词，一次加载含原文+翻译",
-            "· 支持所有功能：多行模式、翻译互换、万象息屏",
-            "· 需安装 LyricProvider (LSPosed) 并在作用域勾选音乐App"
+            "· 经 LyricProvider（LSPosed）一次加载完整歌词，含原文+翻译",
+            "· 支持多行模式、翻译互换、万象息屏等完整功能",
+            "· 需在模块作用域勾选对应音乐 App"
         )
         for (line in warnings) {
             target.addView(TextView(ctx).apply {
@@ -396,9 +404,9 @@ class LyricSourceActivity : AppCompatActivity() {
             ctx, com.google.android.material.R.attr.colorOnSurfaceVariant, "LyricFocus"
         )
         val warnings = listOf(
-            "· 读取通知栏 MediaMetadata.extras.lyricInfo 字段",
-            "· 需安装 LyricInfo Xposed 模块并勾选音乐App",
-            "· 零外部依赖，LRC 格式直接解析"
+            "· 读取通知栏 MediaMetadata.extras 的 lyricInfo（LRC）",
+            "· 需安装 LyricInfo Xposed 模块并勾选音乐 App",
+            "· 无额外在线请求，解析成功即作为完整歌词源"
         )
         for (line in warnings) {
             target.addView(TextView(ctx).apply {
@@ -429,9 +437,9 @@ class LyricSourceActivity : AppCompatActivity() {
             ctx, com.google.android.material.R.attr.colorOnSurfaceVariant, "LyricFocus"
         )
         val warnings = listOf(
-            "· 实时推送单行歌词，不支持多行模式及翻译",
-            "· 仅在播放时逐行显示，暂停/切歌时清空",
-            "· 需安装 SuperLyric 支持的播放器"
+            "· 实时推送当前行，不提供完整时间轴",
+            "· 不支持多行模式与翻译互换",
+            "· 暂停/切歌时清空；需安装支持 SuperLyric 的播放器或模块"
         )
         for (line in warnings) {
             val tv = TextView(ctx).apply {
