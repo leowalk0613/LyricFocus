@@ -75,9 +75,11 @@ Provider 需在 Manifest 中导出（或按你的安全策略配置权限），�
 | `artist` | string | 歌手 |
 | `pkg` | string | 可选，播放器包名 |
 | `playing` | boolean | 是否在播放 |
+| `loading` | boolean | **切歌清空/加载中**：为 true 时接收端必须立刻清 UI 与本地时间轴 |
+| `seq` | int | **单调递增序号**：接收端应丢弃 `seq < acceptedSeq` 的过期包 |
 | `ctx` | object | **仅全量**时出现，见下 |
 
-切歌清空时：`l`/`s` 为空字符串，`t = 0`，无 `ctx`。
+切歌瞬间 LyricFocus 会先推送：`loading=true`、`l/s=""`、带新歌 `title`，并抬高 `seq`；随后旧包即使晚到也应被接收端按 `seq` 丢弃。
 
 ### `ctx`（全量）
 
@@ -103,8 +105,29 @@ Provider 需在 Manifest 中导出（或按你的安全策略配置权限），�
 ## 4. 推送时机
 
 - **全量 `putlyricfd`**：歌词内容变化（切歌加载、换源等）时，带完整 `ctx.lines`
-- **轻量 `putlyric`**：换行时，只带 `l/s/t/title/artist/...`，接收方用缓存的 `lines` + 本地进度渲染多行
-- **清空**：切歌瞬间先 `putlyric` 空数据，避免残留
+- **轻量 `putlyric`**：换行时，只带 `l/s/t/title/artist/seq/...`，接收方用缓存的 `lines` + 本地进度渲染多行
+- **清空**：切歌瞬间先推 `loading=true`（轻量 + 可选空时间轴 FD），并递增 `seq`
+
+## 4.1 接收端必做（防残留）
+
+```kotlin
+var acceptedSeq = 0
+
+fun onLyricUpdate(json: JSONObject) {
+    val seq = json.optInt("seq", 0)
+    if (seq > 0 && seq < acceptedSeq) return // 丢弃过期包
+    if (seq > acceptedSeq) acceptedSeq = seq
+
+    if (json.optBoolean("loading", false)) {
+        clearUiAndTimeline()
+        showTitle(json.optString("title"), json.optString("artist"))
+        return
+    }
+    // …正常上屏；轻量包无 ctx 时合并上次全量时间轴
+}
+```
+
+未知字段请忽略，便于后续扩展。
 
 ## 5. 与 LyricFocus 的关系
 

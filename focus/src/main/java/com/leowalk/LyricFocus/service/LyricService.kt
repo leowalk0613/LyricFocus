@@ -151,6 +151,9 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     private var lyricGeneration: Int = 0
     private var lastFetchRequestTitle: String = ""
     private var lastFetchRequestArtist: String = ""
+    /** MEDIA_ID / 平台 songId，比 title 更早变化时用于立刻切歌 */
+    private var lastTrackKey: String = ""
+    private var lastProgressPositionMs: Long = 0L
     private var lastBroadcastLyric = ""
     private var lastBroadcastSecond = ""
     private lateinit var externalLyricPusher: ExternalLyricProtocol.Pusher
@@ -520,7 +523,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     }
 
     private fun updateLyricProgress() {
-        // 兜底：直接读控制器元数据，网络源回调延迟时也能在 ~250ms 内切到新歌
+        // 兜底：直接读控制器元数据 / MEDIA_ID，网络源 title 回调延迟时也能尽快切歌
         if (ensureTrackMatchesMonitor()) {
             return
         }
@@ -533,6 +536,19 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             return
         }
         resolveCurrentPosition()
+        // 进度大幅回退（接近歌头）时强制再比对一次曲目键，部分播放器会晚于音频才改 title
+        if (isPlaying &&
+            lastProgressPositionMs > 8_000L &&
+            currentPosition < 3_000L &&
+            lastProgressPositionMs - currentPosition > 5_000L
+        ) {
+            lastProgressPositionMs = currentPosition
+            if (ensureTrackMatchesMonitor(forceKeyRecheck = true)) {
+                return
+            }
+        } else {
+            lastProgressPositionMs = currentPosition
+        }
         currentPlaybackPositionMs = currentPosition
         updateNotification()
         if (aodchangeRenderMode) {
@@ -550,6 +566,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         if (currentLyricInfo.isEmpty) {
             return
         }
+        val pushSeq = lyricGeneration
 
         val syncAdvanceMs = effectiveSyncAdvanceMs()
         val currentLine = currentLyricInfo.getCurrentLine(currentPosition, syncAdvanceMs)
@@ -573,9 +590,14 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
             )
         }
 
+        // 构建期间若已切歌，禁止把旧词推出去
+        if (pushSeq != lyricGeneration) {
+            return
+        }
+
         if (aodchangeRenderMode) {
             // aodchange 外部渲染：仅推送歌词数据，不更新前台歌词通知
-            sendToAodchange(currentLyricText, secondLineText, currentLine?.time ?: 0L)
+            sendToAodchange(currentLyricText, secondLineText, currentLine?.time ?: 0L, pushSeq)
             return
         }
 
@@ -596,7 +618,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         }
 
         sendLyricBroadcastIfChanged(currentLyricText, secondLineText, lineTranslation)
-        sendToAodchange(currentLyricText, secondLineText, currentLine?.time ?: 0L)
+        sendToAodchange(currentLyricText, secondLineText, currentLine?.time ?: 0L, pushSeq)
     }
 
     private fun resyncFocusState() {
@@ -702,8 +724,12 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     }
 
     /** 外部渲染：按协议向所有已发现接收端推送（含内置 aodchange / musiclockscreen 兼容）。 */
-    private fun sendToAodchange(l: String, s: String, time: Long) {
+    private fun sendToAodchange(l: String, s: String, time: Long, seq: Int = lyricGeneration) {
         try {
+            if (seq < lyricGeneration) {
+                Log.i(TAG, "skip stale external push seq=$seq current=$lyricGeneration")
+                return
+            }
             val syncAdvanceMs = effectiveSyncAdvanceMs()
             val ctx = ExternalLyricProtocol.buildContextJson(
                 lyricInfo = currentLyricInfo,
@@ -720,6 +746,8 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                     artist = currentArtist,
                     musicPackage = currentMusicPackage(),
                     playing = isPlaying,
+                    loading = false,
+                    seq = seq,
                     ctx = ctx
                 )
             )
@@ -1181,7 +1209,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
      * 网络源与本地源走同一路径。
      */
     private fun onTrackChanged(newTitle: String, newArtist: String) {
-        Log.d(TAG, "onTrackChanged: '$currentTitle'/'$currentArtist' -> '$newTitle'/'$newArtist'")
+        Log.i(TAG, "onTrackChanged: '$currentTitle'/'$currentArtist' -> '$newTitle'/'$newArtist'")
         currentTitle = newTitle
         currentArtist = newArtist
         fetchLyricJob?.cancel()
@@ -1193,13 +1221,19 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
         } ?: 0L
         lastUpdateTime = System.currentTimeMillis()
         currentPlaybackPositionMs = currentPosition
+        lastProgressPositionMs = currentPosition
+        MusicMonitorService.currentController?.metadata?.let { meta ->
+            val key = buildTrackKey(meta, newTitle, newArtist)
+            if (key.isNotBlank()) lastTrackKey = key
+        }
         resetBroadcastCache()
         clearAlbumColorForNewSong()
 
         // 立刻推送 loading/空歌词，避免接收端残留上一首
+        val clearSeq = lyricGeneration
         if (aodchangeRenderMode) {
             try {
-                externalLyricPusher.clear(newTitle, newArtist)
+                externalLyricPusher.clear(newTitle, newArtist, seq = clearSeq)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to clear external lyric on song change", e)
             }
@@ -1211,18 +1245,68 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
     }
 
     /** @return true 表示已触发切歌处理，调用方应中止后续旧曲逻辑 */
-    private fun ensureTrackMatchesMonitor(): Boolean {
+    private fun ensureTrackMatchesMonitor(forceKeyRecheck: Boolean = false): Boolean {
         val metadata = MusicMonitorService.currentController?.metadata
             ?: MusicMonitorService.currentMetadata
             ?: return false
         val title = metadata.getString(MediaMetadata.METADATA_KEY_TITLE) ?: ""
         val artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: ""
+        val trackKey = buildTrackKey(metadata, title, artist)
+
+        val keyChanged = trackKey.isNotBlank() && lastTrackKey.isNotBlank() && trackKey != lastTrackKey
+        if (keyChanged) {
+            Log.d(TAG, "Track key changed: $lastTrackKey -> $trackKey (title='$title')")
+            lastTrackKey = trackKey
+            if (title.isNotBlank()) {
+                onTrackChanged(title, artist)
+            } else {
+                // ID 已变但 title 尚未到位：先停旧请求并清外部残留
+                fetchLyricJob?.cancel()
+                fetchLyricJob = null
+                lyricGeneration++
+                clearLyricResult()
+                resetBroadcastCache()
+                if (aodchangeRenderMode) {
+                    try {
+                        externalLyricPusher.clear(currentTitle, currentArtist, seq = lyricGeneration)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to clear external lyric on key change", e)
+                    }
+                }
+            }
+            return true
+        }
+        if (trackKey.isNotBlank()) {
+            lastTrackKey = trackKey
+        }
+
         if (title.isBlank()) return false
         if (title != currentTitle || artist != currentArtist) {
             onTrackChanged(title, artist)
             return true
         }
+        if (forceKeyRecheck) {
+            // 进度回退触发的再检查：刷新 lastTrackKey，便于下一轮比对
+            if (trackKey.isNotBlank()) lastTrackKey = trackKey
+        }
         return false
+    }
+
+    private fun buildTrackKey(metadata: MediaMetadata, title: String, artist: String): String {
+        val mediaId = metadata.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)?.trim().orEmpty()
+        if (mediaId.isNotBlank()) return "mid:$mediaId"
+        val pkg = currentMusicPackage()
+        val resolved = PlayingSongIdResolver.resolve(
+            packageName = pkg,
+            metadata = metadata,
+            focusMediaJsons = MusicMonitorService.focusMediaJsonForPackage(pkg),
+            expectedTitle = title,
+        )
+        if (resolved != null && resolved.hasDirectKey()) {
+            return "p:${resolved.platform}:${resolved.songId}:${resolved.songMid.orEmpty()}"
+        }
+        if (title.isBlank()) return ""
+        return "t:$title|$artist"
     }
 
     private fun isStaleLyricFetch(generation: Int, title: String, artist: String): Boolean {
@@ -1265,6 +1349,7 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                     packageName = pkg,
                     metadata = metadata,
                     focusMediaJsons = MusicMonitorService.focusMediaJsonForPackage(pkg),
+                    expectedTitle = title,
                 )
                 if (resolvedId != null) {
                     Log.d(
@@ -1272,6 +1357,8 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                         "Resolved platform song id: ${resolvedId.platform}:" +
                             "id=${resolvedId.songId} mid=${resolvedId.songMid}"
                     )
+                } else {
+                    Log.d(TAG, "No trusted platform song id for '$title', will search by name")
                 }
                 var lyricInfo = lyricManager.fetchLyric(
                     title,
@@ -1279,22 +1366,57 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                     musicPackage = pkg,
                     platformSongId = resolvedId,
                 )
+                // 拉取期间 focus 通知可能才追上新歌：若出现匹配新 title 的 id，且与本次直拉 id 不同，丢弃结果并重拉
                 ensureActive()
                 if (isStaleLyricFetch(generation, title, artist)) {
                     Log.d(TAG, "Discard stale lyric result for '$title' (gen=$generation current=$lyricGeneration)")
                     return@launch
                 }
+                val refreshedId = PlayingSongIdResolver.resolve(
+                    packageName = pkg,
+                    metadata = MusicMonitorService.currentMetadata,
+                    focusMediaJsons = MusicMonitorService.focusMediaJsonForPackage(pkg),
+                    expectedTitle = currentTitle,
+                )
+                val idChangedDuringFetch = refreshedId != null &&
+                    refreshedId.hasDirectKey() &&
+                    (
+                        resolvedId == null ||
+                            refreshedId.songId != resolvedId.songId ||
+                            refreshedId.songMid != resolvedId.songMid
+                        )
+                if (idChangedDuringFetch) {
+                    Log.i(
+                        TAG,
+                        "Focus song id ready/updated during fetch: " +
+                            "${resolvedId?.songId} -> ${refreshedId?.songId}, refetch by id"
+                    )
+                    if (isStaleLyricFetch(generation, title, artist)) return@launch
+                    lyricInfo = lyricManager.fetchLyric(
+                        currentTitle,
+                        currentArtist,
+                        musicPackage = pkg,
+                        platformSongId = refreshedId,
+                    )
+                }
+                ensureActive()
+                if (isStaleLyricFetch(generation, title, artist)) {
+                    Log.d(TAG, "Discard stale lyric result for '$title' (gen=$generation current=$lyricGeneration)")
+                    return@launch
+                }
+                val applyTitle = currentTitle
+                val applyArtist = currentArtist
                 if (lyricInfo != null && !lyricInfo.isEmpty) {
-                    applyLyricResult(lyricInfo, title, artist)
+                    applyLyricResult(lyricInfo, applyTitle, applyArtist)
 
                     if (FocusPreferences.isAiTranslateEnabled(this@LyricService)) {
                         try {
-                            val translated = lyricManager.translateWithAi(lyricInfo, title, artist)
+                            val translated = lyricManager.translateWithAi(lyricInfo, applyTitle, applyArtist)
                             ensureActive()
-                            if (isStaleLyricFetch(generation, title, artist)) return@launch
+                            if (isStaleLyricFetch(generation, applyTitle, applyArtist)) return@launch
                             Log.d(TAG, "AI translate: sameRef=${translated === lyricInfo} hasTrans=${translated.lines.any { it.translation != null }} lines=${translated.lines.size}")
                             if (translated !== lyricInfo) {
-                                applyLyricResult(translated, title, artist)
+                                applyLyricResult(translated, applyTitle, applyArtist)
                                 lyricInfo = translated
                             }
                         } catch (e: CancellationException) {
@@ -1306,11 +1428,11 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
                     if (FocusPreferences.isAiPolishEnabled(this@LyricService)) {
                         try {
-                            val polished = lyricManager.polishWithAi(lyricInfo, title, artist)
+                            val polished = lyricManager.polishWithAi(lyricInfo, applyTitle, applyArtist)
                             ensureActive()
-                            if (isStaleLyricFetch(generation, title, artist)) return@launch
+                            if (isStaleLyricFetch(generation, applyTitle, applyArtist)) return@launch
                             if (polished !== lyricInfo) {
-                                applyLyricResult(polished, title, artist)
+                                applyLyricResult(polished, applyTitle, applyArtist)
                             }
                         } catch (e: CancellationException) {
                             throw e
@@ -1319,9 +1441,9 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
                         }
                     }
                 } else {
-                    if (isStaleLyricFetch(generation, title, artist)) return@launch
+                    if (isStaleLyricFetch(generation, applyTitle, applyArtist)) return@launch
                     clearLyricResult()
-                    sendNoLyricStateToSystemUI(title, artist, force = true)
+                    sendNoLyricStateToSystemUI(applyTitle, applyArtist, force = true)
                     Log.d(TAG, "No lyric found")
                 }
             } catch (e: CancellationException) {
@@ -1537,6 +1659,25 @@ class LyricService : Service(), MusicMonitorService.MusicStateListener {
 
     private fun sendNoLyricStateToSystemUI(title: String, artist: String, force: Boolean = true) {
         if (aodchangeRenderMode) {
+            try {
+                // 外部渲染：无歌词时结束 loading，推空行（用当前 generation，须 > clear 的 floor）
+                externalLyricPusher.push(
+                    ExternalLyricProtocol.PushPayload(
+                        lyricLine = "",
+                        secondLine = "",
+                        timeMs = 0L,
+                        title = title,
+                        artist = artist,
+                        musicPackage = currentMusicPackage(),
+                        playing = isPlaying,
+                        loading = false,
+                        seq = lyricGeneration,
+                        ctx = JSONObject().put("idx", -1).put("lines", JSONArray())
+                    )
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to push no-lyric external state", e)
+            }
             return
         }
         if (FocusPreferences.isShowInShade(this)) {

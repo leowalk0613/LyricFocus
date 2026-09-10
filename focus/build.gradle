@@ -20,7 +20,7 @@ android {
         applicationId "com.leowalk.LyricFocus"
         minSdk 31
         targetSdk 34
-        versionCode 34
+        versionCode 35
         versionName "1.9.3(OS4)"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }

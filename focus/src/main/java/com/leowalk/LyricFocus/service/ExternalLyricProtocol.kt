@@ -23,6 +23,10 @@ import java.util.concurrent.ConcurrentHashMap
  * ```
  *
  * Provider 需实现 `putlyric`（轻量）与 `putlyricfd`（全量 FD）；可选 `settings`。
+ *
+ * 切歌防残留（接入方必做）：
+ * - 识别 `loading=true`：立刻清空 UI / 本地时间轴
+ * - 按单调递增 `seq` 丢弃过期包：`if (seq < acceptedSeq) ignore`
  */
 object ExternalLyricProtocol {
     private const val TAG = "ExternalLyricProtocol"
@@ -56,6 +60,8 @@ object ExternalLyricProtocol {
         val musicPackage: String = "",
         val playing: Boolean = true,
         val loading: Boolean = false,
+        /** 单调递增序号：接收端应丢弃 seq 小于已接受值的过期包（切歌防残留关键） */
+        val seq: Int = 0,
         val ctx: JSONObject? = null
     )
 
@@ -161,6 +167,7 @@ object ExternalLyricProtocol {
     fun buildJson(payload: PushPayload, includeCtx: Boolean): JSONObject {
         return JSONObject().apply {
             put("v", SCHEMA_VERSION)
+            put("seq", payload.seq)
             put("l", payload.lyricLine)
             put("s", payload.secondLine)
             put("t", payload.timeMs)
@@ -188,6 +195,9 @@ object ExternalLyricProtocol {
         private val stateByEndpoint = ConcurrentHashMap<String, DedupState>()
         @Volatile
         private var cachedEndpoints: List<Endpoint>? = null
+        /** 切歌后抬高地板：低于此 seq 的推送在发送端直接丢弃 */
+        @Volatile
+        private var floorSeq: Int = 0
 
         fun invalidateDiscovery() {
             cachedEndpoints = null
@@ -195,6 +205,10 @@ object ExternalLyricProtocol {
 
         fun resetDedup() {
             stateByEndpoint.clear()
+        }
+
+        fun raiseFloor(seq: Int) {
+            if (seq > floorSeq) floorSeq = seq
         }
 
         fun endpoints(): List<Endpoint> {
@@ -205,16 +219,32 @@ object ExternalLyricProtocol {
         }
 
         fun push(payload: PushPayload) {
+            // clear 抬高 floor 后：同 seq 的非 loading 包一律丢弃，避免盖住切歌清空
+            val blocked = if (payload.loading) {
+                payload.seq < floorSeq
+            } else {
+                payload.seq <= floorSeq
+            }
+            if (blocked) {
+                Log.i(
+                    TAG,
+                    "drop stale push seq=${payload.seq} floor=$floorSeq loading=${payload.loading} " +
+                        "title=${payload.title} l=${payload.lyricLine.take(20)}"
+                )
+                return
+            }
             val ctx = payload.ctx
-            val linesKey = ctx?.optJSONArray("lines")?.toString() ?: ""
+            // 去重键不能含 isCur：否则每换行都会被当成「全新时间轴」狂发 putlyricfd
+            val linesKey = stableLinesKey(ctx)
             val ctxIdx = ctx?.optInt("idx", -1) ?: -1
             for (ep in endpoints()) {
                 pushOne(ep, payload, linesKey, ctxIdx)
             }
         }
 
-        /** 切歌时空数据 / loading，清接收方残留 */
-        fun clear(title: String, artist: String) {
+        /** 切歌时空数据 / loading，清接收方残留（含全量 FD 时间轴） */
+        fun clear(title: String, artist: String, seq: Int) {
+            raiseFloor(seq)
             val payload = PushPayload(
                 lyricLine = "",
                 secondLine = "",
@@ -223,18 +253,39 @@ object ExternalLyricProtocol {
                 artist = artist,
                 playing = false,
                 loading = true,
-                ctx = null
+                seq = seq,
+                ctx = JSONObject().put("idx", -1).put("lines", JSONArray())
             )
-            val json = buildJson(payload, includeCtx = false).toString()
+            val lightJson = buildJson(payload, includeCtx = false).toString()
+            val fullJson = buildJson(payload, includeCtx = true).toString()
+            Log.i(TAG, "clear loading=true seq=$seq title=$title endpoints=${endpoints().size}")
             for (ep in endpoints()) {
                 try {
-                    val extras = Bundle().apply { putString("n", json) }
+                    val extras = Bundle().apply { putString("n", lightJson) }
                     context.contentResolver.call(ep.uri, METHOD_PUT_LYRIC, null, extras)
                 } catch (e: Exception) {
-                    Log.d(TAG, "clear failed ${ep.authority}: ${e.message}")
+                    Log.d(TAG, "clear putlyric failed ${ep.authority}: ${e.message}")
+                }
+                try {
+                    sendFd(ep, fullJson)
+                } catch (e: Exception) {
+                    Log.d(TAG, "clear putlyricfd failed ${ep.authority}: ${e.message}")
                 }
             }
             resetDedup()
+        }
+
+        private fun stableLinesKey(ctx: JSONObject?): String {
+            val lines = ctx?.optJSONArray("lines") ?: return ""
+            if (lines.length() == 0) return "empty"
+            val sb = StringBuilder(lines.length() * 16)
+            for (i in 0 until lines.length()) {
+                val o = lines.optJSONObject(i) ?: continue
+                sb.append(o.optLong("tm")).append('=')
+                    .append(o.optString("t")).append('|')
+                    .append(o.optString("r")).append(';')
+            }
+            return sb.toString()
         }
 
         fun readSyncAdvanceMs(fallback: Long): Long {

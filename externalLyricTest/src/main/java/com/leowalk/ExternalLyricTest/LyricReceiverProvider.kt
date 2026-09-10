@@ -11,8 +11,13 @@ import org.json.JSONObject
 import java.io.FileInputStream
 
 /**
- * LyricFocus 外部歌词接收端（协议 v1）。
- * 见 docs/external-lyric-protocol.md
+ * LyricFocus 外部歌词接收端参考实现（协议 v1 + seq/loading）。
+ *
+ * 第三方请复制此处理逻辑：
+ * 1. 解析 JSON
+ * 2. 交给与 [LyricReceiveEngine] 等价的状态机
+ * 3. `loading=true` / 异曲 / 空包 → 清空 UI
+ * 4. `seq` 过期 → 丢弃
  */
 class LyricReceiverProvider : ContentProvider() {
     override fun onCreate(): Boolean = true
@@ -51,7 +56,7 @@ class LyricReceiverProvider : ContentProvider() {
             val o = JSONObject(raw)
             val ctx = o.optJSONObject("ctx")
             val lines = ctx?.optJSONArray("lines")
-            val snapshot = LyricHub.Snapshot(
+            val accepted = LyricHub.ingest(
                 method = method,
                 title = o.optString("title"),
                 artist = o.optString("artist"),
@@ -59,17 +64,23 @@ class LyricReceiverProvider : ContentProvider() {
                 second = o.optString("s"),
                 timeMs = o.optLong("t"),
                 playing = o.optBoolean("playing", true),
+                loading = o.optBoolean("loading", false),
+                seq = o.optInt("seq", 0),
                 pkg = o.optString("pkg"),
                 ctxIdx = if (ctx != null) ctx.optInt("idx", -1) else null,
                 ctxLineCount = lines?.length(),
-                rawPreview = raw.take(240)
+                rawPreview = raw.take(240),
             )
-            LyricHub.publish(snapshot)
-            Log.i(
-                TAG,
-                "$method title=${snapshot.title} l=${snapshot.line} " +
-                    "ctxLines=${snapshot.ctxLineCount} idx=${snapshot.ctxIdx}"
-            )
+            if (!accepted) {
+                Log.i(TAG, "DROP $method seq=${o.optInt("seq")} title=${o.optString("title")}")
+            } else {
+                Log.i(
+                    TAG,
+                    "OK $method seq=${o.optInt("seq")} loading=${o.optBoolean("loading")} " +
+                        "title=${o.optString("title")} l=${o.optString("l").take(40)} " +
+                        "ctxLines=${lines?.length()}"
+                )
+            }
         } catch (e: Exception) {
             Log.e(TAG, "parse failed method=$method", e)
         }

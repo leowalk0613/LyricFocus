@@ -7,7 +7,7 @@ import org.json.JSONObject
 
 /**
  * 从当前播放会话解析平台歌曲 ID，供直拉歌词跳过搜歌名。
- * - 网易云：focus media / MEDIA_ID → 数字 songId
+ * - 网易云：focus media / MEDIA_ID → 数字 songId（focus 的 title 必须与当前曲名匹配，否则视为过期通知）
  * - QQ 音乐：MEDIA_ID → 数字 songId
  * - 小米音乐：focus media shareContent 的 songmid（勿信不可靠的 mediaId）
  */
@@ -29,19 +29,27 @@ object PlayingSongIdResolver {
         fun hasDirectKey(): Boolean = songId > 0L || !songMid.isNullOrBlank()
     }
 
+    data class FocusNetEase(
+        val songId: Long,
+        val title: String,
+    )
+
     fun resolve(
         packageName: String?,
         metadata: MediaMetadata?,
         focusMediaJsons: List<String> = emptyList(),
+        expectedTitle: String? = null,
     ): ResolvedId? {
         val pkg = packageName.orEmpty()
+        val titleHint = expectedTitle
+            ?: metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
         when {
             pkg == PKG_NETEASE || pkg.contains("netease", ignoreCase = true) ->
-                resolveNetEase(metadata, focusMediaJsons)?.let {
+                resolveNetEase(metadata, focusMediaJsons, titleHint)?.let {
                     return ResolvedId(FocusPreferences.LYRIC_SOURCE_NETEASE, songId = it)
                 }
             pkg == PKG_MIUI || pkg.contains("miui.player", ignoreCase = true) ->
-                resolveMiuiSongMid(focusMediaJsons)?.let {
+                resolveMiuiSongMid(focusMediaJsons, titleHint)?.let {
                     return ResolvedId(FocusPreferences.LYRIC_SOURCE_QQ, songMid = it)
                 }
             pkg == PKG_QQ || pkg.contains("qqmusic", ignoreCase = true) ->
@@ -52,11 +60,24 @@ object PlayingSongIdResolver {
         return null
     }
 
-    private fun resolveNetEase(metadata: MediaMetadata?, focusMediaJsons: List<String>): Long? {
-        for (json in focusMediaJsons) {
-            parseNetEaseIdFromFocusJson(json)?.let {
-                Log.d(TAG, "netease id from focus media: $it")
-                return it
+    private fun resolveNetEase(
+        metadata: MediaMetadata?,
+        focusMediaJsons: List<String>,
+        expectedTitle: String?,
+    ): Long? {
+        val matched = focusMediaJsons.mapNotNull { parseFocusNetEase(it) }
+            .firstOrNull { expectedTitle.isNullOrBlank() || titlesLooselyMatch(it.title, expectedTitle) }
+        if (matched != null) {
+            Log.d(TAG, "netease id from focus media: ${matched.songId} title='${matched.title}'")
+            return matched.songId
+        }
+        if (focusMediaJsons.isNotEmpty() && !expectedTitle.isNullOrBlank()) {
+            val stale = focusMediaJsons.mapNotNull { parseFocusNetEase(it) }.firstOrNull()
+            if (stale != null) {
+                Log.i(
+                    TAG,
+                    "ignore stale netease focus id=${stale.songId} focusTitle='${stale.title}' expected='$expectedTitle'"
+                )
             }
         }
         parseNumericMediaId(metadata)?.let {
@@ -72,14 +93,42 @@ object PlayingSongIdResolver {
         }
     }
 
-    private fun resolveMiuiSongMid(focusMediaJsons: List<String>): String? {
+    private fun resolveMiuiSongMid(focusMediaJsons: List<String>, expectedTitle: String?): String? {
         for (json in focusMediaJsons) {
+            val title = parseFocusShareTitle(json).orEmpty()
+            if (!expectedTitle.isNullOrBlank() && title.isNotBlank() &&
+                !titlesLooselyMatch(title, expectedTitle)
+            ) {
+                continue
+            }
             parseSongMidFromFocusJson(json)?.let {
                 Log.d(TAG, "miui songmid from focus media: $it")
                 return it
             }
         }
         return null
+    }
+
+    fun parseFocusNetEase(json: String?): FocusNetEase? {
+        if (json.isNullOrBlank()) return null
+        val title = parseFocusShareTitle(json).orEmpty()
+        val id = parseNetEaseIdFromFocusJson(json) ?: return null
+        return FocusNetEase(songId = id, title = title)
+    }
+
+    fun parseFocusShareTitle(json: String?): String? {
+        if (json.isNullOrBlank()) return null
+        return try {
+            JSONObject(json)
+                .optJSONObject("param_v2")
+                ?.optJSONObject("param_island")
+                ?.optJSONObject("shareData")
+                ?.optString("title")
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     fun parseNetEaseIdFromFocusJson(json: String?): Long? {
@@ -124,5 +173,24 @@ object PlayingSongIdResolver {
     fun parseNumericMediaId(metadata: MediaMetadata?): Long? {
         val raw = metadata?.getString(MediaMetadata.METADATA_KEY_MEDIA_ID) ?: return null
         return raw.trim().toLongOrNull()?.takeIf { it > 0 }
+    }
+
+    /** 网易云 focus title 常不带翻译括号后缀，需宽松匹配 */
+    fun titlesLooselyMatch(a: String, b: String): Boolean {
+        val left = normalizeTitle(a)
+        val right = normalizeTitle(b)
+        if (left.isEmpty() || right.isEmpty()) return false
+        if (left == right) return true
+        return left.startsWith(right) || right.startsWith(left) ||
+            left.contains(right) || right.contains(left)
+    }
+
+    private fun normalizeTitle(raw: String): String {
+        return raw.trim()
+            .lowercase()
+            .replace(" ", "")
+            .substringBefore('(')
+            .substringBefore('（')
+            .trim()
     }
 }

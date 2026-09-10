@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">外部歌词测试</string>
-    <string name="hint_waiting">等待 LyricFocus 推送…\n请开启「外部渲染（纯推送）」并播放音乐</string>
-    <string name="clear_log">清空日志</string>
+    <string name="hint_waiting">等待 LyricFocus 推送…\n请开启「外部渲染」并播放音乐\n切歌时应先出现 loading 清空</string>
+    <string name="clear_log">清空日志（长按重置 seq）</string>
     <string name="status_idle">未收到推送</string>
 </resources>

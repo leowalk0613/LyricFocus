@@ -396,25 +396,40 @@ class MusicMonitorService : NotificationListenerService() {
             if (freshMeta != null) {
                 val title = freshMeta.getString(MediaMetadata.METADATA_KEY_TITLE)
                 val artist = freshMeta.getString(MediaMetadata.METADATA_KEY_ARTIST)
-                val metaObjectChanged = freshMeta != currentMetadata
-                val trackChanged = title != lastKnownTitle || artist != lastKnownArtist
-                if (metaObjectChanged || trackChanged) {
-                    Log.d(TAG, "Health check metadata refresh: $title - $artist")
+                val mediaId = freshMeta.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)
+                val oldMediaId = currentMetadata?.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)
+                val trackChanged = title != lastKnownTitle ||
+                    artist != lastKnownArtist ||
+                    (mediaId != null && mediaId != oldMediaId)
+                // 不要用 MediaMetadata 引用不等：部分播放器每次 getMetadata() 都 new 对象
+                if (trackChanged) {
+                    Log.d(TAG, "Health check metadata refresh: $title - $artist mid=$mediaId")
                     currentMetadata = freshMeta
                     lastKnownTitle = title
                     lastKnownArtist = artist
                     notifyMetadataChanged(freshMeta)
+                } else if (currentMetadata !== freshMeta) {
+                    currentMetadata = freshMeta
                 }
             }
 
-            if (freshState != null && freshState != currentPlaybackState) {
-                Log.d(TAG, "Health check: stale playback state detected")
+            if (freshState != null) {
+                val changed = !playbackStateLooksSame(freshState, currentPlaybackState)
                 currentPlaybackState = freshState
-                notifyPlaybackStateChanged(freshState)
+                if (changed) {
+                    Log.d(TAG, "Health check: playback state refresh state=${freshState.state}")
+                    notifyPlaybackStateChanged(freshState)
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Health check failed", e)
             clearCurrentSession()
         }
+    }
+
+    private fun playbackStateLooksSame(a: PlaybackState, b: PlaybackState?): Boolean {
+        if (b == null) return false
+        // 仅 state 变化需要通知；position 由 LyricService 自行轮询，避免每秒刷 playback 回调
+        return a.state == b.state
     }
 }
